@@ -1,0 +1,38 @@
+# AutoPerfPy Configuration File
+# Customize these settings for your environment
+
+# Benchmarking configuration
+benchmark:
+  batch_sizes: [1, 4, 8, 16, 32]
+  num_images: 1000
+  timeout_seconds: 3600
+  iterations: 3
+
+# LLM inference configuration  
+llm:
+  prompt_length: 512
+  output_tokens: 256
+  batch_size: 8
+  max_sequence_length: 2048
+  model_size: "7b"  # 7b, 13b, 70b
+
+# Monitoring configuration
+monitoring:
+  duration_seconds: 300
+  interval_seconds: 1
+  enable_gpu_monitoring: true
+  log_file: "monitoring.log"
+  oem_threshold_percent: 85
+
+# Analysis configuration
+analysis:
+  latency_threshold_ms: 50.0
+  percentiles: [50, 95, 99]
+  group_by: "workload"  # workload, batch_size, timestamp
+
+# Process monitoring configuration
+process:
+  timeout_seconds: 1800
+  enable_zombie_detection: true
+  sigterm_wait_seconds: 10
+  log_file: "process_monitor.log"
