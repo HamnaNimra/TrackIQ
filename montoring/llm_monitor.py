@@ -132,7 +132,7 @@ class KVCacheAnalyzer:
                 print(f"{elapsed:6.1f} | {used:10} | {total:10} | {growth_rate:15.2f}")
             
             time.sleep(sample_interval)
-        
+    
         # Analysis
         if len(measurements) >= 2:
             initial_mem = measurements[0][1]
