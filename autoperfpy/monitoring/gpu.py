@@ -4,7 +4,7 @@ import time
 import threading
 from typing import Dict, Any, List, Optional
 from ..core import BaseMonitor
-import subprocess
+from ._gpu_common import get_memory_metrics
 
 
 class GPUMemoryMonitor(BaseMonitor):
@@ -50,30 +50,15 @@ class GPUMemoryMonitor(BaseMonitor):
             time.sleep(interval)
 
     def _get_gpu_metrics(self) -> Optional[Dict[str, Any]]:
-        """Get current GPU metrics.
+        """Get current GPU metrics using shared utilities.
 
         Returns:
             Dictionary with GPU metrics or None
         """
-        try:
-            result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,nounits,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-
-            if result.returncode == 0:
-                used, total, util = result.stdout.strip().split(",")
-                return {
-                    "timestamp": time.time(),
-                    "gpu_memory_used_mb": float(used),
-                    "gpu_memory_total_mb": float(total),
-                    "gpu_utilization_percent": float(util),
-                    "gpu_memory_percent": (float(used) / float(total) * 100),
-                }
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            return None
+        metrics = get_memory_metrics()
+        if metrics:
+            metrics["timestamp"] = time.time()
+        return metrics
 
     def get_metrics(self) -> List[Dict[str, Any]]:
         """Get collected metrics (thread-safe copy).
