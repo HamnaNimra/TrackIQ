@@ -69,3 +69,20 @@ variability:
   cv_threshold_high: 20.0          # CV below this = moderately consistent
   outlier_method: "iqr"            # iqr or zscore
   zscore_threshold: 3.0
+
+# HTML Report configuration
+html_report:
+  title: "Performance Analysis Report"
+  author: "AutoPerfPy"
+  theme: "light"                   # light or dark
+  embed_images: true               # Embed images as base64 (vs external files)
+  include_summary: true            # Include executive summary section
+  image_dpi: 150                   # Image resolution for embedded graphs
+  max_table_rows: 100              # Maximum rows to show in data tables
+
+# PDF Report configuration
+pdf_report:
+  title: "Performance Analysis Report"
+  author: "AutoPerfPy"
+  include_summary: true            # Include summary page
+  image_dpi: 300                   # Image resolution for PDF

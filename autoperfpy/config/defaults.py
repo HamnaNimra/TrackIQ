@@ -99,6 +99,29 @@ class VariabilityConfig:
     zscore_threshold: float = 3.0
 
 
+@dataclass
+class HTMLReportConfig:
+    """Configuration for HTML report generation."""
+
+    title: str = "Performance Analysis Report"
+    author: str = "AutoPerfPy"
+    theme: str = "light"  # light or dark
+    embed_images: bool = True
+    include_summary: bool = True
+    image_dpi: int = 150
+    max_table_rows: int = 100
+
+
+@dataclass
+class PDFReportConfig:
+    """Configuration for PDF report generation."""
+
+    title: str = "Performance Analysis Report"
+    author: str = "AutoPerfPy"
+    include_summary: bool = True
+    image_dpi: int = 300
+
+
 DEFAULT_CONFIG = {
     "benchmark": BenchmarkConfig(),
     "llm": LLMConfig(),
@@ -109,4 +132,6 @@ DEFAULT_CONFIG = {
     "tegrastats": TegrastatsConfig(),
     "efficiency": EfficiencyConfig(),
     "variability": VariabilityConfig(),
+    "html_report": HTMLReportConfig(),
+    "pdf_report": PDFReportConfig(),
 }

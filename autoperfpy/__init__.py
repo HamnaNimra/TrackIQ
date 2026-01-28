@@ -36,7 +36,7 @@ from .analyzers import (
 )
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
-from .reporting import PerformanceVisualizer, PDFReportGenerator
+from .reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
 
 __all__ = [
     "Config",
@@ -77,4 +77,5 @@ __all__ = [
     # Reporting
     "PerformanceVisualizer",
     "PDFReportGenerator",
+    "HTMLReportGenerator",
 ]

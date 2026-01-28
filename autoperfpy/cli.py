@@ -14,6 +14,7 @@ from autoperfpy.analyzers import (
 )
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from autoperfpy.monitoring import GPUMemoryMonitor
+from autoperfpy.reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
 import json
 
 
@@ -52,6 +53,10 @@ Examples:
 
   # Monitoring
   autoperfpy monitor gpu --duration 300
+
+  # Report generation
+  autoperfpy report html --csv data.csv --output report.html --title "My Report"
+  autoperfpy report pdf --csv data.csv --output report.pdf
         """,
     )
 
@@ -121,6 +126,25 @@ Examples:
     # KV cache monitor
     cache_parser = monitor_subparsers.add_parser("kv-cache", help="Monitor KV cache")
     cache_parser.add_argument("--max-length", type=int, default=2048, help="Max sequence length")
+
+    # Report commands
+    report_parser = subparsers.add_parser("report", help="Generate performance reports")
+    report_subparsers = report_parser.add_subparsers(dest="report_type")
+
+    # HTML report
+    html_parser = report_subparsers.add_parser("html", help="Generate interactive HTML report")
+    html_parser.add_argument("--csv", help="CSV file with benchmark data")
+    html_parser.add_argument("--output", "-o", default="performance_report.html", help="Output HTML file path")
+    html_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    html_parser.add_argument("--theme", choices=["light", "dark"], default="light", help="Color theme")
+    html_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
+
+    # PDF report
+    pdf_parser = report_subparsers.add_parser("pdf", help="Generate PDF report")
+    pdf_parser.add_argument("--csv", help="CSV file with benchmark data")
+    pdf_parser.add_argument("--output", "-o", default="performance_report.pdf", help="Output PDF file path")
+    pdf_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
     return parser
 
@@ -383,6 +407,183 @@ def run_monitor_gpu(args, config):
     return summary
 
 
+def run_report_html(args, config):
+    """Generate HTML report."""
+    import pandas as pd
+
+    report = HTMLReportGenerator(
+        title=args.title,
+        author=args.author,
+        theme=args.theme,
+    )
+
+    viz = PerformanceVisualizer()
+
+    # Add metadata
+    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
+
+    if args.csv:
+        # Load and analyze data
+        df = pd.read_csv(args.csv)
+
+        # Add summary items based on available columns
+        if "latency_ms" in df.columns:
+            report.add_summary_item("Samples", len(df), "", "neutral")
+            report.add_summary_item("Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral")
+            report.add_summary_item("P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral")
+
+            cv = df['latency_ms'].std() / df['latency_ms'].mean() * 100
+            status = "good" if cv < 10 else "warning" if cv < 20 else "critical"
+            report.add_summary_item("CV", f"{cv:.1f}", "%", status)
+
+        # Generate visualizations based on available data
+        if "workload" in df.columns and "latency_ms" in df.columns:
+            report.add_section("Latency Analysis", "Percentile latency comparisons across workloads")
+
+            latencies_by_workload = {}
+            for workload in df["workload"].unique():
+                wdf = df[df["workload"] == workload]["latency_ms"]
+                latencies_by_workload[workload] = {
+                    "P50": wdf.quantile(0.5),
+                    "P95": wdf.quantile(0.95),
+                    "P99": wdf.quantile(0.99),
+                }
+            fig = viz.plot_latency_percentiles(latencies_by_workload)
+            report.add_figure(fig, "Latency Percentiles by Workload", "Latency Analysis")
+
+            # Distribution comparison
+            data_dict = {w: df[df["workload"] == w]["latency_ms"].tolist() for w in df["workload"].unique()}
+            fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
+            report.add_figure(fig, "Latency Distribution", "Latency Analysis")
+
+        if "batch_size" in df.columns and "latency_ms" in df.columns:
+            report.add_section("Batch Analysis", "Performance vs batch size")
+
+            batch_df = df.groupby("batch_size").agg({
+                "latency_ms": "mean",
+            }).reset_index()
+
+            # Calculate throughput if not present
+            if "throughput" not in df.columns:
+                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+            else:
+                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+
+            fig = viz.plot_latency_throughput_tradeoff(
+                batch_df["batch_size"].tolist(),
+                batch_df["latency_ms"].tolist(),
+                batch_df["throughput"].tolist(),
+            )
+            report.add_figure(fig, "Latency vs Throughput Trade-off", "Batch Analysis")
+
+        if "power_w" in df.columns:
+            report.add_section("Power Analysis", "Power consumption and efficiency metrics")
+
+            if "workload" in df.columns:
+                workloads = df["workload"].unique().tolist()
+                power_values = [df[df["workload"] == w]["power_w"].mean() for w in workloads]
+                if "latency_ms" in df.columns:
+                    perf_values = [1000 / df[df["workload"] == w]["latency_ms"].mean() for w in workloads]
+                    fig = viz.plot_power_vs_performance(workloads, power_values, perf_values)
+                    report.add_figure(fig, "Power vs Performance", "Power Analysis")
+
+        # Add data table
+        if len(df) > 0:
+            sample_df = df.head(20)
+            headers = sample_df.columns.tolist()
+            rows = sample_df.values.tolist()
+            # Format numeric values
+            rows = [[f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows]
+            report.add_table("Sample Data (First 20 rows)", headers, rows, "Data Overview")
+            report.add_section("Data Overview", "Raw data samples")
+
+    else:
+        # Generate sample report with demo data
+        report.add_summary_item("Status", "Demo Mode", "", "warning")
+        report.add_summary_item("Note", "No data file provided", "", "neutral")
+
+        report.add_section("Demo Visualizations", "Sample graphs with synthetic data")
+
+        # Demo latency percentiles
+        demo_latencies = {
+            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
+            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
+            "BERT": {"P50": 45.1, "P95": 52.3, "P99": 65.8},
+        }
+        fig = viz.plot_latency_percentiles(demo_latencies)
+        report.add_figure(fig, "Demo Latency Percentiles", "Demo Visualizations")
+
+        # Demo batch scaling
+        batch_sizes = [1, 2, 4, 8, 16]
+        latencies = [25.0, 28.5, 35.2, 48.1, 78.5]
+        throughputs = [40, 70, 114, 166, 204]
+        fig = viz.plot_latency_throughput_tradeoff(batch_sizes, latencies, throughputs)
+        report.add_figure(fig, "Demo Batch Scaling", "Demo Visualizations")
+
+    output_path = report.generate_html(args.output)
+    print(f"\n✅ HTML report generated: {output_path}")
+    return {"output_path": output_path}
+
+
+def run_report_pdf(args, config):
+    """Generate PDF report."""
+    import pandas as pd
+
+    report = PDFReportGenerator(
+        title=args.title,
+        author=args.author,
+    )
+
+    viz = PerformanceVisualizer()
+
+    # Add metadata
+    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
+
+    if args.csv:
+        df = pd.read_csv(args.csv)
+        report.add_metadata("Total Samples", str(len(df)))
+
+        # Generate visualizations based on available data
+        if "workload" in df.columns and "latency_ms" in df.columns:
+            latencies_by_workload = {}
+            for workload in df["workload"].unique():
+                wdf = df[df["workload"] == workload]["latency_ms"]
+                latencies_by_workload[workload] = {
+                    "P50": wdf.quantile(0.5),
+                    "P95": wdf.quantile(0.95),
+                    "P99": wdf.quantile(0.99),
+                }
+            fig = viz.plot_latency_percentiles(latencies_by_workload)
+            report.add_figure(fig, "Latency Percentiles by Workload")
+
+        if "batch_size" in df.columns and "latency_ms" in df.columns:
+            batch_df = df.groupby("batch_size").agg({"latency_ms": "mean"}).reset_index()
+            if "throughput" not in df.columns:
+                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+            else:
+                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+
+            fig = viz.plot_latency_throughput_tradeoff(
+                batch_df["batch_size"].tolist(),
+                batch_df["latency_ms"].tolist(),
+                batch_df["throughput"].tolist(),
+            )
+            report.add_figure(fig, "Latency vs Throughput Trade-off")
+
+    else:
+        # Generate sample report with demo data
+        demo_latencies = {
+            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
+            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
+        }
+        fig = viz.plot_latency_percentiles(demo_latencies)
+        report.add_figure(fig, "Demo Latency Percentiles")
+
+    output_path = report.generate_pdf(args.output)
+    print(f"\n✅ PDF report generated: {output_path}")
+    return {"output_path": output_path}
+
+
 def main():
     """Main CLI entry point."""
     parser = setup_parser()
@@ -419,6 +620,11 @@ def main():
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
+        elif args.command == "report":
+            if args.report_type == "html":
+                result = run_report_html(args, config)
+            elif args.report_type == "pdf":
+                result = run_report_pdf(args, config)
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
