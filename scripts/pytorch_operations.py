@@ -1,3 +1,12 @@
+""" PyTorch operations and a sample algorithm implementation.
+
+Disclaimer: This code is for educational purposes only.
+It demonstrates basic PyTorch operations and a simple algorithm.   
+Author: Hamna
+Target: NVIDIA Edge AI / Automotive Performance Engineering
+
+"""
+
 import torch
 
 # Check device

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Automotive Performance Log Parser
-Disclaimer: None of this data is real, its synthetic data for practice purposes only
 # Platform: NVIDIA Drive Orin AGX
 Extracts timestamps where latency exceeds specified threshold
 
+Disclaimer: None of this data is real, its synthetic data for practice purposes only
 Author: Hamna
 Target: NVIDIA Edge AI / Automotive Performance Engineering
 """

@@ -3,6 +3,10 @@
 NVIDIA Automotive Perflab Benchmark Analyzer
 Calculates P99 latency and comprehensive percentile statistics
 
+Usage:
+    python calculate_p99_latency.py <benchmark_csv>
+
+Disclaimer: None of this data is real, its synthetic data for practice purposes only.
 Author: Hamna
 Target: NVIDIA Performance Engineering - Edge AI Automotive
 """
