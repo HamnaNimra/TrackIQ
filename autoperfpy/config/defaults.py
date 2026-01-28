@@ -54,10 +54,84 @@ class ProcessMonitorConfig:
     log_file: str = "process_monitor.log"
 
 
+@dataclass
+class DNNPipelineConfig:
+    """Configuration for DNN pipeline analysis."""
+
+    top_n_layers: int = 5
+    memory_overhead_threshold: float = 20.0
+    dla_utilization_target: float = 30.0
+    enable_layer_profiling: bool = True
+    batch_sizes: list = field(default_factory=lambda: [1, 2, 4, 8])
+
+
+@dataclass
+class TegrastatsConfig:
+    """Configuration for Tegrastats analysis."""
+
+    throttle_temp_threshold: float = 85.0
+    memory_pressure_threshold: float = 90.0
+    sample_interval_ms: int = 1000
+    enable_thermal_monitoring: bool = True
+    enable_emc_monitoring: bool = True
+
+
+@dataclass
+class EfficiencyConfig:
+    """Configuration for efficiency analysis."""
+
+    power_column: str = "power_w"
+    latency_column: str = "latency_ms"
+    throughput_column: str = "throughput_fps"
+    group_by: str = "workload"
+    include_pareto_analysis: bool = True
+
+
+@dataclass
+class VariabilityConfig:
+    """Configuration for variability analysis."""
+
+    latency_column: str = "latency_ms"
+    cv_threshold_low: float = 5.0  # Very consistent
+    cv_threshold_moderate: float = 10.0  # Consistent
+    cv_threshold_high: float = 20.0  # Moderately consistent
+    outlier_method: str = "iqr"  # iqr or zscore
+    zscore_threshold: float = 3.0
+
+
+@dataclass
+class HTMLReportConfig:
+    """Configuration for HTML report generation."""
+
+    title: str = "Performance Analysis Report"
+    author: str = "AutoPerfPy"
+    theme: str = "light"  # light or dark
+    embed_images: bool = True
+    include_summary: bool = True
+    image_dpi: int = 150
+    max_table_rows: int = 100
+
+
+@dataclass
+class PDFReportConfig:
+    """Configuration for PDF report generation."""
+
+    title: str = "Performance Analysis Report"
+    author: str = "AutoPerfPy"
+    include_summary: bool = True
+    image_dpi: int = 300
+
+
 DEFAULT_CONFIG = {
     "benchmark": BenchmarkConfig(),
     "llm": LLMConfig(),
     "monitoring": MonitoringConfig(),
     "analysis": AnalysisConfig(),
     "process": ProcessMonitorConfig(),
+    "dnn_pipeline": DNNPipelineConfig(),
+    "tegrastats": TegrastatsConfig(),
+    "efficiency": EfficiencyConfig(),
+    "variability": VariabilityConfig(),
+    "html_report": HTMLReportConfig(),
+    "pdf_report": PDFReportConfig(),
 }

@@ -4,9 +4,17 @@ import argparse
 import sys
 
 from autoperfpy.config import ConfigManager
-from autoperfpy.analyzers import PercentileLatencyAnalyzer, LogAnalyzer
+from autoperfpy.analyzers import (
+    PercentileLatencyAnalyzer,
+    LogAnalyzer,
+    DNNPipelineAnalyzer,
+    TegrastatsAnalyzer,
+    EfficiencyAnalyzer,
+    VariabilityAnalyzer,
+)
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from autoperfpy.monitoring import GPUMemoryMonitor
+from autoperfpy.reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
 import json
 
 
@@ -22,10 +30,33 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Latency analysis
   autoperfpy analyze latency --csv data.csv
+  autoperfpy analyze logs --log performance.log --threshold 50
+
+  # DNN pipeline analysis
+  autoperfpy analyze dnn-pipeline --csv layer_times.csv --batch-size 4
+  autoperfpy analyze dnn-pipeline --profiler profiler_output.txt
+
+  # Tegrastats analysis
+  autoperfpy analyze tegrastats --log tegrastats.log
+
+  # Efficiency analysis
+  autoperfpy analyze efficiency --csv benchmark_data.csv
+
+  # Variability analysis
+  autoperfpy analyze variability --csv latency_data.csv
+
+  # Benchmarking
   autoperfpy benchmark batching --batch-sizes 1,4,8,16
   autoperfpy benchmark llm --prompt-length 512
+
+  # Monitoring
   autoperfpy monitor gpu --duration 300
+
+  # Report generation
+  autoperfpy report html --csv data.csv --output report.html --title "My Report"
+  autoperfpy report pdf --csv data.csv --output report.pdf
         """,
     )
 
@@ -46,6 +77,27 @@ Examples:
     log_parser = analyze_subparsers.add_parser("logs", help="Analyze performance logs")
     log_parser.add_argument("--log", required=True, help="Log file to analyze")
     log_parser.add_argument("--threshold", type=float, default=50.0, help="Latency threshold (ms)")
+
+    # Analyze DNN pipeline
+    dnn_parser = analyze_subparsers.add_parser("dnn-pipeline", help="Analyze DNN inference pipeline")
+    dnn_parser.add_argument("--csv", help="CSV file with layer timings")
+    dnn_parser.add_argument("--profiler", help="Profiler output text file")
+    dnn_parser.add_argument("--batch-size", type=int, default=1, help="Batch size used")
+    dnn_parser.add_argument("--top-layers", type=int, default=5, help="Number of slowest layers to report")
+
+    # Analyze tegrastats
+    tegra_parser = analyze_subparsers.add_parser("tegrastats", help="Analyze Tegrastats output")
+    tegra_parser.add_argument("--log", required=True, help="Tegrastats log file")
+    tegra_parser.add_argument("--throttle-threshold", type=float, default=85.0, help="Thermal throttling threshold (°C)")
+
+    # Analyze efficiency
+    eff_parser = analyze_subparsers.add_parser("efficiency", help="Analyze power efficiency")
+    eff_parser.add_argument("--csv", required=True, help="CSV file with benchmark data")
+
+    # Analyze variability
+    var_parser = analyze_subparsers.add_parser("variability", help="Analyze latency variability")
+    var_parser.add_argument("--csv", required=True, help="CSV file with latency data")
+    var_parser.add_argument("--column", default="latency_ms", help="Column name for latency values")
 
     # Benchmark commands
     bench_parser = subparsers.add_parser("benchmark", help="Run benchmarks")
@@ -74,6 +126,25 @@ Examples:
     # KV cache monitor
     cache_parser = monitor_subparsers.add_parser("kv-cache", help="Monitor KV cache")
     cache_parser.add_argument("--max-length", type=int, default=2048, help="Max sequence length")
+
+    # Report commands
+    report_parser = subparsers.add_parser("report", help="Generate performance reports")
+    report_subparsers = report_parser.add_subparsers(dest="report_type")
+
+    # HTML report
+    html_parser = report_subparsers.add_parser("html", help="Generate interactive HTML report")
+    html_parser.add_argument("--csv", help="CSV file with benchmark data")
+    html_parser.add_argument("--output", "-o", default="performance_report.html", help="Output HTML file path")
+    html_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    html_parser.add_argument("--theme", choices=["light", "dark"], default="light", help="Color theme")
+    html_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
+
+    # PDF report
+    pdf_parser = report_subparsers.add_parser("pdf", help="Generate PDF report")
+    pdf_parser.add_argument("--csv", help="CSV file with benchmark data")
+    pdf_parser.add_argument("--output", "-o", default="performance_report.pdf", help="Output PDF file path")
+    pdf_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
     return parser
 
@@ -106,6 +177,158 @@ def run_analyze_logs(args, config):
     print(f"Total events: {result.metrics['total_events']}")
     print(f"Spike events: {result.metrics['spike_events']}")
     print(f"Spike percentage: {result.metrics['spike_percentage']:.2f}%")
+
+    return result
+
+
+def run_analyze_dnn_pipeline(args, config):
+    """Run DNN pipeline analysis."""
+    analyzer_config = {
+        "top_n_layers": args.top_layers,
+    }
+    analyzer = DNNPipelineAnalyzer(config=analyzer_config)
+
+    if args.csv:
+        result = analyzer.analyze_layer_csv(args.csv, batch_size=args.batch_size)
+    elif args.profiler:
+        with open(args.profiler, "r") as f:
+            content = f.read()
+        result = analyzer.analyze_profiler_output(content)
+    else:
+        print("❌ Error: Either --csv or --profiler must be specified")
+        return None
+
+    print("\n🧠 DNN Pipeline Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nSource: {metrics.get('source', 'unknown')}")
+    print(f"Batch Size: {metrics.get('batch_size', 1)}")
+    print(f"Number of Layers: {metrics.get('num_layers', 0)}")
+
+    timing = metrics.get("timing", {})
+    print(f"\n⏱️  Timing:")
+    print(f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms")
+    print(f"  GPU Time: {timing.get('gpu_time_ms', 0):.2f}ms")
+    print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
+
+    device_split = metrics.get("device_split", {})
+    print(f"\n📊 Device Split:")
+    print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
+    print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
+
+    throughput = metrics.get("throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0))
+    print(f"\n🚀 Throughput: {throughput:.1f} FPS")
+
+    slowest = metrics.get("slowest_layers", [])
+    if slowest:
+        print(f"\n🐢 Slowest Layers:")
+        for layer in slowest[:5]:
+            name = layer.get("name", "unknown")
+            time_ms = layer.get("time_ms", layer.get("avg_time_ms", 0))
+            device = layer.get("device", "GPU")
+            print(f"  {name}: {time_ms:.2f}ms ({device})")
+
+    recommendations = metrics.get("recommendations", [])
+    if recommendations:
+        print(f"\n💡 Recommendations:")
+        for rec in recommendations:
+            print(f"  • {rec}")
+
+    return result
+
+
+def run_analyze_tegrastats(args, config):
+    """Run tegrastats analysis."""
+    analyzer = TegrastatsAnalyzer(throttle_temp_threshold=args.throttle_threshold)
+    result = analyzer.analyze(args.log)
+
+    print("\n📊 Tegrastats Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nSamples Analyzed: {metrics.get('num_samples', 0)}")
+
+    # CPU metrics
+    cpu = metrics.get("cpu", {})
+    print(f"\n🖥️  CPU:")
+    print(f"  Average Utilization: {cpu.get('avg_utilization', 0):.1f}%")
+    print(f"  Max Utilization: {cpu.get('max_utilization', 0):.1f}%")
+
+    # GPU metrics
+    gpu = metrics.get("gpu", {})
+    print(f"\n🎮 GPU:")
+    print(f"  Average Utilization: {gpu.get('avg_utilization', 0):.1f}%")
+    print(f"  Max Utilization: {gpu.get('max_utilization', 0):.1f}%")
+    print(f"  Average Frequency: {gpu.get('avg_frequency_mhz', 0):.0f} MHz")
+
+    # Memory metrics
+    memory = metrics.get("memory", {})
+    print(f"\n💾 Memory:")
+    print(f"  Average Used: {memory.get('avg_used_mb', 0):.0f} MB")
+    print(f"  Max Used: {memory.get('max_used_mb', 0):.0f} MB")
+
+    # Thermal metrics
+    thermal = metrics.get("thermal", {})
+    print(f"\n🌡️  Thermal:")
+    print(f"  Average Temperature: {thermal.get('avg_temperature', 0):.1f}°C")
+    print(f"  Max Temperature: {thermal.get('max_temperature', 0):.1f}°C")
+    print(f"  Throttling Events: {thermal.get('throttle_events', 0)}")
+
+    # Health status
+    health = metrics.get("health", {})
+    status = health.get("status", "unknown")
+    status_emoji = "✅" if status == "healthy" else "⚠️" if status == "warning" else "❌"
+    print(f"\n{status_emoji} Health Status: {status.upper()}")
+
+    warnings = health.get("warnings", [])
+    if warnings:
+        print("  Warnings:")
+        for warning in warnings:
+            print(f"    • {warning}")
+
+    return result
+
+
+def run_analyze_efficiency(args, config):
+    """Run efficiency analysis."""
+    analyzer = EfficiencyAnalyzer(config)
+    result = analyzer.analyze(args.csv)
+
+    print("\n⚡ Efficiency Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    for workload, data in metrics.items():
+        if isinstance(data, dict):
+            print(f"\n{workload}:")
+            print(f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W")
+            print(f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J")
+            print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
+            print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
+
+    return result
+
+
+def run_analyze_variability(args, config):
+    """Run variability analysis."""
+    analyzer = VariabilityAnalyzer(config)
+    result = analyzer.analyze(args.csv, latency_column=args.column)
+
+    print("\n📈 Variability Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nCoefficient of Variation: {metrics.get('cv_percent', 0):.2f}%")
+    print(f"Jitter (Std Dev): {metrics.get('jitter_ms', 0):.2f}ms")
+    print(f"IQR: {metrics.get('iqr_ms', 0):.2f}ms")
+    print(f"Outliers: {metrics.get('outlier_count', 0)}")
+    print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
+
+    print(f"\n📊 Percentiles:")
+    print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
+    print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
+    print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
 
     return result
 
@@ -184,6 +407,183 @@ def run_monitor_gpu(args, config):
     return summary
 
 
+def run_report_html(args, config):
+    """Generate HTML report."""
+    import pandas as pd
+
+    report = HTMLReportGenerator(
+        title=args.title,
+        author=args.author,
+        theme=args.theme,
+    )
+
+    viz = PerformanceVisualizer()
+
+    # Add metadata
+    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
+
+    if args.csv:
+        # Load and analyze data
+        df = pd.read_csv(args.csv)
+
+        # Add summary items based on available columns
+        if "latency_ms" in df.columns:
+            report.add_summary_item("Samples", len(df), "", "neutral")
+            report.add_summary_item("Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral")
+            report.add_summary_item("P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral")
+
+            cv = df['latency_ms'].std() / df['latency_ms'].mean() * 100
+            status = "good" if cv < 10 else "warning" if cv < 20 else "critical"
+            report.add_summary_item("CV", f"{cv:.1f}", "%", status)
+
+        # Generate visualizations based on available data
+        if "workload" in df.columns and "latency_ms" in df.columns:
+            report.add_section("Latency Analysis", "Percentile latency comparisons across workloads")
+
+            latencies_by_workload = {}
+            for workload in df["workload"].unique():
+                wdf = df[df["workload"] == workload]["latency_ms"]
+                latencies_by_workload[workload] = {
+                    "P50": wdf.quantile(0.5),
+                    "P95": wdf.quantile(0.95),
+                    "P99": wdf.quantile(0.99),
+                }
+            fig = viz.plot_latency_percentiles(latencies_by_workload)
+            report.add_figure(fig, "Latency Percentiles by Workload", "Latency Analysis")
+
+            # Distribution comparison
+            data_dict = {w: df[df["workload"] == w]["latency_ms"].tolist() for w in df["workload"].unique()}
+            fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
+            report.add_figure(fig, "Latency Distribution", "Latency Analysis")
+
+        if "batch_size" in df.columns and "latency_ms" in df.columns:
+            report.add_section("Batch Analysis", "Performance vs batch size")
+
+            batch_df = df.groupby("batch_size").agg({
+                "latency_ms": "mean",
+            }).reset_index()
+
+            # Calculate throughput if not present
+            if "throughput" not in df.columns:
+                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+            else:
+                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+
+            fig = viz.plot_latency_throughput_tradeoff(
+                batch_df["batch_size"].tolist(),
+                batch_df["latency_ms"].tolist(),
+                batch_df["throughput"].tolist(),
+            )
+            report.add_figure(fig, "Latency vs Throughput Trade-off", "Batch Analysis")
+
+        if "power_w" in df.columns:
+            report.add_section("Power Analysis", "Power consumption and efficiency metrics")
+
+            if "workload" in df.columns:
+                workloads = df["workload"].unique().tolist()
+                power_values = [df[df["workload"] == w]["power_w"].mean() for w in workloads]
+                if "latency_ms" in df.columns:
+                    perf_values = [1000 / df[df["workload"] == w]["latency_ms"].mean() for w in workloads]
+                    fig = viz.plot_power_vs_performance(workloads, power_values, perf_values)
+                    report.add_figure(fig, "Power vs Performance", "Power Analysis")
+
+        # Add data table
+        if len(df) > 0:
+            sample_df = df.head(20)
+            headers = sample_df.columns.tolist()
+            rows = sample_df.values.tolist()
+            # Format numeric values
+            rows = [[f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows]
+            report.add_table("Sample Data (First 20 rows)", headers, rows, "Data Overview")
+            report.add_section("Data Overview", "Raw data samples")
+
+    else:
+        # Generate sample report with demo data
+        report.add_summary_item("Status", "Demo Mode", "", "warning")
+        report.add_summary_item("Note", "No data file provided", "", "neutral")
+
+        report.add_section("Demo Visualizations", "Sample graphs with synthetic data")
+
+        # Demo latency percentiles
+        demo_latencies = {
+            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
+            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
+            "BERT": {"P50": 45.1, "P95": 52.3, "P99": 65.8},
+        }
+        fig = viz.plot_latency_percentiles(demo_latencies)
+        report.add_figure(fig, "Demo Latency Percentiles", "Demo Visualizations")
+
+        # Demo batch scaling
+        batch_sizes = [1, 2, 4, 8, 16]
+        latencies = [25.0, 28.5, 35.2, 48.1, 78.5]
+        throughputs = [40, 70, 114, 166, 204]
+        fig = viz.plot_latency_throughput_tradeoff(batch_sizes, latencies, throughputs)
+        report.add_figure(fig, "Demo Batch Scaling", "Demo Visualizations")
+
+    output_path = report.generate_html(args.output)
+    print(f"\n✅ HTML report generated: {output_path}")
+    return {"output_path": output_path}
+
+
+def run_report_pdf(args, config):
+    """Generate PDF report."""
+    import pandas as pd
+
+    report = PDFReportGenerator(
+        title=args.title,
+        author=args.author,
+    )
+
+    viz = PerformanceVisualizer()
+
+    # Add metadata
+    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
+
+    if args.csv:
+        df = pd.read_csv(args.csv)
+        report.add_metadata("Total Samples", str(len(df)))
+
+        # Generate visualizations based on available data
+        if "workload" in df.columns and "latency_ms" in df.columns:
+            latencies_by_workload = {}
+            for workload in df["workload"].unique():
+                wdf = df[df["workload"] == workload]["latency_ms"]
+                latencies_by_workload[workload] = {
+                    "P50": wdf.quantile(0.5),
+                    "P95": wdf.quantile(0.95),
+                    "P99": wdf.quantile(0.99),
+                }
+            fig = viz.plot_latency_percentiles(latencies_by_workload)
+            report.add_figure(fig, "Latency Percentiles by Workload")
+
+        if "batch_size" in df.columns and "latency_ms" in df.columns:
+            batch_df = df.groupby("batch_size").agg({"latency_ms": "mean"}).reset_index()
+            if "throughput" not in df.columns:
+                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+            else:
+                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+
+            fig = viz.plot_latency_throughput_tradeoff(
+                batch_df["batch_size"].tolist(),
+                batch_df["latency_ms"].tolist(),
+                batch_df["throughput"].tolist(),
+            )
+            report.add_figure(fig, "Latency vs Throughput Trade-off")
+
+    else:
+        # Generate sample report with demo data
+        demo_latencies = {
+            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
+            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
+        }
+        fig = viz.plot_latency_percentiles(demo_latencies)
+        report.add_figure(fig, "Demo Latency Percentiles")
+
+    output_path = report.generate_pdf(args.output)
+    print(f"\n✅ PDF report generated: {output_path}")
+    return {"output_path": output_path}
+
+
 def main():
     """Main CLI entry point."""
     parser = setup_parser()
@@ -204,6 +604,14 @@ def main():
                 result = run_analyze_latency(args, config)
             elif args.analyze_type == "logs":
                 result = run_analyze_logs(args, config)
+            elif args.analyze_type == "dnn-pipeline":
+                result = run_analyze_dnn_pipeline(args, config)
+            elif args.analyze_type == "tegrastats":
+                result = run_analyze_tegrastats(args, config)
+            elif args.analyze_type == "efficiency":
+                result = run_analyze_efficiency(args, config)
+            elif args.analyze_type == "variability":
+                result = run_analyze_variability(args, config)
         elif args.command == "benchmark":
             if args.bench_type == "batching":
                 result = run_benchmark_batching(args, config)
@@ -212,6 +620,11 @@ def main():
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
+        elif args.command == "report":
+            if args.report_type == "html":
+                result = run_report_html(args, config)
+            elif args.report_type == "pdf":
+                result = run_report_pdf(args, config)
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1

@@ -128,12 +128,17 @@ Some logic exists in both scripts and package (e.g., percentile calculation, GPU
 | Component | Location | Purpose | Import |
 |-----------|----------|---------|--------|
 | **Percentile Analyzer** | `autoperfpy/analyzers/latency.py` | OOP-based percentile analysis from CSV | `from autoperfpy import PercentileLatencyAnalyzer` |
+| **DNN Pipeline Analyzer** | `autoperfpy/analyzers/dnn_pipeline.py` | TensorRT/DriveWorks DNN inference analysis | `from autoperfpy import DNNPipelineAnalyzer` |
+| **Tegrastats Analyzer** | `autoperfpy/analyzers/tegrastats.py` | NVIDIA Jetson tegrastats analysis | `from autoperfpy import TegrastatsAnalyzer` |
+| **Efficiency Analyzer** | `autoperfpy/analyzers/efficiency.py` | Power efficiency and Perf/Watt analysis | `from autoperfpy import EfficiencyAnalyzer` |
+| **Variability Analyzer** | `autoperfpy/analyzers/variability.py` | Latency jitter and consistency analysis | `from autoperfpy import VariabilityAnalyzer` |
 | **Batching Benchmark** | `autoperfpy/benchmarks/latency.py` | Batch size impact analysis with optimization hints | `from autoperfpy import BatchingTradeoffBenchmark` |
 | **LLM Benchmark** | `autoperfpy/benchmarks/latency.py` | TTFT & time-per-token measurement | `from autoperfpy import LLMLatencyBenchmark` |
 | **GPU Monitor** | `autoperfpy/monitoring/gpu.py` | Real-time GPU memory monitoring | `from autoperfpy import GPUMemoryMonitor` |
 | **KV Cache Monitor** | `autoperfpy/monitoring/gpu.py` | LLM KV cache estimation & tracking | `from autoperfpy import LLMKVCacheMonitor` |
-| **Performance Visualizer** | `autoperfpy/reporting/visualizer.py` | Create graphs: latency, throughput, power, memory | `from autoperfpy import PerformanceVisualizer` |
+| **Performance Visualizer** | `autoperfpy/reporting/visualizer.py` | Create graphs: latency, throughput, power, memory, DNN layers | `from autoperfpy import PerformanceVisualizer` |
 | **PDF Report Generator** | `autoperfpy/reporting/pdf_generator.py` | Consolidate graphs into professional PDF reports | `from autoperfpy import PDFReportGenerator` |
+| **HTML Report Generator** | `autoperfpy/reporting/html_generator.py` | Create interactive HTML reports with navigation | `from autoperfpy import HTMLReportGenerator` |
 | **Configuration System** | `autoperfpy/config/` | YAML/JSON-based config management | `from autoperfpy import ConfigManager` |
 | **CLI Interface** | `autoperfpy/cli.py` | Unified command-line interface | `autoperfpy <command> [options]` |
 
@@ -216,7 +221,7 @@ AutoPerfPy/
 
 ### Prerequisites
 
-- **Python**: 3.7 or higher
+- **Python**: 3.8 or higher
 - **OS**: Linux/Unix environment (tested on Ubuntu 20.04+)
 - **Shell**: Bash (for shell scripts)
 - **NVIDIA**: Optional - CUDA/cuDNN for GPU acceleration
@@ -347,6 +352,171 @@ PyTorch operation profiling and optimization.
 TensorRT LLM integration and optimization interface.
 
 **Purpose**: Manage TensorRT LLM inference pipelines
+
+---
+
+### 🧠 DNN Pipeline Analysis (NEW!)
+
+#### **DNNPipelineAnalyzer (autoperfpy.analyzers)**
+Analyze TensorRT/DriveWorks DNN inference performance.
+
+**Purpose**: Profile neural network inference on NVIDIA platforms with GPU and DLA accelerators.
+
+**Features**:
+- ✓ Layer-by-layer inference timing analysis
+- ✓ DLA vs GPU execution split tracking
+- ✓ Memory transfer overhead (H2D/D2H) analysis
+- ✓ Batch scaling analysis
+- ✓ Automatic optimization recommendations
+
+**CLI Usage**:
+```bash
+# Analyze from CSV layer timings
+autoperfpy analyze dnn-pipeline --csv layer_times.csv --batch-size 4
+
+# Analyze from profiler output
+autoperfpy analyze dnn-pipeline --profiler profiler_output.txt
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import DNNPipelineAnalyzer
+
+analyzer = DNNPipelineAnalyzer(config={"top_n_layers": 10})
+
+# From profiler output
+result = analyzer.analyze_profiler_output(profiler_text)
+
+# From CSV
+result = analyzer.analyze_layer_csv("layer_times.csv", batch_size=4)
+
+# From raw data
+result = analyzer.analyze_from_data(
+    layer_timings=[
+        {"name": "conv1", "layer_type": "Conv", "execution_time_ms": 2.0, "device": "GPU"},
+        {"name": "conv2", "layer_type": "Conv", "execution_time_ms": 1.5, "device": "DLA0"},
+    ],
+    batch_size=4
+)
+
+# Get recommendations
+print(result.metrics["recommendations"])
+
+# Compare two engine configurations
+comparison = analyzer.compare_engines(baseline_metrics, optimized_metrics)
+print(f"Speedup: {comparison['latency_improvement_percent']:.1f}%")
+```
+
+**Output Metrics**:
+- Timing breakdown (total, GPU, DLA, memory overhead)
+- Throughput (FPS)
+- Device split percentages
+- Slowest layers list
+- Batch scaling analysis
+- DLA vs GPU comparison
+
+---
+
+### 📊 Tegrastats Analysis (NEW!)
+
+#### **TegrastatsAnalyzer (autoperfpy.analyzers)**
+Analyze NVIDIA Jetson tegrastats output for system health monitoring.
+
+**Purpose**: Monitor CPU, GPU, memory, and thermal metrics on Jetson platforms.
+
+**Features**:
+- ✓ Per-core CPU utilization tracking
+- ✓ GPU utilization and frequency monitoring
+- ✓ Memory pressure detection
+- ✓ Thermal throttling detection
+- ✓ Health status assessment (healthy/warning/critical)
+
+**CLI Usage**:
+```bash
+autoperfpy analyze tegrastats --log tegrastats.log --throttle-threshold 85
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import TegrastatsAnalyzer
+
+analyzer = TegrastatsAnalyzer(throttle_temp_threshold=85.0)
+
+# Analyze log file
+result = analyzer.analyze("tegrastats.log")
+
+# Or analyze raw lines
+result = analyzer.analyze_lines(log_lines)
+
+# Check health status
+health = result.metrics["health"]
+if health["status"] != "healthy":
+    print("Warnings:", health["warnings"])
+```
+
+---
+
+### ⚡ Efficiency Analysis (NEW!)
+
+#### **EfficiencyAnalyzer (autoperfpy.analyzers)**
+Analyze power efficiency metrics for inference workloads.
+
+**Purpose**: Calculate Performance/Watt and energy consumption metrics.
+
+**Features**:
+- ✓ Performance per Watt calculation
+- ✓ Energy per inference (Joules)
+- ✓ Cost per inference estimation
+- ✓ Pareto-optimal configuration identification
+
+**CLI Usage**:
+```bash
+autoperfpy analyze efficiency --csv benchmark_data.csv
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import EfficiencyAnalyzer
+
+analyzer = EfficiencyAnalyzer()
+result = analyzer.analyze("benchmark_data.csv")
+
+for workload, metrics in result.metrics.items():
+    print(f"{workload}: {metrics['perf_per_watt']:.2f} infer/s/W")
+```
+
+---
+
+### 📈 Variability Analysis (NEW!)
+
+#### **VariabilityAnalyzer (autoperfpy.analyzers)**
+Analyze latency variability and consistency.
+
+**Purpose**: Measure jitter, coefficient of variation, and identify outliers.
+
+**Features**:
+- ✓ Coefficient of Variation (CV) calculation
+- ✓ Jitter measurement (std dev)
+- ✓ Interquartile Range (IQR)
+- ✓ Outlier detection and counting
+- ✓ Consistency rating (very_consistent → high_variability)
+
+**CLI Usage**:
+```bash
+autoperfpy analyze variability --csv latency_data.csv --column latency_ms
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import VariabilityAnalyzer
+
+analyzer = VariabilityAnalyzer()
+result = analyzer.analyze("latency_data.csv")
+
+print(f"CV: {result.metrics['cv_percent']:.2f}%")
+print(f"Jitter: {result.metrics['jitter_ms']:.2f}ms")
+print(f"Rating: {result.metrics['consistency_rating']}")
+```
 
 ---
 
@@ -531,23 +701,32 @@ from autoperfpy import PerformanceVisualizer
 
 viz = PerformanceVisualizer()
 
-# Latency percentiles
+# === Core Latency Graphs ===
 fig1 = viz.plot_latency_percentiles(workload_data)
-
-# Throughput trade-off
 fig2 = viz.plot_latency_throughput_tradeoff(batch_sizes, latencies, throughputs)
-
-# Power efficiency
 fig3 = viz.plot_power_vs_performance(workloads, power, perf)
-
-# Memory timeline
 fig4 = viz.plot_gpu_memory_timeline(timestamps, memory_used)
-
-# Relative comparison
 fig5 = viz.plot_relative_performance(baseline, configs_data)
-
-# Distribution
 fig6 = viz.plot_distribution(data_dict)
+
+# === DNN Pipeline Graphs ===
+fig7 = viz.plot_layer_timings(layers)              # Layer execution times
+fig8 = viz.plot_device_split(gpu_time, dla_time)   # DLA vs GPU pie chart
+fig9 = viz.plot_memory_transfer_timeline(transfers) # H2D/D2H transfers
+fig10 = viz.plot_batch_scaling(batch_metrics)       # Batch size analysis
+
+# === Tegrastats Graphs ===
+fig11 = viz.plot_tegrastats_overview(metrics)       # CPU/GPU/Memory/Thermal
+fig12 = viz.plot_tegrastats_timeline(timeline_data) # Metrics over time
+
+# === Efficiency Graphs ===
+fig13 = viz.plot_efficiency_metrics(efficiency_data) # Perf/Watt, Energy/Inference
+fig14 = viz.plot_pareto_frontier(workloads, latencies, throughputs, power)
+
+# === Variability Graphs ===
+fig15 = viz.plot_variability_metrics(variability_data) # CV, Jitter, IQR
+fig16 = viz.plot_consistency_rating(workloads, ratings, cv_values)
+fig17 = viz.plot_outlier_analysis(latencies, workload_name)
 
 # Save any figure
 viz.save_figure(fig1, "graph.png", dpi=300)
@@ -588,6 +767,90 @@ pdf_gen.generate_pdf("report.pdf", include_summary=True)
 - Graph pages with captions
 - PDF metadata (title, author, creation date)
 
+---
+
+#### **HTMLReportGenerator (autoperfpy.reporting)**
+Generate interactive HTML reports with navigation, theming, and executive summaries.
+
+**Features**:
+- ✓ Light and dark theme support
+- ✓ Interactive navigation with smooth scrolling
+- ✓ Executive summary cards with status indicators
+- ✓ Data tables with styling
+- ✓ Section-based organization
+- ✓ Embedded images (base64) or external files
+- ✓ Print-friendly CSS
+- ✓ Responsive design for mobile
+
+**CLI Usage**:
+```bash
+# Generate HTML report from CSV data
+autoperfpy report html --csv data.csv --output report.html --title "My Analysis"
+
+# Use dark theme
+autoperfpy report html --csv data.csv --output report.html --theme dark
+
+# Generate demo report (no data file)
+autoperfpy report html --output demo_report.html
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import HTMLReportGenerator, PerformanceVisualizer
+
+# Create report with dark theme
+report = HTMLReportGenerator(
+    title="DNN Performance Analysis",
+    author="ML Team",
+    theme="dark"
+)
+
+# Add metadata
+report.add_metadata("Platform", "NVIDIA Jetson AGX Orin")
+report.add_metadata("Model", "ResNet50 INT8")
+
+# Add executive summary items with status
+report.add_summary_item("Mean Latency", "25.3", "ms", status="good")
+report.add_summary_item("P99 Latency", "42.1", "ms", status="warning")
+report.add_summary_item("Throughput", "156", "FPS", status="good")
+report.add_summary_item("CV", "15.2", "%", status="warning")
+
+# Create sections
+report.add_section("Latency Analysis", "Percentile breakdown by workload")
+report.add_section("Power Efficiency", "Performance per Watt metrics")
+
+# Add figures with section assignment
+viz = PerformanceVisualizer()
+fig1 = viz.plot_latency_percentiles(latency_data)
+report.add_figure(fig1, "Latency Percentiles", section="Latency Analysis")
+
+fig2 = viz.plot_power_vs_performance(workloads, power, perf)
+report.add_figure(fig2, "Power vs Performance", section="Power Efficiency")
+
+# Add data tables
+report.add_table(
+    title="Top Configurations",
+    headers=["Config", "Latency (ms)", "Throughput (FPS)", "Power (W)"],
+    rows=[
+        ["Batch=4, FP16", "28.5", "140", "15.2"],
+        ["Batch=8, INT8", "25.3", "156", "14.8"],
+    ],
+    section="Latency Analysis"
+)
+
+# Generate HTML file
+report.generate_html("performance_report.html")
+```
+
+**Output Features**:
+- Responsive header with metadata badges
+- Sticky navigation bar with section links
+- Summary cards with color-coded status (good/warning/critical)
+- Embedded graphs organized by section
+- Styled data tables
+- Footer with generation timestamp
+
+---
 
 **Termination Flow**:
 ```
@@ -919,7 +1182,7 @@ New to performance optimization? Follow this learning path:
 pip install -r requirements.txt
 
 # Check Python version
-python --version  # Should be 3.7+
+python --version  # Should be 3.8+
 ```
 
 ### Permission Errors (Shell Scripts)
