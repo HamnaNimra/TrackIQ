@@ -17,7 +17,7 @@ from .core import (
     EfficiencyCalculator,
     BatchEfficiencyAnalyzer,
 )
-from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer, EfficiencyAnalyzer
+from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer, EfficiencyAnalyzer, VariabilityAnalyzer
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from .reporting import PerformanceVisualizer, PDFReportGenerator
@@ -40,6 +40,7 @@ __all__ = [
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
     "EfficiencyAnalyzer",
+    "VariabilityAnalyzer",
     # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",
