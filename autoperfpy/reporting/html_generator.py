@@ -602,6 +602,88 @@ class HTMLReportGenerator:
             .summary-grid {{
                 grid-template-columns: repeat(2, 1fr);
             }}
+            .chart-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+
+        /* Interactive Charts */
+        .chart-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 25px;
+            margin-top: 25px;
+        }}
+
+        .chart-card {{
+            background: var(--secondary-color);
+            border-radius: 8px;
+            overflow: hidden;
+            padding: 20px;
+        }}
+
+        .chart-card .chart-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+
+        .chart-card .chart-title {{
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }}
+
+        .chart-card .chart-controls {{
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }}
+
+        .chart-card .chart-btn {{
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .chart-card .chart-btn:hover {{
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }}
+
+        .chart-card .chart-btn.active {{
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }}
+
+        .chart-container {{
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }}
+
+        .chart-card .chart-description {{
+            font-size: 0.85rem;
+            opacity: 0.7;
+            margin-top: 12px;
+            text-align: center;
+        }}
+
+        .chart-card .zoom-info {{
+            font-size: 0.75rem;
+            opacity: 0.6;
+            text-align: center;
+            margin-top: 8px;
         }}
         """
 
