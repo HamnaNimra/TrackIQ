@@ -849,6 +849,380 @@ class HTMLReportGenerator:
         </section>
         """
 
+    def _generate_interactive_charts_html(self, charts: List[Dict]) -> str:
+        """Generate HTML for interactive charts in a section.
+
+        Args:
+            charts: List of chart dictionaries
+
+        Returns:
+            Charts HTML string
+        """
+        if not charts:
+            return ""
+
+        chart_cards = []
+        for chart in charts:
+            chart_id = chart["id"]
+            title = chart.get("title", "")
+            description = chart.get("description", "")
+            enable_zoom = chart.get("enable_zoom", False)
+
+            desc_html = f'<p class="chart-description">{description}</p>' if description else ""
+
+            # Add zoom controls for supported chart types
+            zoom_controls = ""
+            zoom_info = ""
+            if enable_zoom and chart["type"] in ("line", "scatter"):
+                zoom_controls = """
+                <div class="chart-controls">
+                    <button class="chart-btn" onclick="resetZoom('{id}')">Reset Zoom</button>
+                </div>
+                """.format(id=chart_id)
+                zoom_info = '<p class="zoom-info">Scroll to zoom, drag to pan</p>'
+
+            chart_cards.append(f"""
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h4 class="chart-title">{title}</h4>
+                    {zoom_controls}
+                </div>
+                <div class="chart-container">
+                    <canvas id="{chart_id}"></canvas>
+                </div>
+                {desc_html}
+                {zoom_info}
+            </div>
+            """)
+
+        return f"""
+        <div class="chart-grid">
+            {''.join(chart_cards)}
+        </div>
+        """
+
+    def _get_chart_color_palette(self) -> List[str]:
+        """Get color palette for charts based on theme."""
+        if self.theme == "dark":
+            return [
+                "rgba(233, 69, 96, 0.8)",    # Red
+                "rgba(78, 205, 196, 0.8)",   # Teal
+                "rgba(255, 209, 102, 0.8)",  # Yellow
+                "rgba(149, 117, 205, 0.8)",  # Purple
+                "rgba(100, 181, 246, 0.8)",  # Blue
+                "rgba(129, 199, 132, 0.8)",  # Green
+                "rgba(255, 138, 101, 0.8)",  # Orange
+                "rgba(240, 98, 146, 0.8)",   # Pink
+            ]
+        else:
+            return [
+                "rgba(66, 153, 225, 0.8)",   # Blue
+                "rgba(72, 187, 120, 0.8)",   # Green
+                "rgba(237, 137, 54, 0.8)",   # Orange
+                "rgba(159, 122, 234, 0.8)",  # Purple
+                "rgba(245, 101, 101, 0.8)",  # Red
+                "rgba(56, 178, 172, 0.8)",   # Teal
+                "rgba(236, 201, 75, 0.8)",   # Yellow
+                "rgba(237, 100, 166, 0.8)",  # Pink
+            ]
+
+    def _generate_chartjs_config(self, chart: Dict) -> str:
+        """Generate Chart.js configuration for a chart.
+
+        Args:
+            chart: Chart dictionary
+
+        Returns:
+            JavaScript configuration object string
+        """
+        import json
+
+        chart_type = chart["type"]
+        colors = self._get_chart_color_palette()
+
+        # Common options
+        common_opts = {
+            "responsive": True,
+            "maintainAspectRatio": False,
+            "plugins": {
+                "legend": {
+                    "display": True,
+                    "position": "top",
+                    "labels": {
+                        "usePointStyle": True,
+                        "padding": 15,
+                    },
+                    "onClick": None,  # Will be replaced with function
+                },
+                "tooltip": {
+                    "enabled": True,
+                    "mode": "index",
+                    "intersect": False,
+                    "backgroundColor": "rgba(0, 0, 0, 0.8)",
+                    "titleFont": {"size": 13},
+                    "bodyFont": {"size": 12},
+                    "padding": 12,
+                    "cornerRadius": 6,
+                },
+            },
+        }
+
+        if chart_type == "line":
+            datasets = []
+            for i, ds in enumerate(chart.get("datasets", [])):
+                color = ds.get("color", colors[i % len(colors)])
+                datasets.append({
+                    "label": ds.get("label", f"Series {i+1}"),
+                    "data": ds.get("data", []),
+                    "borderColor": color,
+                    "backgroundColor": color.replace("0.8", "0.2"),
+                    "borderWidth": 2,
+                    "tension": 0.3,
+                    "pointRadius": 4,
+                    "pointHoverRadius": 6,
+                    "fill": False,
+                })
+
+            config = {
+                "type": "line",
+                "data": {
+                    "labels": chart.get("labels", []),
+                    "datasets": datasets,
+                },
+                "options": {
+                    **common_opts,
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": bool(chart.get("x_label")),
+                                "text": chart.get("x_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                        "y": {
+                            "title": {
+                                "display": bool(chart.get("y_label")),
+                                "text": chart.get("y_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                    },
+                },
+            }
+
+            if chart.get("enable_zoom"):
+                config["options"]["plugins"]["zoom"] = {
+                    "zoom": {
+                        "wheel": {"enabled": True},
+                        "pinch": {"enabled": True},
+                        "mode": "xy",
+                    },
+                    "pan": {
+                        "enabled": True,
+                        "mode": "xy",
+                    },
+                }
+
+        elif chart_type == "bar":
+            datasets = []
+            for i, ds in enumerate(chart.get("datasets", [])):
+                color = ds.get("color", colors[i % len(colors)])
+                datasets.append({
+                    "label": ds.get("label", f"Series {i+1}"),
+                    "data": ds.get("data", []),
+                    "backgroundColor": color,
+                    "borderColor": color.replace("0.8", "1"),
+                    "borderWidth": 1,
+                })
+
+            config = {
+                "type": "bar",
+                "data": {
+                    "labels": chart.get("labels", []),
+                    "datasets": datasets,
+                },
+                "options": {
+                    **common_opts,
+                    "indexAxis": "y" if chart.get("horizontal") else "x",
+                    "scales": {
+                        "x": {
+                            "stacked": chart.get("stacked", False),
+                            "title": {
+                                "display": bool(chart.get("x_label")),
+                                "text": chart.get("x_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                        "y": {
+                            "stacked": chart.get("stacked", False),
+                            "title": {
+                                "display": bool(chart.get("y_label")),
+                                "text": chart.get("y_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                    },
+                },
+            }
+
+        elif chart_type == "scatter":
+            datasets = []
+            for i, ds in enumerate(chart.get("datasets", [])):
+                color = ds.get("color", colors[i % len(colors)])
+                datasets.append({
+                    "label": ds.get("label", f"Series {i+1}"),
+                    "data": ds.get("data", []),
+                    "backgroundColor": color,
+                    "borderColor": color.replace("0.8", "1"),
+                    "pointRadius": 6,
+                    "pointHoverRadius": 8,
+                })
+
+            config = {
+                "type": "scatter",
+                "data": {"datasets": datasets},
+                "options": {
+                    **common_opts,
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": bool(chart.get("x_label")),
+                                "text": chart.get("x_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                        "y": {
+                            "title": {
+                                "display": bool(chart.get("y_label")),
+                                "text": chart.get("y_label", ""),
+                            },
+                            "grid": {"display": True, "color": "rgba(0,0,0,0.1)"},
+                        },
+                    },
+                },
+            }
+
+            if chart.get("enable_zoom"):
+                config["options"]["plugins"]["zoom"] = {
+                    "zoom": {
+                        "wheel": {"enabled": True},
+                        "pinch": {"enabled": True},
+                        "mode": "xy",
+                    },
+                    "pan": {
+                        "enabled": True,
+                        "mode": "xy",
+                    },
+                }
+
+        elif chart_type in ("pie", "doughnut"):
+            chart_colors = chart.get("colors") or colors[:len(chart.get("data", []))]
+
+            config = {
+                "type": chart_type,
+                "data": {
+                    "labels": chart.get("labels", []),
+                    "datasets": [{
+                        "data": chart.get("data", []),
+                        "backgroundColor": chart_colors,
+                        "borderWidth": 2,
+                        "borderColor": "#fff" if self.theme == "light" else "#16213e",
+                    }],
+                },
+                "options": {
+                    **common_opts,
+                    "plugins": {
+                        **common_opts["plugins"],
+                        "legend": {
+                            "display": True,
+                            "position": "right",
+                            "labels": {
+                                "usePointStyle": True,
+                                "padding": 15,
+                            },
+                        },
+                    },
+                },
+            }
+
+        else:
+            config = {"type": "bar", "data": {}, "options": {}}
+
+        return json.dumps(config, indent=2)
+
+    def _get_chartjs_scripts(self) -> str:
+        """Generate Chart.js initialization scripts.
+
+        Returns:
+            JavaScript string for chart initialization
+        """
+        if not self.interactive_charts:
+            return ""
+
+        # CDN links for Chart.js and zoom plugin
+        scripts = """
+    <!-- Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <script>
+        // Store chart instances for interaction
+        const chartInstances = {};
+
+        // Reset zoom function
+        function resetZoom(chartId) {
+            if (chartInstances[chartId]) {
+                chartInstances[chartId].resetZoom();
+            }
+        }
+
+        // Toggle dataset visibility (filter)
+        function toggleDataset(chartId, datasetIndex) {
+            const chart = chartInstances[chartId];
+            if (chart) {
+                const meta = chart.getDatasetMeta(datasetIndex);
+                meta.hidden = !meta.hidden;
+                chart.update();
+            }
+        }
+
+        // Initialize charts on DOM load
+        document.addEventListener('DOMContentLoaded', function() {
+"""
+
+        # Generate initialization code for each chart
+        for chart in self.interactive_charts:
+            chart_id = chart["id"]
+            config = self._generate_chartjs_config(chart)
+
+            # Replace null onClick with actual function for legend filtering
+            config_with_legend = config.replace(
+                '"onClick": null',
+                """\"onClick\": function(e, legendItem, legend) {
+                    const index = legendItem.datasetIndex;
+                    const chart = legend.chart;
+                    const meta = chart.getDatasetMeta(index);
+                    meta.hidden = !meta.hidden;
+                    chart.update();
+                }"""
+            )
+
+            scripts += f"""
+            // Initialize {chart_id}
+            (function() {{
+                const ctx = document.getElementById('{chart_id}');
+                if (ctx) {{
+                    const config = {config_with_legend};
+                    chartInstances['{chart_id}'] = new Chart(ctx, config);
+                }}
+            }})();
+"""
+
+        scripts += """
+        });
+    </script>
+"""
+        return scripts
+
     def generate_html(
         self,
         output_path: str,
@@ -883,8 +1257,16 @@ class HTMLReportGenerator:
                 section_tables[section] = []
             section_tables[section].append(table)
 
+        # Organize interactive charts by section
+        section_charts: Dict[str, List[Dict]] = {}
+        for chart in self.interactive_charts:
+            section = chart.get("section", "General")
+            if section not in section_charts:
+                section_charts[section] = []
+            section_charts[section].append(chart)
+
         # Get all unique section names
-        all_sections = set(section_figures.keys()) | set(section_tables.keys())
+        all_sections = set(section_figures.keys()) | set(section_tables.keys()) | set(section_charts.keys())
         for s in self.sections:
             all_sections.add(s["name"])
         section_names = sorted(all_sections)
@@ -910,8 +1292,11 @@ class HTMLReportGenerator:
             tables_html = self._generate_tables_html(
                 section_tables.get(section_name, [])
             )
+            charts_html = self._generate_interactive_charts_html(
+                section_charts.get(section_name, [])
+            )
 
-            if figures_html or tables_html:
+            if figures_html or tables_html or charts_html:
                 sections_html.append(f"""
                 <section class="section" id="{anchor}">
                     <div class="section-header">
@@ -920,6 +1305,7 @@ class HTMLReportGenerator:
                     </div>
                     <div class="section-content">
                         {figures_html}
+                        {charts_html}
                         {tables_html}
                     </div>
                 </section>
@@ -1008,6 +1394,7 @@ class HTMLReportGenerator:
             }});
         }});
     </script>
+    {self._get_chartjs_scripts()}
 </body>
 </html>
 """
@@ -1018,12 +1405,14 @@ class HTMLReportGenerator:
         return output_path
 
     def clear(self) -> None:
-        """Clear all figures, tables, and summary items."""
+        """Clear all figures, tables, summary items, and interactive charts."""
         self.figures = []
         self.tables = []
         self.summary_items = []
         self.sections = []
         self.metadata = {}
+        self.interactive_charts = []
+        self._chart_id_counter = 0
 
 
 __all__ = ["HTMLReportGenerator"]
