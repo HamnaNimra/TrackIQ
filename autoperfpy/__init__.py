@@ -13,8 +13,11 @@ from .core import (
     LatencyStats,
     PerformanceComparator,
     RegressionDetector,
+    EfficiencyMetrics,
+    EfficiencyCalculator,
+    BatchEfficiencyAnalyzer,
 )
-from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer
+from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer, EfficiencyAnalyzer
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from .reporting import PerformanceVisualizer, PDFReportGenerator
@@ -29,12 +32,21 @@ __all__ = [
     "LatencyStats",
     "PerformanceComparator",
     "RegressionDetector",
+    # Efficiency metrics
+    "EfficiencyMetrics",
+    "EfficiencyCalculator",
+    "BatchEfficiencyAnalyzer",
+    # Analyzers
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
+    "EfficiencyAnalyzer",
+    # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",
+    # Monitoring
     "GPUMemoryMonitor",
     "LLMKVCacheMonitor",
+    # Reporting
     "PerformanceVisualizer",
     "PDFReportGenerator",
 ]
