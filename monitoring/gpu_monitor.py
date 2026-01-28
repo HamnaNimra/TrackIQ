@@ -13,12 +13,21 @@ Usage:
     python gpu_monitor.py [--window SIZE] [--threshold PERCENT] [--interval SEC]
 """
 
-import subprocess
+import sys
 import time
 import argparse
 from collections import deque
 from datetime import datetime
 from typing import Optional, Dict
+
+# Import shared GPU utilities from autoperfpy package
+sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
+try:
+    from autoperfpy.monitoring._gpu_common import get_performance_metrics
+    _USE_SHARED_UTILS = True
+except ImportError:
+    _USE_SHARED_UTILS = False
+    import subprocess
 
 
 class GPUMonitor:
@@ -50,7 +59,11 @@ class GPUMonitor:
         self.power_history = deque(maxlen=window_size)
 
     def get_gpu_metrics(self) -> Optional[Dict[str, float]]:
-        """Query nvidia-smi for GPU metrics"""
+        """Query nvidia-smi for GPU metrics using shared utilities."""
+        if _USE_SHARED_UTILS:
+            return get_performance_metrics()
+
+        # Fallback if shared utilities not available
         try:
             result = subprocess.run(
                 [
