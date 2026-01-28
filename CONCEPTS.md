@@ -8,6 +8,8 @@ This document explains key performance engineering concepts used throughout Auto
 3. [Throughput & Batching](#throughput--batching)
 4. [LLM Inference Metrics](#llm-inference-metrics)
 5. [GPU Memory Management](#gpu-memory-management)
+6. [Regression Detection](#regression-detection)
+7. [Testing & Quality Assurance](#testing--quality-assurance)
 
 ---
 

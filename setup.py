@@ -11,8 +11,7 @@ setup(
     name="autoperfpy",
     version="0.1.0",
     author="Hamna Nimra",
-    author_email="hamna@nvidia.com",
-    description="Performance analysis and benchmarking toolkit for NVIDIA platforms",
+    description="Performance analysis and benchmarking toolkit for NVIDIA GPU platforms and LLM workloads",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/HamnaNimra/AutoPerfPy",
@@ -40,8 +39,16 @@ setup(
     extras_require={
         "dev": [
             "pytest>=6.0",
+            "pytest-cov>=2.12.0",
+            "pytest-mock>=3.6.0",
             "black>=21.0",
             "flake8>=3.9",
+            "isort>=5.0",
+        ],
+        "test": [
+            "pytest>=6.0",
+            "pytest-cov>=2.12.0",
+            "pytest-mock>=3.6.0",
         ],
     },
     entry_points={

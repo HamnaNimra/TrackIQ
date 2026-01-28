@@ -5,7 +5,7 @@ A comprehensive collection of Python scripts and shell utilities for **performan
 
 > **⚠️ Disclaimer**: All data in this repository is **synthetic** and created for **practice/demonstration purposes only**. Results are not representative of real hardware performance.
 
-**Focus**: NVIDIA Edge AI platforms (Drive Orin AGX, TensorRT, LLM optimization)
+**Focus**: Performance optimization for machine learning inference and edge computing workloads
 
 ---
 
@@ -13,10 +13,12 @@ A comprehensive collection of Python scripts and shell utilities for **performan
 
 - [Quick Start](#-quick-start)
 - [Features](#-features)
-- [Project Structure](#-project-structure)
-- [Module Documentation](#-module-documentation)
+- [Installation](#-setup--installation)
 - [Usage Examples](#-usage-examples)
-- [Contributing](#contributing)
+- [Testing](#-testing)
+- [Changelog](CHANGELOG.md)
+- [Learning Path](#-learning-path)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -566,7 +568,7 @@ pdf_gen = PDFReportGenerator(
 )
 
 # Add metadata
-pdf_gen.add_metadata("System", "NVIDIA Drive Orin")
+pdf_gen.add_metadata("System", "GPU Inference Platform")
 pdf_gen.add_metadata("Date", "2024-01-15")
 
 # Add figures from visualizer
@@ -729,12 +731,105 @@ fig3 = viz.plot_gpu_memory_timeline(timestamps, memory_used)
 
 # Generate consolidated PDF report
 pdf_gen = PDFReportGenerator("My Performance Report")
-pdf_gen.add_metadata("System", "NVIDIA Drive Orin AGX")
+pdf_gen.add_metadata("System", "GPU Inference Platform")
 pdf_gen.add_figure(fig1, "Latency Percentiles")
 pdf_gen.add_figure(fig2, "Latency vs Throughput Trade-off")
 pdf_gen.add_figure(fig3, "GPU Memory Timeline")
 
 pdf_gen.generate_pdf("my_report.pdf")
+```
+
+### Example 8: Performance Regression Detection (NEW!)
+
+#### Basic Usage
+```python
+from autoperfpy import RegressionDetector, RegressionThreshold
+
+# Create detector
+detector = RegressionDetector()
+
+# Save baseline metrics (e.g., from main branch)
+detector.save_baseline("main", {
+    "p99_latency": 50.0,
+    "throughput": 1000.0,
+})
+
+# Compare current metrics against baseline
+result = detector.detect_regressions(
+    baseline_name="main",
+    current_metrics={
+        "p99_latency": 56.0,  # 12% increase
+        "throughput": 950.0,  # 5% decrease
+    },
+    thresholds=RegressionThreshold(
+        p99_percent=10.0,          # P99 can increase 10%
+        throughput_percent=5.0,    # Throughput can decrease 5%
+    )
+)
+
+# Check results
+if result["has_regressions"]:
+    print("⚠️ Performance regression detected!")
+    for metric, comp in result["regressions"].items():
+        print(f"  {metric}: {comp['percent_change']:+.2f}%")
+
+# Generate human-readable report
+print(detector.generate_report("main", current_metrics))
+```
+
+#### List and Manage Baselines
+```python
+# List all available baselines
+baselines = detector.list_baselines()
+print(f"Available baselines: {baselines}")
+
+# Load a baseline for comparison
+baseline_metrics = detector.load_baseline("v1.0")
+```
+
+---
+
+## 🧪 Testing
+
+### Installation with Test Dependencies
+```bash
+pip install -e ".[test]"
+```
+
+### Running Tests
+```bash
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run with coverage report
+pytest tests/ --cov=autoperfpy --cov-report=html
+
+# Run specific test file
+pytest tests/test_core.py -v
+
+# Run specific test class
+pytest tests/test_core.py::TestRegressionDetector -v
+```
+
+### Test Coverage
+- **42 Total Tests** across 4 test files
+- **Core Utilities** (15 tests): DataLoader, LatencyStats, RegressionDetector
+- **Analyzers** (11 tests): Percentile analysis, log analysis
+- **Benchmarks** (11 tests): Batching trade-offs, LLM inference
+- **CLI** (5 tests): Argument parsing and execution
+
+### Using Make Commands
+```bash
+make help              # Show all available commands
+make install-test      # Install with test dependencies
+make test              # Run all tests
+make test-verbose      # Run with verbose output
+make test-coverage     # Generate coverage report
+make lint              # Run linting
+make format            # Format code
 ```
 
 ---

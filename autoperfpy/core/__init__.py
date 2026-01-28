@@ -2,6 +2,7 @@
 
 from .base import BaseAnalyzer, BaseBenchmark, BaseMonitor, AnalysisResult
 from .utils import DataLoader, LatencyStats, PerformanceComparator
+from .regression import RegressionDetector, RegressionThreshold
 
 __all__ = [
     "BaseAnalyzer",
@@ -11,4 +12,6 @@ __all__ = [
     "DataLoader",
     "LatencyStats",
     "PerformanceComparator",
+    "RegressionDetector",
+    "RegressionThreshold",
 ]

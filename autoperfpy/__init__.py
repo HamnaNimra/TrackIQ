@@ -12,6 +12,7 @@ from .core import (
     DataLoader,
     LatencyStats,
     PerformanceComparator,
+    RegressionDetector,
 )
 from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
@@ -27,6 +28,7 @@ __all__ = [
     "DataLoader",
     "LatencyStats",
     "PerformanceComparator",
+    "RegressionDetector",
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
     "BatchingTradeoffBenchmark",
