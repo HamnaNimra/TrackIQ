@@ -81,6 +81,32 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         self.top_n_layers = self.config.get("top_n_layers", 5)
         self.memory_overhead_threshold = self.config.get("memory_overhead_threshold", 20.0)
 
+    def analyze(self, data: Any) -> AnalysisResult:
+        """Perform analysis on DNN pipeline data.
+
+        This method serves as the generic entry point for analysis, supporting
+        multiple data formats:
+        - str: Profiler output text
+        - List[InferenceRun]: List of inference runs
+        - List[Dict]: List of layer timing dictionaries
+
+        Args:
+            data: Input data (profiler output string, InferenceRun list, or dict list)
+
+        Returns:
+            AnalysisResult with inference metrics
+        """
+        if isinstance(data, str):
+            return self.analyze_profiler_output(data)
+        elif isinstance(data, list):
+            if len(data) == 0:
+                return self.analyze_runs([])
+            if isinstance(data[0], InferenceRun):
+                return self.analyze_runs(data)
+            elif isinstance(data[0], dict):
+                return self.analyze_from_data(data)
+        raise ValueError(f"Unsupported data type: {type(data)}")
+
     def analyze_profiler_output(self, content: str) -> AnalysisResult:
         """Analyze raw profiler output text.
 
