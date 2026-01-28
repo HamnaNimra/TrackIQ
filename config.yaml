@@ -36,3 +36,36 @@ process:
   enable_zombie_detection: true
   sigterm_wait_seconds: 10
   log_file: "process_monitor.log"
+
+# DNN Pipeline analysis configuration
+dnn_pipeline:
+  top_n_layers: 5
+  memory_overhead_threshold: 20.0  # Warn if memory overhead exceeds this %
+  dla_utilization_target: 30.0     # Warn if DLA usage is below this %
+  enable_layer_profiling: true
+  batch_sizes: [1, 2, 4, 8]
+
+# Tegrastats analysis configuration
+tegrastats:
+  throttle_temp_threshold: 85.0    # Temperature threshold for throttling detection (°C)
+  memory_pressure_threshold: 90.0  # Memory usage threshold for pressure warning (%)
+  sample_interval_ms: 1000
+  enable_thermal_monitoring: true
+  enable_emc_monitoring: true
+
+# Efficiency analysis configuration
+efficiency:
+  power_column: "power_w"
+  latency_column: "latency_ms"
+  throughput_column: "throughput_fps"
+  group_by: "workload"
+  include_pareto_analysis: true
+
+# Variability analysis configuration
+variability:
+  latency_column: "latency_ms"
+  cv_threshold_low: 5.0            # CV below this = very consistent
+  cv_threshold_moderate: 10.0      # CV below this = consistent
+  cv_threshold_high: 20.0          # CV below this = moderately consistent
+  outlier_method: "iqr"            # iqr or zscore
+  zscore_threshold: 3.0

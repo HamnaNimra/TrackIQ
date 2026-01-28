@@ -4,7 +4,14 @@ import argparse
 import sys
 
 from autoperfpy.config import ConfigManager
-from autoperfpy.analyzers import PercentileLatencyAnalyzer, LogAnalyzer
+from autoperfpy.analyzers import (
+    PercentileLatencyAnalyzer,
+    LogAnalyzer,
+    DNNPipelineAnalyzer,
+    TegrastatsAnalyzer,
+    EfficiencyAnalyzer,
+    VariabilityAnalyzer,
+)
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from autoperfpy.monitoring import GPUMemoryMonitor
 import json
@@ -22,9 +29,28 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Latency analysis
   autoperfpy analyze latency --csv data.csv
+  autoperfpy analyze logs --log performance.log --threshold 50
+
+  # DNN pipeline analysis
+  autoperfpy analyze dnn-pipeline --csv layer_times.csv --batch-size 4
+  autoperfpy analyze dnn-pipeline --profiler profiler_output.txt
+
+  # Tegrastats analysis
+  autoperfpy analyze tegrastats --log tegrastats.log
+
+  # Efficiency analysis
+  autoperfpy analyze efficiency --csv benchmark_data.csv
+
+  # Variability analysis
+  autoperfpy analyze variability --csv latency_data.csv
+
+  # Benchmarking
   autoperfpy benchmark batching --batch-sizes 1,4,8,16
   autoperfpy benchmark llm --prompt-length 512
+
+  # Monitoring
   autoperfpy monitor gpu --duration 300
         """,
     )
@@ -46,6 +72,27 @@ Examples:
     log_parser = analyze_subparsers.add_parser("logs", help="Analyze performance logs")
     log_parser.add_argument("--log", required=True, help="Log file to analyze")
     log_parser.add_argument("--threshold", type=float, default=50.0, help="Latency threshold (ms)")
+
+    # Analyze DNN pipeline
+    dnn_parser = analyze_subparsers.add_parser("dnn-pipeline", help="Analyze DNN inference pipeline")
+    dnn_parser.add_argument("--csv", help="CSV file with layer timings")
+    dnn_parser.add_argument("--profiler", help="Profiler output text file")
+    dnn_parser.add_argument("--batch-size", type=int, default=1, help="Batch size used")
+    dnn_parser.add_argument("--top-layers", type=int, default=5, help="Number of slowest layers to report")
+
+    # Analyze tegrastats
+    tegra_parser = analyze_subparsers.add_parser("tegrastats", help="Analyze Tegrastats output")
+    tegra_parser.add_argument("--log", required=True, help="Tegrastats log file")
+    tegra_parser.add_argument("--throttle-threshold", type=float, default=85.0, help="Thermal throttling threshold (°C)")
+
+    # Analyze efficiency
+    eff_parser = analyze_subparsers.add_parser("efficiency", help="Analyze power efficiency")
+    eff_parser.add_argument("--csv", required=True, help="CSV file with benchmark data")
+
+    # Analyze variability
+    var_parser = analyze_subparsers.add_parser("variability", help="Analyze latency variability")
+    var_parser.add_argument("--csv", required=True, help="CSV file with latency data")
+    var_parser.add_argument("--column", default="latency_ms", help="Column name for latency values")
 
     # Benchmark commands
     bench_parser = subparsers.add_parser("benchmark", help="Run benchmarks")
@@ -106,6 +153,158 @@ def run_analyze_logs(args, config):
     print(f"Total events: {result.metrics['total_events']}")
     print(f"Spike events: {result.metrics['spike_events']}")
     print(f"Spike percentage: {result.metrics['spike_percentage']:.2f}%")
+
+    return result
+
+
+def run_analyze_dnn_pipeline(args, config):
+    """Run DNN pipeline analysis."""
+    analyzer_config = {
+        "top_n_layers": args.top_layers,
+    }
+    analyzer = DNNPipelineAnalyzer(config=analyzer_config)
+
+    if args.csv:
+        result = analyzer.analyze_layer_csv(args.csv, batch_size=args.batch_size)
+    elif args.profiler:
+        with open(args.profiler, "r") as f:
+            content = f.read()
+        result = analyzer.analyze_profiler_output(content)
+    else:
+        print("❌ Error: Either --csv or --profiler must be specified")
+        return None
+
+    print("\n🧠 DNN Pipeline Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nSource: {metrics.get('source', 'unknown')}")
+    print(f"Batch Size: {metrics.get('batch_size', 1)}")
+    print(f"Number of Layers: {metrics.get('num_layers', 0)}")
+
+    timing = metrics.get("timing", {})
+    print(f"\n⏱️  Timing:")
+    print(f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms")
+    print(f"  GPU Time: {timing.get('gpu_time_ms', 0):.2f}ms")
+    print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
+
+    device_split = metrics.get("device_split", {})
+    print(f"\n📊 Device Split:")
+    print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
+    print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
+
+    throughput = metrics.get("throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0))
+    print(f"\n🚀 Throughput: {throughput:.1f} FPS")
+
+    slowest = metrics.get("slowest_layers", [])
+    if slowest:
+        print(f"\n🐢 Slowest Layers:")
+        for layer in slowest[:5]:
+            name = layer.get("name", "unknown")
+            time_ms = layer.get("time_ms", layer.get("avg_time_ms", 0))
+            device = layer.get("device", "GPU")
+            print(f"  {name}: {time_ms:.2f}ms ({device})")
+
+    recommendations = metrics.get("recommendations", [])
+    if recommendations:
+        print(f"\n💡 Recommendations:")
+        for rec in recommendations:
+            print(f"  • {rec}")
+
+    return result
+
+
+def run_analyze_tegrastats(args, config):
+    """Run tegrastats analysis."""
+    analyzer = TegrastatsAnalyzer(throttle_temp_threshold=args.throttle_threshold)
+    result = analyzer.analyze(args.log)
+
+    print("\n📊 Tegrastats Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nSamples Analyzed: {metrics.get('num_samples', 0)}")
+
+    # CPU metrics
+    cpu = metrics.get("cpu", {})
+    print(f"\n🖥️  CPU:")
+    print(f"  Average Utilization: {cpu.get('avg_utilization', 0):.1f}%")
+    print(f"  Max Utilization: {cpu.get('max_utilization', 0):.1f}%")
+
+    # GPU metrics
+    gpu = metrics.get("gpu", {})
+    print(f"\n🎮 GPU:")
+    print(f"  Average Utilization: {gpu.get('avg_utilization', 0):.1f}%")
+    print(f"  Max Utilization: {gpu.get('max_utilization', 0):.1f}%")
+    print(f"  Average Frequency: {gpu.get('avg_frequency_mhz', 0):.0f} MHz")
+
+    # Memory metrics
+    memory = metrics.get("memory", {})
+    print(f"\n💾 Memory:")
+    print(f"  Average Used: {memory.get('avg_used_mb', 0):.0f} MB")
+    print(f"  Max Used: {memory.get('max_used_mb', 0):.0f} MB")
+
+    # Thermal metrics
+    thermal = metrics.get("thermal", {})
+    print(f"\n🌡️  Thermal:")
+    print(f"  Average Temperature: {thermal.get('avg_temperature', 0):.1f}°C")
+    print(f"  Max Temperature: {thermal.get('max_temperature', 0):.1f}°C")
+    print(f"  Throttling Events: {thermal.get('throttle_events', 0)}")
+
+    # Health status
+    health = metrics.get("health", {})
+    status = health.get("status", "unknown")
+    status_emoji = "✅" if status == "healthy" else "⚠️" if status == "warning" else "❌"
+    print(f"\n{status_emoji} Health Status: {status.upper()}")
+
+    warnings = health.get("warnings", [])
+    if warnings:
+        print("  Warnings:")
+        for warning in warnings:
+            print(f"    • {warning}")
+
+    return result
+
+
+def run_analyze_efficiency(args, config):
+    """Run efficiency analysis."""
+    analyzer = EfficiencyAnalyzer(config)
+    result = analyzer.analyze(args.csv)
+
+    print("\n⚡ Efficiency Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    for workload, data in metrics.items():
+        if isinstance(data, dict):
+            print(f"\n{workload}:")
+            print(f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W")
+            print(f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J")
+            print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
+            print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
+
+    return result
+
+
+def run_analyze_variability(args, config):
+    """Run variability analysis."""
+    analyzer = VariabilityAnalyzer(config)
+    result = analyzer.analyze(args.csv, latency_column=args.column)
+
+    print("\n📈 Variability Analysis")
+    print("=" * 60)
+    metrics = result.metrics
+
+    print(f"\nCoefficient of Variation: {metrics.get('cv_percent', 0):.2f}%")
+    print(f"Jitter (Std Dev): {metrics.get('jitter_ms', 0):.2f}ms")
+    print(f"IQR: {metrics.get('iqr_ms', 0):.2f}ms")
+    print(f"Outliers: {metrics.get('outlier_count', 0)}")
+    print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
+
+    print(f"\n📊 Percentiles:")
+    print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
+    print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
+    print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
 
     return result
 
@@ -204,6 +403,14 @@ def main():
                 result = run_analyze_latency(args, config)
             elif args.analyze_type == "logs":
                 result = run_analyze_logs(args, config)
+            elif args.analyze_type == "dnn-pipeline":
+                result = run_analyze_dnn_pipeline(args, config)
+            elif args.analyze_type == "tegrastats":
+                result = run_analyze_tegrastats(args, config)
+            elif args.analyze_type == "efficiency":
+                result = run_analyze_efficiency(args, config)
+            elif args.analyze_type == "variability":
+                result = run_analyze_variability(args, config)
         elif args.command == "benchmark":
             if args.bench_type == "batching":
                 result = run_benchmark_batching(args, config)
