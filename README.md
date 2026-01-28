@@ -321,14 +321,14 @@ timestamp,workload,batch_size,latency_ms,power_w
 **Output Example**:
 ```
 ╔════════════════════════════════════════╗
-║        YOLO V8 (Batch Size: 1)        ║
+║        YOLO V8 (Batch Size: 1)         ║
 ╠════════════════════════════════════════╣
-║ P99:     28.50 ms                     ║
-║ P95:     27.80 ms                     ║
-║ P50:     25.50 ms (Median)            ║
-║ Mean:    25.67 ms ± 1.23 ms           ║
-║ Range:   [23.1, 29.5] ms              ║
-║ Power:   65.2 ± 2.1 W                 ║
+║ P99:     28.50 ms                      ║
+║ P95:     27.80 ms                      ║
+║ P50:     25.50 ms (Median)             ║
+║ Mean:    25.67 ms ± 1.23 ms            ║
+║ Range:   [23.1, 29.5] ms               ║
+║ Power:   65.2 ± 2.1 W                  ║
 ╚════════════════════════════════════════╝
 ```
 
