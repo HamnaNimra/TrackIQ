@@ -70,6 +70,6 @@ gpu_anomalies.log
 # Temporary files
 tmp/
 *.tmp
-.*/
+.cla*/
 
 
