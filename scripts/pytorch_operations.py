@@ -1,7 +1,7 @@
-""" PyTorch operations and a sample algorithm implementation.
+"""PyTorch operations and a sample algorithm implementation.
 
 Disclaimer: This code is for educational purposes only.
-It demonstrates basic PyTorch operations and a simple algorithm.   
+It demonstrates basic PyTorch operations and a simple algorithm.
 Author: Hamna
 Target: NVIDIA Edge AI / Automotive Performance Engineering
 
@@ -36,7 +36,7 @@ print("Backward pass successful ✅")
 
 
 def max_profit(prices):
-    min_price = float('inf')
+    min_price = float("inf")
     best = 0
     for p in prices:
         if p < min_price:
