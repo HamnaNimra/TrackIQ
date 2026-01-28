@@ -261,7 +261,7 @@ When adding new scripts or tools:
 
 ## Author
 
-Hamna - NVIDIA Edge AI / Automotive Performance Engineering
+Hamna Nimra
 
 ---
 
@@ -271,6 +271,3 @@ This project uses **synthetic data for practice and demonstration purposes only*
 
 ---
 
-## License
-
-[Add license information if applicable]
