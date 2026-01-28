@@ -863,7 +863,7 @@ timestamp,workload,batch_size,latency_ms,power_w
 - Add command-line examples in comments
 
 ### Adding New Scripts
-1. Create in appropriate directory (`scripts/`, `benchmarks/`, `montoring/`, or `tools/`)
+1. Create in appropriate directory (`scripts/`, `benchmarks/`, `monitoring/`, or `tools/`)
 2. Add `#!/usr/bin/env python3` shebang for Python scripts
 3. Include comprehensive module docstring
 4. Document usage with examples
@@ -946,7 +946,7 @@ python scripts/calculate_p99_latency.py scripts/data/automotive_benchmark_data.c
 nvidia-smi
 
 # Scripts will still run with CPU fallback
-python montoring/gpu_monitor.py --cpu-only
+python monitoring/gpu_monitor.py --cpu-only
 ```
 
 ---

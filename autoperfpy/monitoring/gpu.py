@@ -20,6 +20,7 @@ class GPUMemoryMonitor(BaseMonitor):
         self.config = config
         self.is_running = False
         self.thread = None
+        self._metrics_lock = threading.Lock()
 
     def start(self) -> None:
         """Start GPU memory monitoring."""
@@ -41,7 +42,8 @@ class GPUMemoryMonitor(BaseMonitor):
             try:
                 metric = self._get_gpu_metrics()
                 if metric:
-                    self.metrics.append(metric)
+                    with self._metrics_lock:
+                        self.metrics.append(metric)
             except Exception:
                 pass  # Continue monitoring even if metrics unavailable
 
@@ -74,32 +76,34 @@ class GPUMemoryMonitor(BaseMonitor):
             return None
 
     def get_metrics(self) -> List[Dict[str, Any]]:
-        """Get collected metrics.
+        """Get collected metrics (thread-safe copy).
 
         Returns:
-            List of metric snapshots
+            Copy of metric snapshots to avoid race conditions
         """
-        return self.metrics
+        with self._metrics_lock:
+            return self.metrics.copy()
 
     def get_summary(self) -> Dict[str, Any]:
-        """Get summary statistics of collected metrics.
+        """Get summary statistics of collected metrics (thread-safe).
 
         Returns:
             Summary dictionary
         """
-        if not self.metrics:
-            return {}
+        with self._metrics_lock:
+            if not self.metrics:
+                return {}
 
-        memory_used = [m.get("gpu_memory_used_mb", 0) for m in self.metrics]
-        utilization = [m.get("gpu_utilization_percent", 0) for m in self.metrics]
+            memory_used = [m.get("gpu_memory_used_mb", 0) for m in self.metrics]
+            utilization = [m.get("gpu_utilization_percent", 0) for m in self.metrics]
 
-        return {
-            "avg_memory_mb": sum(memory_used) / len(memory_used),
-            "max_memory_mb": max(memory_used),
-            "avg_utilization_percent": sum(utilization) / len(utilization),
-            "max_utilization_percent": max(utilization),
-            "samples_collected": len(self.metrics),
-        }
+            return {
+                "avg_memory_mb": sum(memory_used) / len(memory_used),
+                "max_memory_mb": max(memory_used),
+                "avg_utilization_percent": sum(utilization) / len(utilization),
+                "max_utilization_percent": max(utilization),
+                "samples_collected": len(self.metrics),
+            }
 
 
 class LLMKVCacheMonitor(BaseMonitor):

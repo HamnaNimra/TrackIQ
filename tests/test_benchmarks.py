@@ -50,11 +50,11 @@ class TestBatchingTradeoffBenchmark:
             time_per_image=0.005
         )
         
-        # Latency per image should increase with batch size
-        # (due to increased processing time per image in a batch)
+        # Latency per image should decrease with batch size
+        # (due to amortization of fixed overhead across more images)
         latencies = results["latency_ms"]
         assert latencies[0] > 0  # batch_size 1
-        assert latencies[2] > latencies[0]  # batch_size 16 > batch_size 1
+        assert latencies[2] < latencies[0]  # batch_size 16 < batch_size 1 (more efficient)
 
     def test_throughput_optimal_batch_size(self):
         """Test throughput typically peaks at medium batch sizes."""
@@ -112,32 +112,32 @@ class TestLLMLatencyBenchmark:
         """Test running LLM benchmark with custom parameters."""
         benchmark = LLMLatencyBenchmark()
         results = benchmark.run(
-            prompt_length=256,
+            prompt_tokens=256,
             output_tokens=128,
-            runs=5
+            num_runs=5
         )
-        
+
         assert "ttft_ms" in results or "latency_ms" in results or len(results) > 0
 
     def test_run_multiple_times(self):
         """Test that benchmark can be run multiple times."""
         benchmark = LLMLatencyBenchmark()
-        results1 = benchmark.run(runs=3)
-        results2 = benchmark.run(runs=5)
-        
+        results1 = benchmark.run(num_runs=3)
+        results2 = benchmark.run(num_runs=5)
+
         assert results1 is not None
         assert results2 is not None
 
     def test_results_increase_with_prompt_length(self):
         """Test that latency increases with longer prompts (expected behavior)."""
         benchmark = LLMLatencyBenchmark()
-        
+
         # Run with short prompt
-        results_short = benchmark.run(prompt_length=128, runs=1)
-        
+        results_short = benchmark.run(prompt_tokens=128, num_runs=1)
+
         # Run with long prompt
-        results_long = benchmark.run(prompt_length=512, runs=1)
-        
+        results_long = benchmark.run(prompt_tokens=512, num_runs=1)
+
         # Both should produce results
         assert results_short is not None
         assert results_long is not None

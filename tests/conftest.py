@@ -27,13 +27,13 @@ def temp_csv_file():
 def temp_log_file():
     """Create a temporary log file for testing."""
     with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-        f.write("[2024-01-01 10:00:00] Inference started - latency: 25.5ms\n")
-        f.write("[2024-01-01 10:00:01] Inference completed - latency: 26.3ms\n")
-        f.write("[2024-01-01 10:00:02] Inference completed - latency: 75.5ms\n")
-        f.write("[2024-01-01 10:00:03] Inference completed - latency: 26.8ms\n")
-        f.write("[2024-01-01 10:00:04] Inference completed - latency: 120.0ms\n")
+        f.write("[2024-01-01 10:00:00] Frame 1: E2E: 25.5ms\n")
+        f.write("[2024-01-01 10:00:01] Frame 2: E2E: 26.3ms\n")
+        f.write("[2024-01-01 10:00:02] Frame 3: E2E: 75.5ms\n")
+        f.write("[2024-01-01 10:00:03] Frame 4: E2E: 26.8ms\n")
+        f.write("[2024-01-01 10:00:04] Frame 5: E2E: 120.0ms\n")
         f.flush()
-        
+
         yield f.name
         Path(f.name).unlink()
 

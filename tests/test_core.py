@@ -114,9 +114,10 @@ class TestPerformanceComparator:
         result = PerformanceComparator.compare_latency_throughput(
             batch_sizes, latencies, throughput
         )
-        
-        assert "optimal_batch_size" in result
-        assert result["total_compared"] == 4
+
+        assert "optimal_for_latency" in result
+        assert "optimal_for_throughput" in result
+        assert result["optimal_for_latency"] == 1  # Lowest latency (10.0ms)
 
 
 class TestRegressionDetector:

@@ -113,13 +113,13 @@ class TestLogAnalyzer:
     def sample_log(self):
         """Create a sample log file for testing."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write("[2024-01-01 10:00:00] Inference started - latency: 25.5ms\n")
-            f.write("[2024-01-01 10:00:01] Inference completed - latency: 26.3ms\n")
-            f.write("[2024-01-01 10:00:02] Inference completed - latency: 75.5ms\n")  # spike
-            f.write("[2024-01-01 10:00:03] Inference completed - latency: 26.8ms\n")
-            f.write("[2024-01-01 10:00:04] Inference completed - latency: 120.0ms\n")  # spike
+            f.write("[2024-01-01 10:00:00] Frame 1: E2E: 25.5ms\n")
+            f.write("[2024-01-01 10:00:01] Frame 2: E2E: 26.3ms\n")
+            f.write("[2024-01-01 10:00:02] Frame 3: E2E: 75.5ms\n")  # spike
+            f.write("[2024-01-01 10:00:03] Frame 4: E2E: 26.8ms\n")
+            f.write("[2024-01-01 10:00:04] Frame 5: E2E: 120.0ms\n")  # spike
             f.flush()
-            
+
             yield f.name
             Path(f.name).unlink()
 
@@ -137,8 +137,8 @@ class TestLogAnalyzer:
         
         # Should detect spikes above 50ms
         metrics = result.metrics
-        assert "spikes_detected" in metrics
-        assert metrics["spikes_detected"] >= 2  # 75.5ms and 120.0ms
+        assert "spike_events" in metrics
+        assert metrics["spike_events"] >= 2  # 75.5ms and 120.0ms
 
     def test_analyze_threshold_parameter(self, sample_log):
         """Test that threshold parameter affects results."""
