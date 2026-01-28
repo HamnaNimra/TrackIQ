@@ -33,6 +33,8 @@ class HTMLReportGenerator:
         self.sections: List[Dict[str, Any]] = []
         self.summary_items: List[Dict[str, Any]] = []
         self.tables: List[Dict[str, Any]] = []
+        self.interactive_charts: List[Dict[str, Any]] = []
+        self._chart_id_counter = 0
 
     def add_metadata(self, key: str, value: Any) -> None:
         """Add metadata to report.
@@ -133,6 +135,152 @@ class HTMLReportGenerator:
             "headers": headers,
             "rows": rows,
             "section": section,
+        })
+
+    def _get_next_chart_id(self) -> str:
+        """Generate unique chart ID."""
+        self._chart_id_counter += 1
+        return f"chart_{self._chart_id_counter}"
+
+    def add_interactive_line_chart(
+        self,
+        labels: List[str],
+        datasets: List[Dict[str, Any]],
+        title: str = "",
+        section: str = "General",
+        description: str = "",
+        x_label: str = "",
+        y_label: str = "",
+        enable_zoom: bool = True,
+    ) -> None:
+        """Add an interactive line chart with hover values, zoom, and filter.
+
+        Args:
+            labels: X-axis labels
+            datasets: List of dataset dicts with 'label', 'data', and optional 'color'
+            title: Chart title
+            section: Section name
+            description: Chart description
+            x_label: X-axis label
+            y_label: Y-axis label
+            enable_zoom: Enable zoom/pan functionality
+        """
+        self.interactive_charts.append({
+            "id": self._get_next_chart_id(),
+            "type": "line",
+            "labels": labels,
+            "datasets": datasets,
+            "title": title,
+            "section": section,
+            "description": description,
+            "x_label": x_label,
+            "y_label": y_label,
+            "enable_zoom": enable_zoom,
+        })
+
+    def add_interactive_bar_chart(
+        self,
+        labels: List[str],
+        datasets: List[Dict[str, Any]],
+        title: str = "",
+        section: str = "General",
+        description: str = "",
+        x_label: str = "",
+        y_label: str = "",
+        horizontal: bool = False,
+        stacked: bool = False,
+    ) -> None:
+        """Add an interactive bar chart with hover values and filter.
+
+        Args:
+            labels: Category labels
+            datasets: List of dataset dicts with 'label', 'data', and optional 'color'
+            title: Chart title
+            section: Section name
+            description: Chart description
+            x_label: X-axis label
+            y_label: Y-axis label
+            horizontal: Use horizontal bars
+            stacked: Stack bars
+        """
+        self.interactive_charts.append({
+            "id": self._get_next_chart_id(),
+            "type": "bar",
+            "labels": labels,
+            "datasets": datasets,
+            "title": title,
+            "section": section,
+            "description": description,
+            "x_label": x_label,
+            "y_label": y_label,
+            "horizontal": horizontal,
+            "stacked": stacked,
+        })
+
+    def add_interactive_scatter_chart(
+        self,
+        datasets: List[Dict[str, Any]],
+        title: str = "",
+        section: str = "General",
+        description: str = "",
+        x_label: str = "",
+        y_label: str = "",
+        enable_zoom: bool = True,
+    ) -> None:
+        """Add an interactive scatter chart with hover values and zoom.
+
+        Args:
+            datasets: List of dataset dicts with 'label', 'data' (list of {x, y} points),
+                     and optional 'color'
+            title: Chart title
+            section: Section name
+            description: Chart description
+            x_label: X-axis label
+            y_label: Y-axis label
+            enable_zoom: Enable zoom/pan functionality
+        """
+        self.interactive_charts.append({
+            "id": self._get_next_chart_id(),
+            "type": "scatter",
+            "datasets": datasets,
+            "title": title,
+            "section": section,
+            "description": description,
+            "x_label": x_label,
+            "y_label": y_label,
+            "enable_zoom": enable_zoom,
+        })
+
+    def add_interactive_pie_chart(
+        self,
+        labels: List[str],
+        data: List[float],
+        title: str = "",
+        section: str = "General",
+        description: str = "",
+        colors: Optional[List[str]] = None,
+        doughnut: bool = False,
+    ) -> None:
+        """Add an interactive pie/doughnut chart with hover values.
+
+        Args:
+            labels: Slice labels
+            data: Slice values
+            title: Chart title
+            section: Section name
+            description: Chart description
+            colors: Optional list of colors for slices
+            doughnut: Use doughnut style instead of pie
+        """
+        self.interactive_charts.append({
+            "id": self._get_next_chart_id(),
+            "type": "doughnut" if doughnut else "pie",
+            "labels": labels,
+            "data": data,
+            "title": title,
+            "section": section,
+            "description": description,
+            "colors": colors,
         })
 
     def _fig_to_base64(self, fig: plt.Figure, format: str = "png", dpi: int = 150) -> str:
