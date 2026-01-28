@@ -6,6 +6,21 @@ This analyzer processes tegrastats output to provide insights into:
 - EMC (memory controller) frequency/bandwidth
 - Thermal zone temperatures (CPU, GPU, AO, Tdiode, tj)
 - RAM usage breakdown (lfb - largest free block)
+
+Users can analyze tegrastats logs to assess system health, identify thermal throttling,
+and monitor memory pressure conditions.
+
+It leverages the TegrastatsParser and TegrastatsCalculator from the core module
+to parse raw output and compute aggregate statistics.
+
+Example usage:
+    analyzer = TegrastatsAnalyzer()
+    result = analyzer.analyze("tegrastats_output.log")
+    summary = analyzer.summarize()
+
+
+Authors:
+    Hamna Nimra
 """
 
 from typing import Dict, Any, Optional, List

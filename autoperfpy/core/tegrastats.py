@@ -13,6 +13,10 @@ EMC_FREQ @2133 GR3D_FREQ 0%@1109 APE 245 AUX@30C CPU@31.5C Tdiode@30.75C AO@31C 
 - TegrastatsParser: Parses tegrastats output lines into TegrastatsSnapshot objects.
 - TegrastatsCalculator: Computes aggregate statistics from multiple snapshots.
 - TegrastatsAggregateStats: Holds aggregated statistics from multiple snapshots.
+- CPUCoreStats: Statistics for a single CPU core.
+- GPUStats: GPU (GR3D) statistics.
+- MemoryStats: RAM and memory controller statistics.
+- ThermalStats: Thermal zone temperatures.
 
 Users can utilize these classes to monitor system performance, analyze resource usage,
 and detect potential thermal or memory pressure issues.

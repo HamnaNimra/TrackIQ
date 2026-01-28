@@ -20,6 +20,11 @@ from .core import (
     TegrastatsParser,
     TegrastatsCalculator,
     TegrastatsSnapshot,
+    # DNN Pipeline (TensorRT/DriveWorks)
+    DNNPipelineParser,
+    DNNPipelineCalculator,
+    InferenceRun,
+    LayerTiming,
 )
 from .analyzers import (
     PercentileLatencyAnalyzer,
@@ -27,6 +32,7 @@ from .analyzers import (
     EfficiencyAnalyzer,
     VariabilityAnalyzer,
     TegrastatsAnalyzer,
+    DNNPipelineAnalyzer,
 )
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
@@ -50,12 +56,18 @@ __all__ = [
     "TegrastatsParser",
     "TegrastatsCalculator",
     "TegrastatsSnapshot",
+    # DNN Pipeline (TensorRT/DriveWorks)
+    "DNNPipelineParser",
+    "DNNPipelineCalculator",
+    "InferenceRun",
+    "LayerTiming",
     # Analyzers
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
     "EfficiencyAnalyzer",
     "VariabilityAnalyzer",
     "TegrastatsAnalyzer",
+    "DNNPipelineAnalyzer",
     # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",

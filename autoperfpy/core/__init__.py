@@ -14,6 +14,14 @@ from .tegrastats import (
     MemoryStats,
     ThermalStats,
 )
+from .dnn_pipeline import (
+    DNNPipelineParser,
+    DNNPipelineCalculator,
+    InferenceRun,
+    LayerTiming,
+    MemoryTransfer,
+    EngineOptimizationMetrics,
+)
 
 __all__ = [
     "BaseAnalyzer",
@@ -38,4 +46,11 @@ __all__ = [
     "GPUStats",
     "MemoryStats",
     "ThermalStats",
+    # DNN Pipeline (TensorRT/DriveWorks)
+    "DNNPipelineParser",
+    "DNNPipelineCalculator",
+    "InferenceRun",
+    "LayerTiming",
+    "MemoryTransfer",
+    "EngineOptimizationMetrics",
 ]
