@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""Entry point for AutoPerfPy CLI."""
+
+if __name__ == "__main__":
+    from autoperfpy.cli import main
+    import sys
+    sys.exit(main())
