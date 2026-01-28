@@ -118,14 +118,24 @@ class RegressionDetector:
 
             if is_latency:
                 # For latency, increase is regression
-                percent_change = ((current_value - baseline_value) / baseline_value) * 100
                 threshold = thresholds.p99_percent if "p99" in metric_name else thresholds.latency_percent
-                is_regression = percent_change > threshold
+                if baseline_value == 0:
+                    # Handle zero baseline - any non-zero current is significant change
+                    percent_change = float('inf') if current_value > 0 else 0.0
+                    is_regression = current_value > 0  # Any increase from zero is regression
+                else:
+                    percent_change = ((current_value - baseline_value) / baseline_value) * 100
+                    is_regression = percent_change > threshold
             else:
                 # For throughput/speed, decrease is regression
-                percent_change = ((baseline_value - current_value) / baseline_value) * 100
                 threshold = thresholds.throughput_percent
-                is_regression = percent_change > threshold
+                if baseline_value == 0:
+                    # Handle zero baseline - can't regress from zero throughput
+                    percent_change = 0.0
+                    is_regression = False  # Can't regress from zero throughput
+                else:
+                    percent_change = ((baseline_value - current_value) / baseline_value) * 100
+                    is_regression = percent_change > threshold
 
             comparisons[metric_name] = MetricComparison(
                 metric_name=metric_name,
