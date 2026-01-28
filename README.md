@@ -62,7 +62,7 @@ This project contains tools for:
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd Scratchpad
+   cd AutoPerfPy
    ```
 
 2. **Install Python dependencies**
