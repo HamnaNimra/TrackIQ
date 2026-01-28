@@ -16,8 +16,18 @@ from .core import (
     EfficiencyMetrics,
     EfficiencyCalculator,
     BatchEfficiencyAnalyzer,
+    # Tegrastats (DriveOS/Jetson)
+    TegrastatsParser,
+    TegrastatsCalculator,
+    TegrastatsSnapshot,
 )
-from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer, EfficiencyAnalyzer, VariabilityAnalyzer
+from .analyzers import (
+    PercentileLatencyAnalyzer,
+    LogAnalyzer,
+    EfficiencyAnalyzer,
+    VariabilityAnalyzer,
+    TegrastatsAnalyzer,
+)
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from .reporting import PerformanceVisualizer, PDFReportGenerator
@@ -36,11 +46,16 @@ __all__ = [
     "EfficiencyMetrics",
     "EfficiencyCalculator",
     "BatchEfficiencyAnalyzer",
+    # Tegrastats (DriveOS/Jetson)
+    "TegrastatsParser",
+    "TegrastatsCalculator",
+    "TegrastatsSnapshot",
     # Analyzers
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
     "EfficiencyAnalyzer",
     "VariabilityAnalyzer",
+    "TegrastatsAnalyzer",
     # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",
