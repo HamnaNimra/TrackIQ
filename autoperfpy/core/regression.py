@@ -1,4 +1,25 @@
-"""Performance regression detection and baseline management."""
+"""
+Performance regression detection and baseline management.
+
+This module provides functionality to detect performance regressions
+by comparing current performance metrics against stored baseline metrics.
+It allows saving and loading baselines, comparing metrics, and generating
+human-readable regression reports.
+
+Classes:
+- RegressionThreshold: Configuration for regression detection thresholds.
+- MetricComparison: Result of comparing two metrics.
+- RegressionDetector: Main class for detecting performance regressions.
+
+Example usage:
+    detector = RegressionDetector(baseline_dir=".autoperfpy/baselines")
+    detector.save_baseline("main", baseline_metrics)
+    result = detector.detect_regressions("main", current_metrics)
+    report = detector.generate_report("main", current_metrics)
+
+Authors:
+    Hamna Nimra
+"""
 
 import json
 from pathlib import Path

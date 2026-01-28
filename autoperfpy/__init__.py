@@ -13,8 +13,27 @@ from .core import (
     LatencyStats,
     PerformanceComparator,
     RegressionDetector,
+    EfficiencyMetrics,
+    EfficiencyCalculator,
+    BatchEfficiencyAnalyzer,
+    # Tegrastats (DriveOS/Jetson)
+    TegrastatsParser,
+    TegrastatsCalculator,
+    TegrastatsSnapshot,
+    # DNN Pipeline (TensorRT/DriveWorks)
+    DNNPipelineParser,
+    DNNPipelineCalculator,
+    InferenceRun,
+    LayerTiming,
 )
-from .analyzers import PercentileLatencyAnalyzer, LogAnalyzer
+from .analyzers import (
+    PercentileLatencyAnalyzer,
+    LogAnalyzer,
+    EfficiencyAnalyzer,
+    VariabilityAnalyzer,
+    TegrastatsAnalyzer,
+    DNNPipelineAnalyzer,
+)
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from .reporting import PerformanceVisualizer, PDFReportGenerator
@@ -29,12 +48,33 @@ __all__ = [
     "LatencyStats",
     "PerformanceComparator",
     "RegressionDetector",
+    # Efficiency metrics
+    "EfficiencyMetrics",
+    "EfficiencyCalculator",
+    "BatchEfficiencyAnalyzer",
+    # Tegrastats (DriveOS/Jetson)
+    "TegrastatsParser",
+    "TegrastatsCalculator",
+    "TegrastatsSnapshot",
+    # DNN Pipeline (TensorRT/DriveWorks)
+    "DNNPipelineParser",
+    "DNNPipelineCalculator",
+    "InferenceRun",
+    "LayerTiming",
+    # Analyzers
     "PercentileLatencyAnalyzer",
     "LogAnalyzer",
+    "EfficiencyAnalyzer",
+    "VariabilityAnalyzer",
+    "TegrastatsAnalyzer",
+    "DNNPipelineAnalyzer",
+    # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",
+    # Monitoring
     "GPUMemoryMonitor",
     "LLMKVCacheMonitor",
+    # Reporting
     "PerformanceVisualizer",
     "PDFReportGenerator",
 ]
