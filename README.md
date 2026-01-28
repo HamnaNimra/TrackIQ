@@ -138,6 +138,7 @@ Some logic exists in both scripts and package (e.g., percentile calculation, GPU
 | **KV Cache Monitor** | `autoperfpy/monitoring/gpu.py` | LLM KV cache estimation & tracking | `from autoperfpy import LLMKVCacheMonitor` |
 | **Performance Visualizer** | `autoperfpy/reporting/visualizer.py` | Create graphs: latency, throughput, power, memory, DNN layers | `from autoperfpy import PerformanceVisualizer` |
 | **PDF Report Generator** | `autoperfpy/reporting/pdf_generator.py` | Consolidate graphs into professional PDF reports | `from autoperfpy import PDFReportGenerator` |
+| **HTML Report Generator** | `autoperfpy/reporting/html_generator.py` | Create interactive HTML reports with navigation | `from autoperfpy import HTMLReportGenerator` |
 | **Configuration System** | `autoperfpy/config/` | YAML/JSON-based config management | `from autoperfpy import ConfigManager` |
 | **CLI Interface** | `autoperfpy/cli.py` | Unified command-line interface | `autoperfpy <command> [options]` |
 
@@ -766,6 +767,90 @@ pdf_gen.generate_pdf("report.pdf", include_summary=True)
 - Graph pages with captions
 - PDF metadata (title, author, creation date)
 
+---
+
+#### **HTMLReportGenerator (autoperfpy.reporting)**
+Generate interactive HTML reports with navigation, theming, and executive summaries.
+
+**Features**:
+- ✓ Light and dark theme support
+- ✓ Interactive navigation with smooth scrolling
+- ✓ Executive summary cards with status indicators
+- ✓ Data tables with styling
+- ✓ Section-based organization
+- ✓ Embedded images (base64) or external files
+- ✓ Print-friendly CSS
+- ✓ Responsive design for mobile
+
+**CLI Usage**:
+```bash
+# Generate HTML report from CSV data
+autoperfpy report html --csv data.csv --output report.html --title "My Analysis"
+
+# Use dark theme
+autoperfpy report html --csv data.csv --output report.html --theme dark
+
+# Generate demo report (no data file)
+autoperfpy report html --output demo_report.html
+```
+
+**Programmatic Usage**:
+```python
+from autoperfpy import HTMLReportGenerator, PerformanceVisualizer
+
+# Create report with dark theme
+report = HTMLReportGenerator(
+    title="DNN Performance Analysis",
+    author="ML Team",
+    theme="dark"
+)
+
+# Add metadata
+report.add_metadata("Platform", "NVIDIA Jetson AGX Orin")
+report.add_metadata("Model", "ResNet50 INT8")
+
+# Add executive summary items with status
+report.add_summary_item("Mean Latency", "25.3", "ms", status="good")
+report.add_summary_item("P99 Latency", "42.1", "ms", status="warning")
+report.add_summary_item("Throughput", "156", "FPS", status="good")
+report.add_summary_item("CV", "15.2", "%", status="warning")
+
+# Create sections
+report.add_section("Latency Analysis", "Percentile breakdown by workload")
+report.add_section("Power Efficiency", "Performance per Watt metrics")
+
+# Add figures with section assignment
+viz = PerformanceVisualizer()
+fig1 = viz.plot_latency_percentiles(latency_data)
+report.add_figure(fig1, "Latency Percentiles", section="Latency Analysis")
+
+fig2 = viz.plot_power_vs_performance(workloads, power, perf)
+report.add_figure(fig2, "Power vs Performance", section="Power Efficiency")
+
+# Add data tables
+report.add_table(
+    title="Top Configurations",
+    headers=["Config", "Latency (ms)", "Throughput (FPS)", "Power (W)"],
+    rows=[
+        ["Batch=4, FP16", "28.5", "140", "15.2"],
+        ["Batch=8, INT8", "25.3", "156", "14.8"],
+    ],
+    section="Latency Analysis"
+)
+
+# Generate HTML file
+report.generate_html("performance_report.html")
+```
+
+**Output Features**:
+- Responsive header with metadata badges
+- Sticky navigation bar with section links
+- Summary cards with color-coded status (good/warning/critical)
+- Embedded graphs organized by section
+- Styled data tables
+- Footer with generation timestamp
+
+---
 
 **Termination Flow**:
 ```
