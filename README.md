@@ -221,7 +221,7 @@ AutoPerfPy/
 
 ### Prerequisites
 
-- **Python**: 3.7 or higher
+- **Python**: 3.8 or higher
 - **OS**: Linux/Unix environment (tested on Ubuntu 20.04+)
 - **Shell**: Bash (for shell scripts)
 - **NVIDIA**: Optional - CUDA/cuDNN for GPU acceleration
@@ -1182,7 +1182,7 @@ New to performance optimization? Follow this learning path:
 pip install -r requirements.txt
 
 # Check Python version
-python --version  # Should be 3.7+
+python --version  # Should be 3.8+
 ```
 
 ### Permission Errors (Shell Scripts)
