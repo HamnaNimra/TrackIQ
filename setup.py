@@ -37,7 +37,7 @@ setup(
         "pyyaml>=5.3.0",
         "requests>=2.25.0",
         "matplotlib>=3.10.1",
-        "plotly>=6.18.0",
+        "plotly",
         "streamlit>=1.20.0",
     ],
     extras_require={
