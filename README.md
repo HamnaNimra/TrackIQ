@@ -9,6 +9,19 @@ A comprehensive collection of Python scripts and shell utilities for **performan
 
 ---
 
+## Architecture: trackiq (core library) vs autoperfpy (app)
+
+| Layer | Package | Contents |
+|-------|---------|----------|
+| **Core library** | `trackiq` | Reusable components: collectors (synthetic, psutil, NVML), config loader, result schemas, comparison/regression logic, platform (GPU) detection, runner, analyzers, reporting, errors. Use `trackiq` in other projects without AutoPerfPy. |
+| **App** | `autoperfpy` | AutoPerfPy-specific: CLI (`autoperfpy run`, `compare`, `analyze`, …), Streamlit UI, TensorRT/automotive benchmarks, DNN pipeline & Tegrastats analyzers, app config and profiles. Imports `trackiq` for generic logic. |
+
+- **Install**: `pip install .` or `pip install -e .` installs both `trackiq` and `autoperfpy`; the CLI entry point is `autoperfpy`.
+- **CLI**: `autoperfpy run` (device/precision), `autoperfpy compare` (uses trackiq comparison), `autoperfpy ui` (Streamlit dashboard).
+- **Streamlit UI**: Run benchmarks from the UI, view platform metadata (device, CPU, GPU, precision), select device and inference config (fp16, fp32, int8). See [Streamlit UI](#streamlit-ui) below.
+
+---
+
 ## 📋 Quick Links
 
 - [Quick Start](#-quick-start)
@@ -239,9 +252,21 @@ pip install -r requirements.txt
 # 3. Make shell scripts executable (optional)
 chmod +x tools/*.sh
 
-# 4. Verify installation
-python -c "import numpy, pandas; print('✓ Dependencies installed')"
+# 4. Install package (trackiq + autoperfpy, CLI entry point)
+pip install .
+# or editable install for development
+pip install -e .
+
+# 5. Verify installation
+python -c "import trackiq, autoperfpy; print('✓ Installed')"
+autoperfpy --help
 ```
+
+### Streamlit UI
+
+- **Launch**: `autoperfpy ui` or `streamlit run autoperfpy/ui/streamlit_app.py`
+- **With data**: `autoperfpy ui --data results.json`
+- **From UI**: Use sidebar → **Run Benchmark** to run a short synthetic benchmark; set device, inference precision (fp16, fp32, int8), and duration. Results show platform metadata (device name, CPU, GPU, precision) and dynamic graphs.
 
 ### Dependencies
 
