@@ -1,6 +1,6 @@
 """Hardware device detection for TrackIQ.
 
-Generic detection for edge AI and embedded platforms: NVIDIA GPUs (pynvml or
+Generic detection for edge AI and embedded platforms: NVIDIA GPUs (nvidia-ml-py or
 nvidia-smi), Intel GPUs/integrated, NVIDIA Jetson and DRIVE (tegrastats-capable),
 and CPUs (psutil + platform). Builds DeviceProfile dicts with platform metadata.
 No remote execution or networking. Applications (e.g. autoperfpy) map device_type
@@ -9,14 +9,16 @@ to collectors; trackiq does not depend on any specific collector.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+import pynvml  # provided by nvidia-ml-py
+
 
 # Device type constants (generic; apps map these to collectors)
-DEVICE_TYPE_NVIDIA_GPU = "nvidia_gpu"
-DEVICE_TYPE_INTEL_GPU = "intel_gpu"
-DEVICE_TYPE_CPU = "cpu"
+DEVICE_TYPE_NVIDIA_GPU = "NVIDIA_GPU"
+DEVICE_TYPE_INTEL_GPU = "INTEL_GPU"
+DEVICE_TYPE_CPU = "CPU"
 # Tegrastats-capable embedded / automotive platforms (Jetson, DRIVE Orin/Thor, etc.)
-DEVICE_TYPE_NVIDIA_JETSON = "nvidia_jetson"
-DEVICE_TYPE_NVIDIA_DRIVE = "nvidia_drive"
+DEVICE_TYPE_NVIDIA_JETSON = "NVIDIA_Jetson"
+DEVICE_TYPE_NVIDIA_DRIVE = "NVIDIA_Drive"
 
 
 @dataclass
@@ -64,6 +66,7 @@ def _get_cpu_info() -> str:
     """Get CPU identifier using platform (and psutil if available)."""
     try:
         import platform as plat
+
         proc = plat.processor() or plat.machine() or ""
         if proc:
             return proc.strip()
@@ -71,6 +74,7 @@ def _get_cpu_info() -> str:
         pass
     try:
         import psutil
+
         # Fallback: count cores as minimal identifier
         return f"CPU ({psutil.cpu_count()} cores)"
     except Exception:
@@ -82,22 +86,22 @@ def _get_os_info() -> str:
     """Get OS name and version."""
     try:
         import platform as plat
+
         return f"{plat.system()} {plat.release()}"
     except Exception:
         return "Unknown OS"
 
 
 def detect_nvidia_gpus() -> List[DeviceProfile]:
-    """Detect NVIDIA GPUs using pynvml if available, else nvidia-smi."""
+    """Detect NVIDIA GPUs using nvidia-ml-py (pynvml module) if available, else nvidia-smi."""
     devices: List[DeviceProfile] = []
     cpu_model = _get_cpu_info()
     os_info = _get_os_info()
     driver_version = ""
     cuda_version = ""
 
-    # Prefer pynvml
     try:
-        import pynvml
+
         pynvml.nvmlInit()
         try:
             driver_version = pynvml.nvmlSystemGetDriverVersion()
@@ -116,21 +120,23 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
             if isinstance(name, bytes):
                 name = name.decode("utf-8")
             name = name or f"NVIDIA GPU {i}"
-            devices.append(DeviceProfile(
-                device_id=f"nvidia_{i}",
-                device_type=DEVICE_TYPE_NVIDIA_GPU,
-                device_name=name,
-                gpu_model=name,
-                cpu_model=cpu_model,
-                soc="",
-                power_mode="",
-                index=i,
-                metadata={
-                    "os": os_info,
-                    "driver_version": driver_version,
-                    "cuda_version": cuda_version,
-                },
-            ))
+            devices.append(
+                DeviceProfile(
+                    device_id=f"nvidia_{i}",
+                    device_type=DEVICE_TYPE_NVIDIA_GPU,
+                    device_name=name,
+                    gpu_model=name,
+                    cpu_model=cpu_model,
+                    soc="",
+                    power_mode="",
+                    index=i,
+                    metadata={
+                        "os": os_info,
+                        "driver_version": driver_version,
+                        "cuda_version": cuda_version,
+                    },
+                )
+            )
         pynvml.nvmlShutdown()
         return devices
     except ImportError:
@@ -141,22 +147,25 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
     # Fallback: nvidia-smi
     try:
         from .gpu import query_nvidia_smi
+
         out = query_nvidia_smi(["name"], timeout=3)
         if out:
             names = [s.strip() for s in out.split("\n")]
             for i, name in enumerate(names):
                 if name:
-                    devices.append(DeviceProfile(
-                        device_id=f"nvidia_{i}",
-                        device_type=DEVICE_TYPE_NVIDIA_GPU,
-                        device_name=name,
-                        gpu_model=name,
-                        cpu_model=cpu_model,
-                        soc="",
-                        power_mode="",
-                        index=i,
-                        metadata={"os": os_info},
-                    ))
+                    devices.append(
+                        DeviceProfile(
+                            device_id=f"nvidia_{i}",
+                            device_type=DEVICE_TYPE_NVIDIA_GPU,
+                            device_name=name,
+                            gpu_model=name,
+                            cpu_model=cpu_model,
+                            soc="",
+                            power_mode="",
+                            index=i,
+                            metadata={"os": os_info},
+                        )
+                    )
     except Exception:
         pass
 
@@ -191,24 +200,81 @@ def detect_intel_gpus() -> List[DeviceProfile]:
 
     try:
         import platform as plat
+
         # Heuristic: Intel integrated often reported in machine or processor
         mach = (plat.machine() or "").lower()
         proc = (plat.processor() or "").lower()
         if "intel" in proc or "intel" in mach:
-            devices.append(DeviceProfile(
-                device_id="intel_0",
-                device_type=DEVICE_TYPE_INTEL_GPU,
-                device_name="Intel (integrated)",
-                gpu_model="Intel (integrated)",
-                cpu_model=cpu_model,
-                soc="",
-                power_mode="",
-                index=0,
-                metadata={"os": os_info},
-            ))
+            devices.append(
+                DeviceProfile(
+                    device_id="intel_0",
+                    device_type=DEVICE_TYPE_INTEL_GPU,
+                    device_name="Intel (integrated)",
+                    gpu_model="Intel (integrated)",
+                    cpu_model=cpu_model,
+                    soc="",
+                    power_mode="",
+                    index=0,
+                    metadata={"os": os_info},
+                )
+            )
     except Exception:
         pass
 
+    return devices
+
+
+def detect_tegrastats_platforms() -> List[DeviceProfile]:
+    """Detect NVIDIA Jetson or DRIVE (tegrastats-capable) platforms.
+
+    Uses /etc/nv_tegra_release when present; no subprocess or network.
+    Returns at most one device (single SoC per system). Generic for edge AI
+    and automotive; applications map device_type to TegrastatsCollector or equivalent.
+    """
+    devices: List[DeviceProfile] = []
+    cpu_model = _get_cpu_info()
+    os_info = _get_os_info()
+    tegra_release_path = "/etc/nv_tegra_release"
+    try:
+        import os
+
+        if not os.path.isfile(tegra_release_path):
+            return devices
+        with open(tegra_release_path, "r", encoding="utf-8", errors="replace") as f:
+            first_line = (f.readline() or "").strip()
+        if not first_line:
+            return devices
+        # Infer Jetson vs DRIVE from content (e.g. "DRIVE" in string -> DRIVE)
+        upper = first_line.upper()
+        if "DRIVE" in upper or "DRIVEOS" in upper:
+            device_type = DEVICE_TYPE_NVIDIA_DRIVE
+            device_id = "nvidia_drive_0"
+            soc = "DRIVE"
+        else:
+            device_type = DEVICE_TYPE_NVIDIA_JETSON
+            device_id = "nvidia_jetson_0"
+            soc = "Jetson"
+        # Use first line as device name (e.g. "# R35.4.1" or similar)
+        device_name = first_line[:80] if len(first_line) > 80 else first_line
+        if device_name.startswith("#"):
+            device_name = device_name[1:].strip() or f"NVIDIA {soc}"
+        devices.append(
+            DeviceProfile(
+                device_id=device_id,
+                device_type=device_type,
+                device_name=device_name,
+                gpu_model="",
+                cpu_model=cpu_model,
+                soc=soc,
+                power_mode="",
+                index=0,
+                metadata={"os": os_info, "tegra_release": first_line},
+            )
+        )
+    except (OSError, IOError):
+        pass
+    except Exception:
+        pass
     return devices
 
 
@@ -216,14 +282,17 @@ def get_all_devices(
     include_nvidia: bool = True,
     include_intel: bool = True,
     include_cpu: bool = True,
+    include_tegrastats: bool = True,
 ) -> List[DeviceProfile]:
     """Detect all available devices and return DeviceProfile list.
 
-    Order: NVIDIA GPUs (by index), Intel GPUs, then CPU.
+    Order: NVIDIA GPUs (by index), Tegrastats platforms (Jetson/DRIVE), Intel GPUs, CPU.
     """
     result: List[DeviceProfile] = []
     if include_nvidia:
         result.extend(detect_nvidia_gpus())
+    if include_tegrastats:
+        result.extend(detect_tegrastats_platforms())
     if include_intel:
         result.extend(detect_intel_gpus())
     if include_cpu:

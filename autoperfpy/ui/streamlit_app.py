@@ -22,11 +22,9 @@ Authors:
 """
 
 import json
-import os
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -38,7 +36,7 @@ try:
     import pandas as pd
     import plotly.express as px
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
+
 except ImportError as e:
     st.error(f"Missing required dependency: {e}")
     st.info("Install with: pip install pandas plotly")
@@ -64,7 +62,7 @@ def load_json_data(filepath: str) -> Optional[Dict[str, Any]]:
         Dictionary with collector data or None if loading fails
     """
     try:
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         st.error(f"Failed to load JSON file: {e}")
@@ -346,22 +344,16 @@ def run_auto_benchmarks_ui(
 ) -> List[Dict[str, Any]]:
     """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
     try:
-        from autoperfpy.device_config import (
-            get_devices_and_configs_auto,
-            enumerate_inference_configs,
-        )
-        from trackiq.platform import get_all_devices
+        from autoperfpy.device_config import get_devices_and_configs_auto
         from autoperfpy.auto_runner import run_auto_benchmarks
 
-        devices = get_all_devices()
-        if not devices:
-            return []
-        pairs = enumerate_inference_configs(
-            devices,
+        pairs = get_devices_and_configs_auto(
             precisions=precisions,
             batch_sizes=batch_sizes,
             max_configs_per_device=max_configs_per_device,
         )
+        if not pairs:
+            return []
         return run_auto_benchmarks(
             pairs,
             duration_seconds=float(duration_seconds),
@@ -377,44 +369,26 @@ def run_benchmark_from_ui(
 ) -> Optional[Dict[str, Any]]:
     """Run benchmark from UI (Phase 5 manual: uses detected device + inference config)."""
     try:
-        from trackiq.platform import get_all_devices
-        from autoperfpy.device_config import InferenceConfig
+        from autoperfpy.device_config import (
+            DEFAULT_ITERATIONS,
+            DEFAULT_WARMUP_RUNS,
+            InferenceConfig,
+            PRECISION_FP32,
+            resolve_device,
+        )
         from autoperfpy.auto_runner import run_single_benchmark
     except ImportError:
         return _run_synthetic_fallback_ui(duration_seconds, device, precision)
-    devices = get_all_devices()
-    device_id = (device or "cpu_0").strip().lower()
-    target = None
-    if device_id.isdigit():
-        idx = int(device_id)
-        for d in devices:
-            if (
-                getattr(d, "device_type", "") == "nvidia_gpu"
-                and getattr(d, "index", -1) == idx
-            ):
-                target = d
-                break
-        if not target:
-            for d in devices:
-                if getattr(d, "index", -1) == idx:
-                    target = d
-                    break
-    else:
-        for d in devices:
-            if getattr(d, "device_id", "") == device_id:
-                target = d
-                break
-    if not target:
-        target = devices[0] if devices else None
+    target = resolve_device(device or "cpu_0")
     if not target:
         return _run_synthetic_fallback_ui(duration_seconds, device, precision)
     config = InferenceConfig(
-        precision=precision or "fp32",
+        precision=precision or PRECISION_FP32,
         batch_size=1,
         accelerator=target.device_id,
         streams=1,
-        warmup_runs=5,
-        iterations=100,
+        warmup_runs=DEFAULT_WARMUP_RUNS,
+        iterations=DEFAULT_ITERATIONS,
     )
     result = run_single_benchmark(
         target,
@@ -431,11 +405,12 @@ def _run_synthetic_fallback_ui(
 ) -> Optional[Dict[str, Any]]:
     """Fallback: run synthetic benchmark from UI when Phase 5 runner unavailable."""
     try:
+        from autoperfpy.device_config import DEFAULT_WARMUP_RUNS
         from trackiq.collectors import SyntheticCollector
         from trackiq.runner import BenchmarkRunner
     except ImportError:
         return None
-    config = {"warmup_samples": 5, "seed": 42}
+    config = {"warmup_samples": DEFAULT_WARMUP_RUNS, "seed": 42}
     collector = SyntheticCollector(config=config)
     runner = BenchmarkRunner(
         collector,
@@ -1090,16 +1065,24 @@ def main():
                     value=10,
                     key="auto_dur",
                 )
+                try:
+                    from autoperfpy.device_config import (
+                        DEFAULT_BATCH_SIZES,
+                        PRECISIONS,
+                    )
+                except ImportError:
+                    PRECISIONS = ["fp32", "fp16", "int8"]
+                    DEFAULT_BATCH_SIZES = [1, 4, 8]
                 precisions_ui = st.multiselect(
                     "Precisions",
-                    options=["fp32", "fp16", "int8"],
-                    default=["fp32", "fp16"],
+                    options=PRECISIONS,
+                    default=PRECISIONS[:2],
                     key="auto_prec",
                 )
                 batch_sizes_ui = st.multiselect(
                     "Batch sizes",
-                    options=[1, 2, 4, 8, 16],
-                    default=[1, 4],
+                    options=DEFAULT_BATCH_SIZES + [2, 16],
+                    default=DEFAULT_BATCH_SIZES,
                     key="auto_bs",
                 )
                 max_cfg = st.number_input(
@@ -1113,8 +1096,8 @@ def main():
                     with st.spinner("Running benchmarks on all devices..."):
                         results = run_auto_benchmarks_ui(
                             duration_seconds=duration_ui,
-                            precisions=precisions_ui or ["fp32"],
-                            batch_sizes=batch_sizes_ui or [1],
+                            precisions=precisions_ui or PRECISIONS[:1],
+                            batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
                             max_configs_per_device=max_cfg,
                         )
                     if results:
@@ -1141,9 +1124,13 @@ def main():
                     value="cpu_0",
                     help="Device ID or GPU index",
                 )
+                try:
+                    from autoperfpy.device_config import PRECISIONS as MANUAL_PRECISIONS
+                except ImportError:
+                    MANUAL_PRECISIONS = ["fp32", "fp16", "int8"]
                 precision_ui = st.selectbox(
                     "Inference precision",
-                    options=["fp32", "fp16", "int8"],
+                    options=MANUAL_PRECISIONS,
                     index=0,
                     help="Precision for inference (fp32, fp16, int8)",
                 )

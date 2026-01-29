@@ -1,9 +1,11 @@
 """Command-line interface for AutoPerfPy."""
 
 import argparse
+import json
 import os
 import sys
 import time
+from typing import Optional
 
 from autoperfpy.config import ConfigManager
 from autoperfpy.analyzers import (
@@ -31,17 +33,19 @@ from autoperfpy.profiles import (
 )
 from trackiq.compare import RegressionDetector, RegressionThreshold
 from trackiq.errors import HardwareNotFoundError, DependencyError
-from trackiq.platform import get_all_devices, DeviceProfile
-import json
+from trackiq.platform import DeviceProfile, get_all_devices
 import numpy as np
 
 # Phase 5: auto/manual run
 from autoperfpy.device_config import (
-    InferenceConfig,
-    get_devices_and_configs_auto,
-    enumerate_inference_configs,
-    DEFAULT_WARMUP_RUNS,
+    DEFAULT_BATCH_SIZES,
     DEFAULT_ITERATIONS,
+    DEFAULT_WARMUP_RUNS,
+    InferenceConfig,
+    PRECISION_FP32,
+    PRECISIONS,
+    get_devices_and_configs_auto,
+    resolve_device,
 )
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
 
@@ -66,6 +70,9 @@ Examples:
   # List available profiles
   autoperfpy profiles --list
   autoperfpy profiles --info automotive_safety
+
+  # List detected devices (for run --auto or --device)
+  autoperfpy devices --list
 
   # Latency analysis
   autoperfpy analyze latency --csv data.csv
@@ -121,6 +128,15 @@ Environment Variables:
     )
     profiles_parser.add_argument(
         "--info", "-i", metavar="NAME", help="Show detailed info for a profile"
+    )
+
+    # Devices command (list detected hardware for run --auto / --device)
+    devices_parser = subparsers.add_parser(
+        "devices",
+        help="List detected devices (GPUs, CPU, Jetson/DRIVE). Use before run --auto.",
+    )
+    devices_parser.add_argument(
+        "--list", "-l", action="store_true", help="List all detected devices (default)"
     )
 
     # Run command (profile-based, auto, or manual)
@@ -1190,9 +1206,9 @@ def run_with_profile(args, _config):
         try:
             from autoperfpy.collectors import NVMLCollector
         except ImportError as e:
-            print(f"Error: NVML collector requires pynvml. {e}", file=sys.stderr)
+            print(f"Error: NVML collector requires nvidia-ml-py. {e}", file=sys.stderr)
             raise DependencyError(
-                "NVML collector requires pynvml. Install with: pip install pynvml"
+                "NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py"
             ) from e
         from trackiq.platform import get_memory_metrics
 
@@ -1344,54 +1360,60 @@ def run_with_profile(args, _config):
     return export
 
 
-def _resolve_device(device_id: str) -> DeviceProfile:
+def _resolve_device(device_id: str) -> Optional[DeviceProfile]:
     """Resolve device ID (e.g. nvidia_0, cpu_0, 0) to a DeviceProfile."""
-    all_devices = get_all_devices()
-    device_id = (device_id or "").strip().lower()
-    if device_id.isdigit():
-        idx = int(device_id)
-        for d in all_devices:
-            if d.device_type == "nvidia_gpu" and d.index == idx:
-                return d
-        for d in all_devices:
-            if d.index == idx:
-                return d
-    for d in all_devices:
-        if d.device_id == device_id:
-            return d
-    return all_devices[0] if all_devices else None
+    return resolve_device(device_id)
+
+
+def run_devices_list(args) -> int:
+    """List all detected devices (for run --auto / --device)."""
+    devices = get_all_devices()
+    if not devices:
+        print("No devices detected.", file=sys.stderr)
+        print(
+            "Run on CPU with: autoperfpy run --manual --device cpu_0",
+            file=sys.stderr,
+        )
+        return 1
+    print("Detected devices (use with: autoperfpy run --auto or --device <id>):")
+    print("=" * 72)
+    for d in devices:
+        name = (d.device_name or d.device_id).strip()
+        parts = [d.device_id, d.device_type, name]
+        if d.gpu_model:
+            parts.append(f"gpu={d.gpu_model}")
+        if d.soc:
+            parts.append(f"soc={d.soc}")
+        if d.cpu_model:
+            parts.append(f"cpu={d.cpu_model}")
+        print("  " + "  ".join(parts))
+    print("=" * 72)
+    print(f"Total: {len(devices)} device(s)")
+    return 0
 
 
 def run_auto_benchmarks_cli(args) -> int:
     """Run automatic benchmarks on all detected devices and configs."""
-    devices = get_all_devices()
-    if not devices:
-        print(
-            "No devices detected. Use --manual --device cpu_0 for synthetic.",
-            file=sys.stderr,
-        )
-        return 1
-    device_filter = None
+    device_ids_filter = None
     if getattr(args, "devices", None):
-        device_filter = [s.strip() for s in args.devices.split(",") if s.strip()]
-    if device_filter:
-        devices = [d for d in devices if d.device_id in device_filter]
-    if not devices:
-        print("No devices match --devices filter.", file=sys.stderr)
-        return 1
+        device_ids_filter = [s.strip() for s in args.devices.split(",") if s.strip()]
     precisions = [
-        s.strip() for s in getattr(args, "precisions", "fp32,fp16").split(",")
+        s.strip()
+        for s in getattr(args, "precisions", ",".join(PRECISIONS)).split(",")
+        if s.strip()
     ]
     batch_sizes = []
-    for s in getattr(args, "batch_sizes", "1,4").split(","):
+    for s in getattr(
+        args, "batch_sizes", ",".join(map(str, DEFAULT_BATCH_SIZES))
+    ).split(","):
         try:
             batch_sizes.append(int(s.strip()))
         except ValueError:
             pass
     if not batch_sizes:
-        batch_sizes = [1, 4]
-    pairs = enumerate_inference_configs(
-        devices,
+        batch_sizes = list(DEFAULT_BATCH_SIZES)
+    pairs = get_devices_and_configs_auto(
+        device_ids_filter=device_ids_filter,
         precisions=precisions,
         batch_sizes=batch_sizes,
         max_configs_per_device=getattr(args, "max_configs_per_device", 6),
@@ -1403,7 +1425,8 @@ def run_auto_benchmarks_cli(args) -> int:
     if not args.quiet:
         print("Auto mode: running benchmarks on all detected devices and configs")
         print("=" * 60)
-        print(f"Devices: {[d.device_id for d in devices]}")
+        device_ids = list(dict.fromkeys(p[0].device_id for p in pairs))
+        print(f"Devices: {device_ids}")
         print(f"Runs: {len(pairs)} (duration {duration}s each)")
         print("=" * 60)
     results = run_auto_benchmarks(
@@ -1442,7 +1465,7 @@ def run_manual_single(args):
         print("No device found. Use --device nvidia_0, cpu_0, or 0.", file=sys.stderr)
         return None
     config = InferenceConfig(
-        precision=getattr(args, "precision", "fp32"),
+        precision=getattr(args, "precision", None) or PRECISION_FP32,
         batch_size=getattr(args, "batch_size", None) or 1,
         accelerator=device.device_id,
         streams=1,
@@ -1497,6 +1520,8 @@ def main():
     try:
         if args.command == "profiles":
             return run_profiles(args)
+        elif args.command == "devices":
+            return run_devices_list(args)
         elif args.command == "run":
             if args.profile is not None:
                 result = run_with_profile(args, config)

@@ -1,7 +1,7 @@
 """NVML collector for NVIDIA GPU metrics.
 
-This module provides a collector that uses pynvml (NVIDIA Management Library)
-to gather real-time GPU metrics including:
+This module provides a collector that uses the pynvml module from nvidia-ml-py
+(NVIDIA Management Library) to gather real-time GPU metrics including:
 - GPU utilization percentage
 - Memory usage and utilization
 - Power consumption
@@ -9,7 +9,7 @@ to gather real-time GPU metrics including:
 - Clock frequencies
 - PCIe throughput
 
-Requires: pynvml (pip install pynvml)
+Requires: nvidia-ml-py (pip install nvidia-ml-py)
 
 Example usage:
     from trackiq.collectors import NVMLCollector
@@ -79,7 +79,7 @@ class NVMLCollector(CollectorBase):
             name: Name for this collector instance
 
         Raises:
-            ImportError: If pynvml is not installed
+            ImportError: If nvidia-ml-py is not installed
         """
         super().__init__(name, config)
 
@@ -105,14 +105,14 @@ class NVMLCollector(CollectorBase):
 
         Raises:
             RuntimeError: If NVML initialization fails or device is not found
-            ImportError: If pynvml is not installed
+            ImportError: If nvidia-ml-py is not installed
         """
         try:
-            import pynvml
+            import pynvml  # provided by nvidia-ml-py
         except ImportError:
             raise ImportError(
-                "pynvml is required for NVMLCollector. "
-                "Install with: pip install pynvml"
+                "nvidia-ml-py is required for NVMLCollector. "
+                "Install with: pip install nvidia-ml-py"
             )
 
         try:
@@ -170,7 +170,7 @@ class NVMLCollector(CollectorBase):
             raise RuntimeError("Collector not started. Call start() first.")
 
         try:
-            import pynvml
+            import pynvml  # provided by nvidia-ml-py
         except ImportError:
             return None
 
@@ -277,7 +277,8 @@ class NVMLCollector(CollectorBase):
         """Clean up NVML resources."""
         if self._nvml_initialized:
             try:
-                import pynvml
+                import pynvml  # provided by nvidia-ml-py
+
                 pynvml.nvmlShutdown()
             except Exception:
                 pass
@@ -315,11 +316,17 @@ class NVMLCollector(CollectorBase):
             return {}
 
         warmup_count = self._cfg.get("warmup_samples", 0)
-        steady_samples = self._samples[warmup_count:] if len(self._samples) > warmup_count else self._samples
+        steady_samples = (
+            self._samples[warmup_count:]
+            if len(self._samples) > warmup_count
+            else self._samples
+        )
 
         def safe_stats(key: str, samples: List[CollectorSample]) -> Dict[str, float]:
             """Calculate stats for a metric, handling None values."""
-            values = [s.metrics.get(key) for s in samples if s.metrics.get(key) is not None]
+            values = [
+                s.metrics.get(key) for s in samples if s.metrics.get(key) is not None
+            ]
             if not values:
                 return {}
             return {
@@ -331,7 +338,9 @@ class NVMLCollector(CollectorBase):
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (self._end_time - self._start_time) if self._end_time else None,
+            "duration_seconds": (
+                (self._end_time - self._start_time) if self._end_time else None
+            ),
             "device": {
                 "index": self._device_index,
                 "name": self._device_name,
@@ -348,7 +357,11 @@ class NVMLCollector(CollectorBase):
                 "mean_mb": safe_stats("memory_used_mb", steady_samples).get("mean"),
                 "max_mb": safe_stats("memory_used_mb", steady_samples).get("max"),
                 "min_mb": safe_stats("memory_used_mb", steady_samples).get("min"),
-                "total_mb": steady_samples[0].metrics.get("memory_total_mb") if steady_samples else None,
+                "total_mb": (
+                    steady_samples[0].metrics.get("memory_total_mb")
+                    if steady_samples
+                    else None
+                ),
             },
             "power": {
                 "mean_w": safe_stats("power_w", steady_samples).get("mean"),
@@ -373,9 +386,9 @@ class NVMLCollector(CollectorBase):
             raise RuntimeError("Collector must be started to get device info")
 
         try:
-            import pynvml
+            import pynvml  # provided by nvidia-ml-py
         except ImportError:
-            return {"error": "pynvml not installed"}
+            return {"error": "nvidia-ml-py not installed"}
 
         info = {
             "name": self._device_name,
@@ -409,7 +422,9 @@ class NVMLCollector(CollectorBase):
             pass
 
         try:
-            info["compute_capability"] = pynvml.nvmlDeviceGetCudaComputeCapability(self._handle)
+            info["compute_capability"] = pynvml.nvmlDeviceGetCudaComputeCapability(
+                self._handle
+            )
         except (pynvml.NVMLError, AttributeError):
             pass
 
@@ -428,7 +443,9 @@ class NVMLCollector(CollectorBase):
         try:
             import pynvml
         except ImportError:
-            raise ImportError("pynvml required. Install with: pip install pynvml")
+            raise ImportError(
+                "nvidia-ml-py required. Install with: pip install nvidia-ml-py"
+            )
 
         devices = []
         try:
@@ -443,11 +460,13 @@ class NVMLCollector(CollectorBase):
 
                 mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
 
-                devices.append({
-                    "index": i,
-                    "name": name,
-                    "memory_total_mb": mem.total / (1024 * 1024),
-                })
+                devices.append(
+                    {
+                        "index": i,
+                        "name": name,
+                        "memory_total_mb": mem.total / (1024 * 1024),
+                    }
+                )
 
             pynvml.nvmlShutdown()
         except pynvml.NVMLError as e:

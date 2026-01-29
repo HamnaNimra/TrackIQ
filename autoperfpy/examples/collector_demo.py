@@ -37,7 +37,9 @@ def demo_synthetic_collector(num_samples: int = 50, output_file: str = None):
 
     print(f"Collecting {num_samples} samples...")
     print()
-    print(f"{'Sample':>6} {'Latency':>10} {'CPU':>8} {'GPU':>8} {'Power':>8} {'Temp':>8} {'Warmup':>8}")
+    print(
+        f"{'Sample':>6} {'Latency':>10} {'CPU':>8} {'GPU':>8} {'Power':>8} {'Temp':>8} {'Warmup':>8}"
+    )
     print("-" * 60)
 
     for i in range(num_samples):
@@ -93,7 +95,9 @@ def demo_psutil_collector(num_samples: int = 20, output_file: str = None):
     collector.start()
     info = collector.get_system_info()
     print(f"System: {info['platform']['system']} {info['platform']['release']}")
-    print(f"CPU: {info['cpu']['cores_logical']} logical cores ({info['cpu']['cores_physical']} physical)")
+    print(
+        f"CPU: {info['cpu']['cores_logical']} logical cores ({info['cpu']['cores_physical']} physical)"
+    )
     print(f"Memory: {info['memory']['total_gb']:.1f} GB")
     print()
 
@@ -104,7 +108,11 @@ def demo_psutil_collector(num_samples: int = 20, output_file: str = None):
         timestamp = time.time()
         metrics = collector.sample(timestamp)
 
-        temp_str = f"{metrics.get('temperature_c', 0):.1f}C" if metrics.get('temperature_c') else "N/A"
+        temp_str = (
+            f"{metrics.get('temperature_c', 0):.1f}C"
+            if metrics.get("temperature_c")
+            else "N/A"
+        )
 
         print(
             f"{i:>6} "
@@ -146,7 +154,7 @@ def demo_nvml_collector(num_samples: int = 20, output_file: str = None):
             print(f"  [{d['index']}] {d['name']} ({d['memory_total_mb']:.0f}MB)")
         print()
     except ImportError:
-        print("ERROR: pynvml is not installed. Run: pip install pynvml")
+        print("ERROR: nvidia-ml-py is not installed. Run: pip install nvidia-ml-py")
         return
     except RuntimeError as e:
         print(f"ERROR: {e}")
@@ -168,8 +176,14 @@ def demo_nvml_collector(num_samples: int = 20, output_file: str = None):
         timestamp = time.time()
         metrics = collector.sample(timestamp)
 
-        power_str = f"{metrics.get('power_w', 0):.1f}W" if metrics.get('power_w') else "N/A"
-        temp_str = f"{metrics.get('temperature_c', 0):.1f}C" if metrics.get('temperature_c') else "N/A"
+        power_str = (
+            f"{metrics.get('power_w', 0):.1f}W" if metrics.get("power_w") else "N/A"
+        )
+        temp_str = (
+            f"{metrics.get('temperature_c', 0):.1f}C"
+            if metrics.get("temperature_c")
+            else "N/A"
+        )
 
         print(
             f"{i:>6} "
@@ -187,9 +201,9 @@ def demo_nvml_collector(num_samples: int = 20, output_file: str = None):
     print("Summary:")
     print(f"  Samples: {export.summary['sample_count']}")
     print(f"  Duration: {export.summary['duration_seconds']:.2f}s")
-    if export.summary.get('gpu', {}).get('mean'):
+    if export.summary.get("gpu", {}).get("mean"):
         print(f"  Mean GPU: {export.summary['gpu']['mean']:.1f}%")
-    if export.summary.get('power', {}).get('mean_w'):
+    if export.summary.get("power", {}).get("mean_w"):
         print(f"  Mean Power: {export.summary['power']['mean_w']:.1f}W")
 
     if output_file:
@@ -209,10 +223,16 @@ def demo_tegrastats_collector(filepath: str = None, output_file: str = None):
     if filepath is None:
         # Check if live tegrastats is available
         if TegrastatsCollector.is_available():
-            print("tegrastats is available. Run with --file <path> to analyze a log file.")
-            print("Or the collector can be used in live mode on Jetson/DriveOS platforms.")
+            print(
+                "tegrastats is available. Run with --file <path> to analyze a log file."
+            )
+            print(
+                "Or the collector can be used in live mode on Jetson/DriveOS platforms."
+            )
         else:
-            print("tegrastats not found. This collector requires a Jetson/DriveOS platform.")
+            print(
+                "tegrastats not found. This collector requires a Jetson/DriveOS platform."
+            )
             print("Provide a tegrastats log file with --file <path>")
         return
 
@@ -283,23 +303,27 @@ Examples:
     )
 
     parser.add_argument(
-        "--collector", "-c",
+        "--collector",
+        "-c",
         choices=["synthetic", "psutil", "nvml", "tegrastats"],
         default="synthetic",
         help="Collector to demo (default: synthetic)",
     )
     parser.add_argument(
-        "--samples", "-n",
+        "--samples",
+        "-n",
         type=int,
         default=50,
         help="Number of samples to collect (default: 50)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output file for JSON export",
     )
     parser.add_argument(
-        "--file", "-f",
+        "--file",
+        "-f",
         help="Input file (for tegrastats file mode)",
     )
 
