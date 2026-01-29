@@ -12,7 +12,7 @@ to gather real-time GPU metrics including:
 Requires: pynvml (pip install pynvml)
 
 Example usage:
-    from autoperfpy.collectors import NVMLCollector
+    from trackiq.collectors import NVMLCollector
 
     collector = NVMLCollector(device_index=0)
     collector.start()

@@ -1,4 +1,4 @@
-"""Synthetic data collector for AutoPerfPy.
+"""Synthetic data collector for TrackIQ.
 
 This module provides a synthetic data collector that generates realistic
 time-series performance data for testing, development, and demonstration
@@ -12,7 +12,7 @@ The SyntheticCollector simulates:
 - Temperature variations based on load
 
 Example usage:
-    from autoperfpy.collectors import SyntheticCollector
+    from trackiq.collectors import SyntheticCollector
 
     # Create collector with custom config
     collector = SyntheticCollector(config={
@@ -55,7 +55,7 @@ class SyntheticCollector(CollectorBase):
 
     This collector is useful for:
     - Testing analysis pipelines without hardware
-    - Demonstrating AutoPerfPy capabilities
+    - Demonstrating TrackIQ capabilities
     - CI/CD smoke tests
     - Developing new visualization features
 
@@ -480,56 +480,6 @@ class SyntheticCollector(CollectorBase):
         upper = min(lower + 1, len(sorted_data) - 1)
         weight = index - lower
         return sorted_data[lower] * (1 - weight) + sorted_data[upper] * weight
-
-
-# TODO: Implement NVMLCollector using pynvml for real NVIDIA GPU metrics
-# Example structure:
-# class NVMLCollector(CollectorBase):
-#     def __init__(self, device_index=0, config=None):
-#         super().__init__("NVMLCollector", config)
-#         self._device_index = device_index
-#         self._handle = None
-#
-#     def start(self):
-#         import pynvml
-#         pynvml.nvmlInit()
-#         self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._device_index)
-#         self._is_running = True
-#         self._start_time = time.time()
-#
-#     def sample(self, timestamp):
-#         import pynvml
-#         memory = pynvml.nvmlDeviceGetMemoryInfo(self._handle)
-#         utilization = pynvml.nvmlDeviceGetUtilizationRates(self._handle)
-#         power = pynvml.nvmlDeviceGetPowerUsage(self._handle) / 1000  # mW to W
-#         temp = pynvml.nvmlDeviceGetTemperature(self._handle, pynvml.NVML_TEMPERATURE_GPU)
-#         metrics = {
-#             "gpu_memory_used_mb": memory.used / (1024 * 1024),
-#             "gpu_memory_total_mb": memory.total / (1024 * 1024),
-#             "gpu_percent": utilization.gpu,
-#             "memory_percent": utilization.memory,
-#             "power_w": power,
-#             "temperature_c": temp,
-#         }
-#         self._store_sample(timestamp, metrics)
-#         return metrics
-
-# TODO: Implement TegrastatsCollector for NVIDIA Jetson platforms
-# Parse tegrastats output for comprehensive system metrics
-
-# TODO: Implement PsutilCollector for cross-platform system monitoring
-# Example structure:
-# class PsutilCollector(CollectorBase):
-#     def sample(self, timestamp):
-#         import psutil
-#         metrics = {
-#             "cpu_percent": psutil.cpu_percent(),
-#             "memory_used_mb": psutil.virtual_memory().used / (1024 * 1024),
-#             "memory_percent": psutil.virtual_memory().percent,
-#             "disk_percent": psutil.disk_usage('/').percent,
-#         }
-#         self._store_sample(timestamp, metrics)
-#         return metrics
 
 
 __all__ = ["SyntheticCollector"]

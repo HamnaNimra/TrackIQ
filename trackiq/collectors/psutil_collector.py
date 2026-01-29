@@ -11,7 +11,7 @@ across all platforms (Linux, Windows, macOS). It captures:
 Requires: psutil (pip install psutil)
 
 Example usage:
-    from autoperfpy.collectors import PsutilCollector
+    from trackiq.collectors import PsutilCollector
 
     collector = PsutilCollector()
     collector.start()

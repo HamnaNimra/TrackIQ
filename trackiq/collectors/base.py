@@ -1,6 +1,6 @@
-"""Base collector interface for AutoPerfPy.
+"""Base collector interface for TrackIQ.
 
-This module defines the abstract base class for all data collectors in AutoPerfPy.
+This module defines the abstract base class for all data collectors in TrackIQ.
 Collectors are responsible for gathering time-series performance metrics from
 various sources (synthetic, hardware monitors, profilers, etc.).
 
@@ -26,7 +26,6 @@ Example usage:
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime
 
 
 @dataclass
@@ -130,120 +129,27 @@ class CollectorBase(ABC):
 
     @abstractmethod
     def start(self) -> None:
-        """Start the data collection process.
-
-        This method should:
-        - Initialize any hardware connections or resources
-        - Set up monitoring threads if needed
-        - Prepare internal state for sampling
-        - Set _is_running to True
-
-        Raises:
-            RuntimeError: If collector cannot be started (e.g., hardware unavailable)
-            ConnectionError: If unable to connect to data source
-
-        Example:
-            def start(self):
-                self._init_hardware()
-                self._is_running = True
-                self._start_time = time.time()
-        """
+        """Start the data collection process."""
         pass
 
     @abstractmethod
     def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
-        """Collect a single sample at the given timestamp.
-
-        This method should be called repeatedly during the collection period
-        to gather time-series data points. Each call should return the current
-        metrics from the data source.
-
-        Args:
-            timestamp: Unix timestamp for this sample (seconds since epoch).
-                       Use time.time() for current time.
-
-        Returns:
-            Dictionary of metric names to values for this sample, or None
-            if sampling failed. Common metrics include:
-            - cpu_percent: CPU utilization percentage (0-100)
-            - gpu_percent: GPU utilization percentage (0-100)
-            - memory_used_mb: Memory usage in megabytes
-            - power_w: Power consumption in watts
-            - latency_ms: Inference/operation latency in milliseconds
-            - temperature_c: Temperature in Celsius
-
-        Raises:
-            RuntimeError: If collector is not running (start() not called)
-
-        Example:
-            def sample(self, timestamp):
-                if not self._is_running:
-                    raise RuntimeError("Collector not started")
-                metrics = self._read_hardware_metrics()
-                self._store_sample(timestamp, metrics)
-                return metrics
-        """
+        """Collect a single sample at the given timestamp."""
         pass
 
     @abstractmethod
     def stop(self) -> None:
-        """Stop the data collection process.
-
-        This method should:
-        - Clean up any hardware connections or resources
-        - Stop monitoring threads gracefully
-        - Set _is_running to False
-        - Record the end time
-
-        Should be safe to call multiple times (idempotent).
-
-        Example:
-            def stop(self):
-                if self._is_running:
-                    self._cleanup_hardware()
-                    self._is_running = False
-                    self._end_time = time.time()
-        """
+        """Stop the data collection process."""
         pass
 
     @abstractmethod
     def export(self) -> CollectorExport:
-        """Export all collected data.
-
-        Returns all samples collected between start() and stop() calls,
-        along with summary statistics and metadata.
-
-        Returns:
-            CollectorExport containing:
-            - All collected samples with timestamps
-            - Summary statistics (min, max, mean, percentiles)
-            - Collection metadata (duration, sample count, config)
-
-        Example:
-            def export(self):
-                summary = self._calculate_summary()
-                return CollectorExport(
-                    collector_name=self.name,
-                    start_time=self._start_time,
-                    end_time=self._end_time,
-                    samples=self._samples,
-                    summary=summary,
-                    config=self._config
-                )
-        """
+        """Export all collected data."""
         pass
 
     def _store_sample(self, timestamp: float, metrics: Dict[str, Any],
                       metadata: Optional[Dict[str, Any]] = None) -> None:
-        """Store a sample in the internal buffer.
-
-        Helper method for subclasses to store collected samples.
-
-        Args:
-            timestamp: Unix timestamp for the sample
-            metrics: Dictionary of metric values
-            metadata: Optional metadata for the sample
-        """
+        """Store a sample in the internal buffer."""
         sample = CollectorSample(
             timestamp=timestamp,
             metrics=metrics,
@@ -252,44 +158,16 @@ class CollectorBase(ABC):
         self._samples.append(sample)
 
     def get_sample_count(self) -> int:
-        """Get the number of samples collected.
-
-        Returns:
-            Number of samples in the buffer
-        """
+        """Get the number of samples collected."""
         return len(self._samples)
 
     def is_running(self) -> bool:
-        """Check if the collector is currently running.
-
-        Returns:
-            True if collector is active, False otherwise
-        """
+        """Check if the collector is currently running."""
         return self._is_running
 
     def clear(self) -> None:
-        """Clear all collected samples.
-
-        Useful for resetting the collector without full stop/start cycle.
-        """
+        """Clear all collected samples."""
         self._samples.clear()
-
-
-# TODO: Implement NVMLCollector for NVIDIA GPU metrics via pynvml
-# - GPU utilization, memory usage, temperature, power draw
-# - See: https://pypi.org/project/pynvml/
-
-# TODO: Implement TegrastatsCollector for Jetson/DriveOS platforms
-# - Parse tegrastats output for CPU, GPU, EMC, thermal metrics
-# - Support both file-based and live collection modes
-
-# TODO: Implement PsutilCollector for cross-platform system metrics
-# - CPU, memory, disk, network via psutil library
-# - See: https://psutil.readthedocs.io/
-
-# TODO: Implement TensorRTCollector for inference profiling
-# - Layer-level timing, memory allocation, throughput
-# - Integrate with TensorRT Python API
 
 
 __all__ = ["CollectorBase", "CollectorSample", "CollectorExport"]

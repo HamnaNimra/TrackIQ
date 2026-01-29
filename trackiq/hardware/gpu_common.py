@@ -1,7 +1,7 @@
-"""Shared GPU utilities for AutoPerfPy monitoring.
+"""Shared GPU utilities for TrackIQ hardware detection.
 
-This module provides common functionality for GPU monitoring,
-used by both the package (autoperfpy.monitoring) and legacy scripts (monitoring/).
+This module provides common functionality for GPU monitoring and
+environment detection via nvidia-smi.
 """
 
 import subprocess
@@ -15,19 +15,7 @@ def query_nvidia_smi(
     query_fields: List[str],
     timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
 ) -> Optional[str]:
-    """Execute nvidia-smi query and return raw output.
-
-    Args:
-        query_fields: List of nvidia-smi query fields (e.g., ["memory.used", "utilization.gpu"])
-        timeout: Command timeout in seconds
-
-    Returns:
-        Raw stdout string if successful, None otherwise
-
-    Example:
-        >>> output = query_nvidia_smi(["memory.used", "memory.total"])
-        >>> print(output)  # "1234, 8192"
-    """
+    """Execute nvidia-smi query and return raw output."""
     try:
         query_string = ",".join(query_fields)
         result = subprocess.run(
@@ -54,22 +42,7 @@ def parse_gpu_metrics(
     field_names: List[str],
     separator: str = ",",
 ) -> Optional[Dict[str, float]]:
-    """Parse nvidia-smi CSV output into a dictionary.
-
-    Args:
-        output: Raw CSV output from nvidia-smi
-        field_names: Names to assign to each parsed value
-        separator: CSV separator (default: comma)
-
-    Returns:
-        Dictionary mapping field names to float values, or None on parse error
-
-    Example:
-        >>> output = "1234, 8192, 75"
-        >>> fields = ["memory_used", "memory_total", "utilization"]
-        >>> result = parse_gpu_metrics(output, fields)
-        >>> print(result)  # {"memory_used": 1234.0, "memory_total": 8192.0, "utilization": 75.0}
-    """
+    """Parse nvidia-smi CSV output into a dictionary."""
     try:
         values = [v.strip() for v in output.split(separator)]
 
@@ -83,15 +56,7 @@ def parse_gpu_metrics(
 
 
 def get_memory_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Dict[str, Any]]:
-    """Get GPU memory metrics.
-
-    Returns:
-        Dictionary with memory metrics or None if unavailable:
-        - gpu_memory_used_mb: Memory used in MB
-        - gpu_memory_total_mb: Total memory in MB
-        - gpu_utilization_percent: GPU utilization percentage
-        - gpu_memory_percent: Memory usage percentage
-    """
+    """Get GPU memory metrics."""
     output = query_nvidia_smi(
         ["memory.used", "memory.total", "utilization.gpu"],
         timeout=timeout,
@@ -108,7 +73,6 @@ def get_memory_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Di
     if parsed is None:
         return None
 
-    # Calculate memory percentage
     if parsed["gpu_memory_total_mb"] > 0:
         parsed["gpu_memory_percent"] = (
             parsed["gpu_memory_used_mb"] / parsed["gpu_memory_total_mb"] * 100
@@ -120,14 +84,7 @@ def get_memory_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Di
 
 
 def get_performance_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Dict[str, float]]:
-    """Get GPU performance metrics (utilization, temperature, power).
-
-    Returns:
-        Dictionary with performance metrics or None if unavailable:
-        - utilization: GPU utilization percentage
-        - temperature: GPU temperature in Celsius
-        - power: Power draw in Watts
-    """
+    """Get GPU performance metrics (utilization, temperature, power)."""
     output = query_nvidia_smi(
         ["utilization.gpu", "temperature.gpu", "power.draw"],
         timeout=timeout,

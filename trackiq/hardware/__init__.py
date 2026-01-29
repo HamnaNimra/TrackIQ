@@ -1,19 +1,17 @@
-"""Monitoring module for AutoPerfPy."""
+"""Hardware detection and query utilities for TrackIQ."""
 
-from .gpu import GPUMemoryMonitor, LLMKVCacheMonitor
-from trackiq.hardware import (
+from .gpu_common import (
     query_nvidia_smi,
     parse_gpu_metrics,
     get_memory_metrics,
     get_performance_metrics,
+    DEFAULT_NVIDIA_SMI_TIMEOUT,
 )
 
 __all__ = [
-    "GPUMemoryMonitor",
-    "LLMKVCacheMonitor",
-    # Shared GPU utilities
     "query_nvidia_smi",
     "parse_gpu_metrics",
     "get_memory_metrics",
     "get_performance_metrics",
+    "DEFAULT_NVIDIA_SMI_TIMEOUT",
 ]

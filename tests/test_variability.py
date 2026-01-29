@@ -4,8 +4,8 @@ import pytest
 import tempfile
 from pathlib import Path
 
-from autoperfpy.analyzers.variability import VariabilityAnalyzer
-from autoperfpy.core.utils import LatencyStats
+from autoperfpy.analyzers import VariabilityAnalyzer
+from autoperfpy.core import LatencyStats
 
 
 class TestVariabilityAnalyzer:
@@ -13,59 +13,65 @@ class TestVariabilityAnalyzer:
 
     @pytest.fixture
     def temp_csv_consistent(self):
-        """Create a temporary CSV file with consistent latencies."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a temporary CSV file with consistent latencies (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("workload,batch_size,latency_ms\n")
-            # Very consistent latencies (low CV)
             for i in range(20):
                 f.write(f"ResNet50,1,{10.0 + (i % 3) * 0.1}\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     @pytest.fixture
     def temp_csv_variable(self):
-        """Create a temporary CSV file with variable latencies."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a temporary CSV file with variable latencies (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("workload,batch_size,latency_ms\n")
-            # Highly variable latencies (high CV)
             latencies = [10.0, 25.0, 15.0, 50.0, 8.0, 35.0, 12.0, 45.0, 20.0, 30.0]
             for lat in latencies:
                 f.write(f"YOLO,1,{lat}\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     @pytest.fixture
     def temp_csv_with_groups(self):
-        """Create a temporary CSV file with multiple workload groups."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a temporary CSV file with multiple workload groups (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("workload,batch_size,latency_ms\n")
-            # Consistent workload
             for i in range(10):
                 f.write(f"ResNet50,1,{10.0 + (i % 2) * 0.5}\n")
-            # Variable workload
             variable_lats = [15.0, 25.0, 10.0, 40.0, 18.0]
             for lat in variable_lats:
                 f.write(f"YOLO,1,{lat}\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     @pytest.fixture
     def temp_csv_with_outliers(self):
-        """Create a CSV file with clear outliers."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a CSV file with clear outliers (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("workload,latency_ms\n")
-            # Normal values
             for _ in range(50):
                 f.write("test,10.0\n")
-            # Outliers
             f.write("test,100.0\n")
             f.write("test,150.0\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_analyze_consistent_data(self, temp_csv_consistent):
         """Test analysis of consistent data produces low CV."""

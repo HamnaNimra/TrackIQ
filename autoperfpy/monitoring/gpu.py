@@ -3,8 +3,8 @@
 import time
 import threading
 from typing import Dict, Any, List, Optional
-from ..core import BaseMonitor
-from ._gpu_common import get_memory_metrics
+from trackiq.core import BaseMonitor
+from trackiq.hardware import get_memory_metrics
 
 
 class GPUMemoryMonitor(BaseMonitor):

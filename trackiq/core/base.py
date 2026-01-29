@@ -1,4 +1,4 @@
-"""Core abstractions and base classes for AutoPerfPy."""
+"""Core abstractions and base classes for TrackIQ."""
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
@@ -28,40 +28,20 @@ class BaseAnalyzer(ABC):
     """Base class for all analyzers."""
 
     def __init__(self, name: str):
-        """Initialize analyzer.
-
-        Args:
-            name: Name of the analyzer
-        """
         self.name = name
         self.results: List[AnalysisResult] = []
 
     @abstractmethod
     def analyze(self, data: Any) -> AnalysisResult:
-        """Perform analysis on data.
-
-        Args:
-            data: Input data to analyze
-
-        Returns:
-            AnalysisResult with metrics
-        """
+        """Perform analysis on data."""
         pass
 
     def add_result(self, result: AnalysisResult) -> None:
-        """Store analysis result.
-
-        Args:
-            result: AnalysisResult to store
-        """
+        """Store analysis result."""
         self.results.append(result)
 
     def get_results(self) -> List[AnalysisResult]:
-        """Get all stored results.
-
-        Returns:
-            List of AnalysisResult objects
-        """
+        """Get all stored results."""
         return self.results
 
 
@@ -69,32 +49,16 @@ class BaseBenchmark(ABC):
     """Base class for all benchmarks."""
 
     def __init__(self, name: str):
-        """Initialize benchmark.
-
-        Args:
-            name: Name of the benchmark
-        """
         self.name = name
         self.results: Dict[str, Any] = {}
 
     @abstractmethod
     def run(self, **kwargs) -> Dict[str, Any]:
-        """Run the benchmark.
-
-        Args:
-            **kwargs: Benchmark-specific parameters
-
-        Returns:
-            Dictionary with benchmark results
-        """
+        """Run the benchmark."""
         pass
 
     def get_results(self) -> Dict[str, Any]:
-        """Get benchmark results.
-
-        Returns:
-            Dictionary with results
-        """
+        """Get benchmark results."""
         return self.results
 
 
@@ -102,11 +66,6 @@ class BaseMonitor(ABC):
     """Base class for all monitors."""
 
     def __init__(self, name: str):
-        """Initialize monitor.
-
-        Args:
-            name: Name of the monitor
-        """
         self.name = name
         self.metrics: List[Dict[str, Any]] = []
 
@@ -122,9 +81,5 @@ class BaseMonitor(ABC):
 
     @abstractmethod
     def get_metrics(self) -> List[Dict[str, Any]]:
-        """Get collected metrics.
-
-        Returns:
-            List of metric snapshots
-        """
+        """Get collected metrics."""
         pass

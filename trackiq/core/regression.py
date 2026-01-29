@@ -53,7 +53,7 @@ class MetricComparison:
 class RegressionDetector:
     """Detect performance regressions against baseline metrics."""
 
-    def __init__(self, baseline_dir: str = ".autoperfpy/baselines"):
+    def __init__(self, baseline_dir: str = ".trackiq/baselines"):
         """Initialize regression detector.
 
         Args:

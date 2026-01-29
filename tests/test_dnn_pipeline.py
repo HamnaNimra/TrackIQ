@@ -94,7 +94,7 @@ class TestMemoryTransfer:
         # 1 GB in 1 second = 1 GB/s
         transfer = MemoryTransfer(
             transfer_type="H2D",
-            size_bytes=1024 ** 3,  # 1 GB
+            size_bytes=1024**3,  # 1 GB
             duration_ms=1000,  # 1 second
         )
         assert abs(transfer.bandwidth_gbps - 1.0) < 0.001
@@ -389,15 +389,18 @@ class TestDNNPipelineParser:
 
     @pytest.fixture
     def sample_csv_file(self):
-        """Create a sample CSV file for testing."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a sample CSV file for testing (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("layer_name,layer_type,time_ms,device\n")
             f.write("conv1,Conv,2.0,GPU\n")
             f.write("conv2,Conv,1.5,DLA0\n")
             f.write("pool1,Pool,0.5,GPU\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_parse_csv_layer_timing(self, sample_csv_file):
         """Test parsing CSV layer timing file."""
@@ -572,17 +575,25 @@ class TestDNNPipelineAnalyzer:
         """Test analyzing from raw data dictionaries."""
         analyzer = DNNPipelineAnalyzer()
         layer_timings = [
-            {"name": "conv1", "layer_type": "Conv", "execution_time_ms": 2.0, "device": "GPU"},
-            {"name": "conv2", "layer_type": "Conv", "execution_time_ms": 1.5, "device": "DLA0"},
+            {
+                "name": "conv1",
+                "layer_type": "Conv",
+                "execution_time_ms": 2.0,
+                "device": "GPU",
+            },
+            {
+                "name": "conv2",
+                "layer_type": "Conv",
+                "execution_time_ms": 1.5,
+                "device": "DLA0",
+            },
         ]
         memory_transfers = [
             {"transfer_type": "H2D", "size_bytes": 1024, "duration_ms": 0.2},
         ]
 
         result = analyzer.analyze_from_data(
-            layer_timings,
-            memory_transfers=memory_transfers,
-            batch_size=4
+            layer_timings, memory_transfers=memory_transfers, batch_size=4
         )
 
         assert result.metrics["batch_size"] == 4
@@ -628,14 +639,17 @@ class TestDNNPipelineAnalyzer:
 
     @pytest.fixture
     def sample_csv_file(self):
-        """Create a sample CSV file for testing."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a sample CSV file for testing (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("layer_name,layer_type,time_ms,device\n")
             f.write("conv1,Conv,2.0,GPU\n")
             f.write("conv2,Conv,1.5,DLA0\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_analyze_layer_csv(self, sample_csv_file):
         """Test analyzing layer timing CSV file."""

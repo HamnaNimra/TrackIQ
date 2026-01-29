@@ -5,13 +5,13 @@ import tempfile
 import numpy as np
 from pathlib import Path
 
-from autoperfpy.core.efficiency import (
+from autoperfpy.core import (
     EfficiencyMetrics,
     EfficiencyCalculator,
     BatchEfficiencyAnalyzer,
+    LatencyStats,
 )
-from autoperfpy.core.utils import LatencyStats
-from autoperfpy.analyzers.efficiency import EfficiencyAnalyzer
+from autoperfpy.analyzers import EfficiencyAnalyzer
 
 
 class TestEfficiencyCalculator:
@@ -189,13 +189,13 @@ class TestBatchEfficiencyAnalyzer:
             {
                 "batch_size": 4,
                 "throughput": 180.0,  # High throughput
-                "latency_ms": 22.0,   # Low latency = low energy
+                "latency_ms": 22.0,  # Low latency = low energy
                 "power_samples": [250.0],
             },
             {
                 "batch_size": 8,
                 "throughput": 200.0,
-                "latency_ms": 40.0,   # Higher latency = higher energy
+                "latency_ms": 40.0,  # Higher latency = higher energy
                 "power_samples": [350.0],
             },
         ]
@@ -313,8 +313,8 @@ class TestEfficiencyAnalyzer:
 
     @pytest.fixture
     def temp_csv_with_power(self):
-        """Create a temporary CSV file with power data."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        """Create a temporary CSV file with power data (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write("workload,batch_size,latency_ms,power_w,throughput\n")
             f.write("ResNet50,1,20.0,200.0,50.0\n")
             f.write("ResNet50,1,21.0,205.0,47.6\n")
@@ -325,9 +325,11 @@ class TestEfficiencyAnalyzer:
             f.write("YOLO,1,15.0,180.0,66.7\n")
             f.write("YOLO,1,16.0,185.0,62.5\n")
             f.flush()
-
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_analyze_efficiency(self, temp_csv_with_power):
         """Test efficiency analysis from CSV."""

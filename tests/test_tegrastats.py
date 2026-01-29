@@ -122,17 +122,18 @@ class TestTegrastatsParser:
         assert snapshot.ape_frequency_mhz == 245
 
     def test_parse_file(self):
-        """Test parsing from file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        """Test parsing from file (close before unlink for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(SAMPLE_TEGRASTATS_LINE + "\n")
             f.write(SAMPLE_HIGH_LOAD_LINE + "\n")
             f.write(SAMPLE_THROTTLING_LINE + "\n")
             f.flush()
-
-            snapshots = TegrastatsParser.parse_file(f.name)
-            Path(f.name).unlink()
-
-        assert len(snapshots) == 3
+            name = f.name
+        try:
+            snapshots = TegrastatsParser.parse_file(name)
+            assert len(snapshots) == 3
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_parse_file_missing(self):
         """Test error handling for missing file."""
@@ -140,18 +141,19 @@ class TestTegrastatsParser:
             TegrastatsParser.parse_file("/nonexistent/file.log")
 
     def test_parse_file_with_malformed_lines(self):
-        """Test that malformed lines are skipped."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        """Test that malformed lines are skipped (close before unlink for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(SAMPLE_TEGRASTATS_LINE + "\n")
             f.write("This is not a valid tegrastats line\n")
             f.write(SAMPLE_HIGH_LOAD_LINE + "\n")
             f.write("Another invalid line without RAM\n")
             f.flush()
-
-            snapshots = TegrastatsParser.parse_file(f.name)
-            Path(f.name).unlink()
-
-        assert len(snapshots) == 2
+            name = f.name
+        try:
+            snapshots = TegrastatsParser.parse_file(name)
+            assert len(snapshots) == 2
+        finally:
+            Path(name).unlink(missing_ok=True)
 
 
 class TestTegrastatsSnapshot:
@@ -202,7 +204,9 @@ class TestTegrastatsCalculator:
         snapshots = []
         base_time = datetime.now()
         for i, line in enumerate(lines):
-            snapshot = TegrastatsParser.parse_line(line, timestamp=base_time + timedelta(seconds=i))
+            snapshot = TegrastatsParser.parse_line(
+                line, timestamp=base_time + timedelta(seconds=i)
+            )
             snapshots.append(snapshot)
         return snapshots
 
@@ -235,7 +239,7 @@ class TestTegrastatsCalculator:
         aggregates = TegrastatsCalculator.calculate_aggregates(sample_snapshots)
 
         assert aggregates.gpu_max_utilization == 95.0  # From high load line
-        assert aggregates.gpu_min_utilization == 0.0   # From idle line
+        assert aggregates.gpu_min_utilization == 0.0  # From idle line
 
     def test_memory_aggregates(self, sample_snapshots):
         """Test memory aggregate statistics."""
@@ -294,14 +298,17 @@ class TestTegrastatsAnalyzer:
 
     @pytest.fixture
     def temp_tegrastats_file(self):
-        """Create a temporary tegrastats file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        """Create a temporary tegrastats file (close before yield for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(SAMPLE_TEGRASTATS_LINE + "\n")
             f.write(SAMPLE_HIGH_LOAD_LINE + "\n")
             f.write(SAMPLE_THROTTLING_LINE + "\n")
             f.flush()
-            yield f.name
-            Path(f.name).unlink()
+            name = f.name
+        try:
+            yield name
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_analyze_file(self, temp_tegrastats_file):
         """Test analyzing a tegrastats file."""
@@ -394,17 +401,18 @@ class TestTegrastatsAnalyzer:
         assert "warnings" in health
 
     def test_analyze_empty_file(self):
-        """Test analyzing empty file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        """Test analyzing empty file (close before unlink for Windows)."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write("")
             f.flush()
-
+            name = f.name
+        try:
             analyzer = TegrastatsAnalyzer()
-            result = analyzer.analyze(f.name)
-            Path(f.name).unlink()
-
-        assert result.metrics["num_samples"] == 0
-        assert "error" in result.metrics
+            result = analyzer.analyze(name)
+            assert result.metrics["num_samples"] == 0
+            assert "error" in result.metrics
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def test_analyze_missing_file(self):
         """Test error handling for missing file."""
@@ -415,10 +423,12 @@ class TestTegrastatsAnalyzer:
 
     def test_custom_config(self, temp_tegrastats_file):
         """Test analyzer with custom config."""
-        analyzer = TegrastatsAnalyzer(config={
-            "throttle_temp_c": 90.0,
-            "memory_pressure_percent": 95.0,
-        })
+        analyzer = TegrastatsAnalyzer(
+            config={
+                "throttle_temp_c": 90.0,
+                "memory_pressure_percent": 95.0,
+            }
+        )
         result = analyzer.analyze(temp_tegrastats_file)
 
         # With higher thresholds, fewer events should be detected

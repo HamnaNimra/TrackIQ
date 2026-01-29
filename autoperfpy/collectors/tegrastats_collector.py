@@ -43,7 +43,7 @@ from collections import deque
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import CollectorBase, CollectorExport, CollectorSample
+from trackiq.collectors import CollectorBase, CollectorExport, CollectorSample
 
 # Import tegrastats parser from core module
 try:
