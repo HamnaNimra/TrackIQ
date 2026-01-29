@@ -581,8 +581,14 @@ class HTMLReportGenerator:
         /* Figures */
         .figure-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 25px;
+        }}
+
+        @media (max-width: 1200px) {{
+            .figure-grid {{
+                grid-template-columns: 1fr;
+            }}
         }}
 
         .figure-card {{
@@ -601,6 +607,8 @@ class HTMLReportGenerator:
             width: 100%;
             min-height: 400px;
             height: 400px;
+            padding: 10px;
+            background: #ffffff;
         }}
 
         .figure-html > div {{
@@ -609,7 +617,11 @@ class HTMLReportGenerator:
         }}
 
         .figure-html .plotly, 
-        .figure-html .js-plotly-plot,
+        .figure-html .js-plotly-plot {{
+            width: 100% !important;
+            height: 100% !important;
+        }}
+
         .figure-html .plot-container {{
             width: 100% !important;
             height: 100% !important;
@@ -620,14 +632,33 @@ class HTMLReportGenerator:
             height: 100% !important;
         }}
 
+        .figure-html .svg-container {{
+            width: 100% !important;
+            height: 100% !important;
+        }}
+
+        /* Ensure Plotly modebar is visible */
+        .figure-html .modebar {{
+            top: 0 !important;
+            right: 0 !important;
+        }}
+
+        .figure-html .modebar-container {{
+            position: absolute !important;
+            top: 5px !important;
+            right: 5px !important;
+        }}
+
         .figure-caption {{
             padding: 15px;
             text-align: center;
+            background: rgba(0,0,0,0.03);
         }}
 
         .figure-caption h4 {{
             font-size: 1rem;
             margin-bottom: 5px;
+            font-weight: 600;
         }}
 
         .figure-caption p {{
@@ -1565,7 +1596,27 @@ class HTMLReportGenerator:
         )
         for s in self.sections:
             all_sections.add(s["name"])
-        section_names = sorted(all_sections)
+
+        # Define preferred section order for consistent layout
+        preferred_order = [
+            "Latency",
+            "Memory",
+            "Power & Thermal",
+            "Throughput",
+            "Utilization",
+            "Summary Statistics",
+            "Comparative Analysis",
+            "General",
+        ]
+
+        # Sort sections: preferred order first, then alphabetical for any extras
+        def section_sort_key(name):
+            try:
+                return (0, preferred_order.index(name))
+            except ValueError:
+                return (1, name)
+
+        section_names = sorted(all_sections, key=section_sort_key)
 
         # Generate sections HTML
         sections_html = []

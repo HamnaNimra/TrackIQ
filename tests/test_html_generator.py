@@ -10,9 +10,18 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import pytest
 
 from autoperfpy.reporting import HTMLReportGenerator, PerformanceVisualizer
+
+try:
+    from trackiq.reporting import charts as shared_charts
+
+    CHARTS_AVAILABLE = shared_charts.is_available()
+except ImportError:
+    CHARTS_AVAILABLE = False
+    shared_charts = None
 
 
 class TestHTMLReportGenerator:
@@ -113,6 +122,57 @@ class TestHTMLReportGenerator:
         assert report.tables[0]["headers"] == headers
         assert report.tables[0]["rows"] == rows
         assert report.tables[0]["section"] == "Test Section"
+
+    def test_add_html_figure(self, report):
+        """Test adding HTML figure fragments (e.g. Plotly)."""
+        report.add_html_figure(
+            "<div id='plotly-1'></div>",
+            caption="Plotly Chart",
+            section="Charts",
+            description="A chart",
+        )
+        assert len(report.html_figures) == 1
+        assert report.html_figures[0]["caption"] == "Plotly Chart"
+        assert report.html_figures[0]["section"] == "Charts"
+        assert "plotly-1" in report.html_figures[0]["html"]
+
+    def test_add_interactive_line_chart(self, report):
+        """Test adding Chart.js line chart."""
+        report.add_interactive_line_chart(
+            labels=["t1", "t2", "t3"],
+            datasets=[
+                {"label": "P50", "data": [22, 24, 23]},
+                {"label": "P99", "data": [35, 38, 36]},
+            ],
+            title="Latency Over Time",
+            section="Latency",
+            description="Zoom enabled",
+            x_label="Time",
+            y_label="ms",
+            enable_zoom=True,
+        )
+        assert len(report.interactive_charts) == 1
+        ch = report.interactive_charts[0]
+        assert ch["type"] == "line"
+        assert ch["title"] == "Latency Over Time"
+        assert ch["section"] == "Latency"
+        assert ch["enable_zoom"] is True
+        assert len(ch["datasets"]) == 2
+        assert ch["labels"] == ["t1", "t2", "t3"]
+
+    def test_add_interactive_bar_chart(self, report):
+        """Test adding Chart.js bar chart."""
+        report.add_interactive_bar_chart(
+            labels=["A", "B", "C"],
+            datasets=[{"label": "Val", "data": [10, 20, 15]}],
+            title="Bar Chart",
+            section="Compare",
+            stacked=True,
+        )
+        assert len(report.interactive_charts) == 1
+        ch = report.interactive_charts[0]
+        assert ch["type"] == "bar"
+        assert ch["stacked"] is True
 
     def test_fig_to_base64(self, report, sample_figure):
         """Test figure to base64 conversion."""
@@ -229,6 +289,13 @@ class TestHTMLReportGenerator:
         report.add_summary_item("label", "value", "", "neutral")
         report.add_section("Section", "Desc")
         report.add_table("Table", ["A"], [["1"]], "Section")
+        report.add_html_figure("<div>plot</div>", "Plot", "Section")
+        report.add_interactive_line_chart(
+            labels=["a", "b"],
+            datasets=[{"label": "X", "data": [1, 2]}],
+            title="Line",
+            section="Section",
+        )
 
         report.clear()
 
@@ -237,6 +304,8 @@ class TestHTMLReportGenerator:
         assert report.summary_items == []
         assert report.sections == []
         assert report.metadata == {}
+        assert report.interactive_charts == []
+        assert report.html_figures == []
 
     def test_add_figures_from_visualizer(self, report):
         """Test adding figures from PerformanceVisualizer."""
@@ -311,6 +380,35 @@ class TestHTMLReportGenerator:
 
         content = output_path.read_text(encoding="utf-8")
         assert "@media (max-width:" in content
+
+    def test_generate_html_includes_chartjs_when_interactive_charts(self, report, tmp_path):
+        """Test that Chart.js and chart canvas are included when using interactive charts."""
+        report.add_interactive_line_chart(
+            labels=["a", "b"],
+            datasets=[{"label": "X", "data": [1, 2]}],
+            title="Test Chart",
+            section="Charts",
+        )
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
+        content = output_path.read_text(encoding="utf-8")
+        assert "chart.js" in content.lower() or "jsdelivr" in content.lower()
+        assert "chart-container" in content
+        assert "canvas" in content
+        assert "Test Chart" in content
+
+    def test_generate_html_includes_plotly_when_html_figures(self, report, tmp_path):
+        """Test that Plotly script is included when adding HTML figures."""
+        report.add_html_figure(
+            "<div id='plotly-div'>placeholder</div>",
+            caption="Plot",
+            section="Charts",
+        )
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
+        content = output_path.read_text(encoding="utf-8")
+        assert "plotly" in content.lower()
+        assert "plotly-div" in content or "placeholder" in content
 
 
 class TestHTMLReportGeneratorIntegration:
@@ -396,3 +494,83 @@ class TestHTMLReportGeneratorIntegration:
         # Dark theme specific colors
         assert "#1a1a2e" in content  # Dark background
         assert "#eaeaea" in content  # Light text
+
+
+@pytest.mark.skipif(not CHARTS_AVAILABLE, reason="trackiq.reporting.charts (pandas/plotly) not available")
+class TestChartsReportIntegration:
+    """Integration tests for add_charts_to_html_report and add_interactive_charts_to_html_report."""
+
+    def _minimal_df_summary(self):
+        """Minimal DataFrame and summary matching collector export shape."""
+        df = pd.DataFrame({
+            "timestamp": [1000.0 + i * 0.5 for i in range(20)],
+            "elapsed_seconds": [i * 0.5 for i in range(20)],
+            "latency_ms": [22.0 + (i % 3) for i in range(20)],
+            "cpu_percent": [40.0 + i for i in range(20)],
+            "gpu_percent": [70.0 + (i % 10) for i in range(20)],
+            "power_w": [15.0 + i * 0.2 for i in range(20)],
+            "temperature_c": [45.0 + i * 0.5 for i in range(20)],
+            "memory_used_mb": [4000.0 + i * 2 for i in range(20)],
+            "memory_total_mb": [16384.0] * 20,
+            "throughput_fps": [1000.0 / (22.0 + (i % 3)) for i in range(20)],
+            "is_warmup": [i < 2 for i in range(20)],
+        })
+        summary = {
+            "sample_count": 20,
+            "warmup_samples": 2,
+            "latency": {"mean_ms": 23.0, "p50_ms": 23.0, "p95_ms": 25.0, "p99_ms": 25.0},
+            "throughput": {"mean_fps": 44.0, "min_fps": 40.0, "max_fps": 50.0},
+            "cpu": {"mean_percent": 49.5, "max_percent": 59.0},
+            "gpu": {"mean_percent": 74.5, "max_percent": 79.0},
+            "power": {"mean_w": 17.0, "max_w": 19.0},
+            "temperature": {"mean_c": 49.5, "max_c": 54.0},
+            "memory": {"mean_mb": 4019.0, "max_mb": 4038.0},
+        }
+        return df, summary
+
+    def test_add_charts_to_html_report_chartjs(self, tmp_path):
+        """add_charts_to_html_report with chart_engine=chartjs adds interactive charts and table."""
+        df, summary = self._minimal_df_summary()
+        report = HTMLReportGenerator(title="Chart.js Report", author="Test", theme="light")
+        report.add_metadata("Source", "unit test")
+        report.add_summary_item("Samples", summary["sample_count"], "", "neutral")
+
+        shared_charts.add_charts_to_html_report(report, df, summary, chart_engine="chartjs")
+
+        assert len(report.interactive_charts) > 0
+        assert len(report.html_figures) == 0
+        assert any(t["section"] == "Summary Statistics" for t in report.tables)
+
+        out = tmp_path / "chartjs_report.html"
+        report.generate_html(str(out))
+        content = out.read_text(encoding="utf-8")
+        assert "chart.js" in content.lower() or "jsdelivr" in content.lower()
+        assert 'id="latency"' in content or 'id="summary-statistics"' in content
+
+    def test_add_charts_to_html_report_plotly(self, tmp_path):
+        """add_charts_to_html_report with chart_engine=plotly adds Plotly HTML figures."""
+        df, summary = self._minimal_df_summary()
+        report = HTMLReportGenerator(title="Plotly Report", author="Test", theme="light")
+
+        shared_charts.add_charts_to_html_report(report, df, summary, chart_engine="plotly")
+
+        assert len(report.html_figures) > 0
+        out = tmp_path / "plotly_report.html"
+        report.generate_html(str(out))
+        content = out.read_text(encoding="utf-8")
+        assert "plotly" in content.lower()
+
+    def test_add_interactive_charts_to_html_report(self, tmp_path):
+        """add_interactive_charts_to_html_report adds Chart.js charts and Summary Statistics."""
+        df, summary = self._minimal_df_summary()
+        report = HTMLReportGenerator(title="Interactive Report", author="Test", theme="light")
+
+        shared_charts.add_interactive_charts_to_html_report(report, df, summary)
+
+        assert len(report.interactive_charts) > 0
+        assert any(t["section"] == "Summary Statistics" for t in report.tables)
+        out = tmp_path / "interactive_report.html"
+        report.generate_html(str(out))
+        content = out.read_text(encoding="utf-8")
+        assert "Latency" in content
+        assert "Summary Statistics" in content or "Key metrics" in content

@@ -3,9 +3,13 @@
 This module provides reusable chart-building functions used by both
 the Streamlit UI and HTML/PDF report generators. All functions return
 Plotly figure objects that can be displayed or embedded.
+
+For HTML reports, Chart.js interactive charts can be used instead of
+Plotly via add_interactive_charts_to_html_report (or add_charts_to_html_report
+with chart_engine="chartjs") for a polished, example-style look.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 try:
     import plotly.express as px
@@ -35,7 +39,7 @@ def samples_to_dataframe(samples: List[Dict]) -> "pd.DataFrame":
     """Convert collector samples to a pandas DataFrame.
 
     Args:
-        samples: List of sample dictionaries from collector export
+        samples: List of sample dictionaries or CollectorSample objects from collector export
 
     Returns:
         DataFrame with flattened metrics and elapsed_seconds column
@@ -45,16 +49,31 @@ def samples_to_dataframe(samples: List[Dict]) -> "pd.DataFrame":
 
     rows = []
     for sample in samples:
-        row = {"timestamp": sample.get("timestamp", 0)}
-        m = (
-            sample.get("metrics", sample)
-            if isinstance(sample, dict)
-            else getattr(sample, "metrics", {})
-        )
-        if isinstance(m, dict):
-            row.update(m)
-        if "metadata" in sample and isinstance(sample.get("metadata"), dict):
-            row.update({f"meta_{k}": v for k, v in sample["metadata"].items()})
+        # Handle both dict and dataclass/object samples
+        if isinstance(sample, dict):
+            timestamp = sample.get("timestamp", 0)
+            metrics = sample.get("metrics", sample)
+            metadata = sample.get("metadata", {})
+        else:
+            # Handle dataclass or object with attributes
+            timestamp = getattr(sample, "timestamp", 0)
+            metrics = getattr(sample, "metrics", {})
+            metadata = getattr(sample, "metadata", {})
+
+            # If metrics is not a dict, try to convert from dataclass
+            if hasattr(metrics, "__dict__") and not isinstance(metrics, dict):
+                metrics = vars(metrics)
+
+        row = {"timestamp": timestamp}
+
+        # Flatten metrics into row
+        if isinstance(metrics, dict):
+            row.update(metrics)
+
+        # Add metadata with prefix
+        if isinstance(metadata, dict):
+            row.update({f"meta_{k}": v for k, v in metadata.items()})
+
         rows.append(row)
 
     df = pd.DataFrame(rows)
@@ -557,6 +576,292 @@ def create_throughput_comparison_bar(
 
 
 # -----------------------------------------------------------------------------
+# Chart.js interactive charts for HTML reports (example-style)
+# -----------------------------------------------------------------------------
+
+
+def _downsample_for_chart(
+    df: "pd.DataFrame",
+    x_col: str,
+    y_cols: List[str],
+    max_points: int = 500,
+) -> "pd.DataFrame":
+    """Downsample DataFrame for line charts to avoid huge payloads."""
+    if not PANDAS_AVAILABLE or len(df) <= max_points:
+        return df
+    step = len(df) / max_points
+    indices = [int(i * step) for i in range(max_points)]
+    indices = sorted(set(indices))
+    cols = [c for c in [x_col] + y_cols if c in df.columns]
+    return df.iloc[indices][cols].copy()
+
+
+def add_interactive_charts_to_html_report(
+    report: Any,
+    df: "pd.DataFrame",
+    summary: Dict[str, Any],
+) -> None:
+    """Add Chart.js interactive charts and a Summary Statistics table to the report.
+
+    Uses the same underlying data as Plotly charts (df/summary) but renders
+    with Chart.js for a polished, example-style HTML report (hover, zoom, filter).
+
+    Args:
+        report: HTMLReportGenerator instance
+        df: DataFrame from samples_to_dataframe(samples)
+        summary: Summary statistics dict (latency, throughput, power, etc.)
+    """
+    if not PANDAS_AVAILABLE:
+        return
+
+    section_descriptions = {
+        "Latency": "Latency analysis and distribution",
+        "Utilization": "CPU and GPU resource utilization",
+        "Power & Thermal": "Power consumption and temperature monitoring",
+        "Memory": "Memory usage analysis",
+        "Throughput": "Throughput performance analysis",
+        "Summary Statistics": "Key metrics at a glance",
+    }
+
+    has_elapsed = "elapsed_seconds" in df.columns
+
+    # ----- Latency -----
+    if "latency_ms" in df.columns and has_elapsed:
+        report.add_section("Latency", section_descriptions["Latency"])
+        plot_df = _downsample_for_chart(
+            df, "elapsed_seconds", ["latency_ms"], max_points=500
+        )
+        labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
+        report.add_interactive_line_chart(
+            labels=labels,
+            datasets=[{"label": "Latency", "data": plot_df["latency_ms"].tolist()}],
+            title="Latency Over Time",
+            section="Latency",
+            description="Latency (ms) vs elapsed time. Scroll to zoom, drag to pan.",
+            x_label="Time (s)",
+            y_label="Latency (ms)",
+            enable_zoom=True,
+        )
+        # Latency distribution (bar)
+        exclude_warmup = "is_warmup" in df.columns
+        plot_df_hist = df[~df["is_warmup"]] if exclude_warmup else df
+        plot_df_hist = plot_df_hist["latency_ms"].dropna()
+        if len(plot_df_hist) > 0:
+            hist, bin_edges = _histogram_bins(plot_df_hist.tolist(), nbins=20)
+            if hist and len(bin_edges) > 1:
+                bin_labels = [f"{bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}" for i in range(len(bin_edges) - 1)]
+                report.add_interactive_bar_chart(
+                    labels=bin_labels,
+                    datasets=[{"label": "Count", "data": hist}],
+                    title="Latency Distribution",
+                    section="Latency",
+                    description="Excluding warmup samples." if exclude_warmup else "Distribution of latency values.",
+                    x_label="Latency (ms)",
+                    y_label="Count",
+                )
+
+    # ----- Utilization -----
+    has_cpu = "cpu_percent" in df.columns
+    has_gpu = "gpu_percent" in df.columns
+    if (has_cpu or has_gpu) and has_elapsed:
+        report.add_section("Utilization", section_descriptions["Utilization"])
+        plot_df = _downsample_for_chart(
+            df,
+            "elapsed_seconds",
+            [c for c in ["cpu_percent", "gpu_percent"] if c in df.columns],
+            max_points=500,
+        )
+        labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
+        datasets = []
+        if "cpu_percent" in plot_df.columns:
+            datasets.append({"label": "CPU %", "data": plot_df["cpu_percent"].tolist()})
+        if "gpu_percent" in plot_df.columns:
+            datasets.append({"label": "GPU %", "data": plot_df["gpu_percent"].tolist()})
+        if datasets:
+            report.add_interactive_line_chart(
+                labels=labels,
+                datasets=datasets,
+                title="CPU/GPU Utilization Over Time",
+                section="Utilization",
+                description="Scroll to zoom, drag to pan. Click legend to toggle series.",
+                x_label="Time (s)",
+                y_label="Utilization (%)",
+                enable_zoom=True,
+            )
+        cpu_data = summary.get("cpu", {})
+        gpu_data = summary.get("gpu", {})
+        categories = []
+        means = []
+        maxes = []
+        if cpu_data:
+            categories.append("CPU")
+            means.append(round(cpu_data.get("mean_percent", 0), 1))
+            maxes.append(round(cpu_data.get("max_percent", 0), 1))
+        if gpu_data:
+            categories.append("GPU")
+            means.append(round(gpu_data.get("mean_percent", 0), 1))
+            maxes.append(round(gpu_data.get("max_percent", 0), 1))
+        if categories:
+            report.add_interactive_bar_chart(
+                labels=categories,
+                datasets=[
+                    {"label": "Mean", "data": means},
+                    {"label": "Max", "data": maxes},
+                ],
+                title="Utilization Summary",
+                section="Utilization",
+                description="Mean vs max utilization.",
+                x_label="",
+                y_label="Utilization (%)",
+            )
+
+    # ----- Power & Thermal -----
+    has_power = "power_w" in df.columns
+    has_temp = "temperature_c" in df.columns
+    if (has_power or has_temp) and has_elapsed:
+        report.add_section("Power & Thermal", section_descriptions["Power & Thermal"])
+        y_cols = [c for c in ["power_w", "temperature_c"] if c in df.columns]
+        plot_df = _downsample_for_chart(df, "elapsed_seconds", y_cols, max_points=500)
+        labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
+        if "power_w" in plot_df.columns:
+            report.add_interactive_line_chart(
+                labels=labels,
+                datasets=[{"label": "Power", "data": plot_df["power_w"].tolist()}],
+                title="Power Over Time",
+                section="Power & Thermal",
+                description="Power consumption (W) vs time.",
+                x_label="Time (s)",
+                y_label="Power (W)",
+                enable_zoom=True,
+            )
+        if "temperature_c" in plot_df.columns:
+            report.add_interactive_line_chart(
+                labels=labels,
+                datasets=[{"label": "Temperature", "data": plot_df["temperature_c"].tolist()}],
+                title="Temperature Over Time",
+                section="Power & Thermal",
+                description="Temperature (°C) vs time.",
+                x_label="Time (s)",
+                y_label="Temperature (°C)",
+                enable_zoom=True,
+            )
+
+    # ----- Memory -----
+    if "memory_used_mb" in df.columns and has_elapsed:
+        report.add_section("Memory", section_descriptions["Memory"])
+        plot_df = _downsample_for_chart(
+            df, "elapsed_seconds", ["memory_used_mb"], max_points=500
+        )
+        labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
+        report.add_interactive_line_chart(
+            labels=labels,
+            datasets=[{"label": "Memory Used", "data": plot_df["memory_used_mb"].tolist()}],
+            title="Memory Over Time",
+            section="Memory",
+            description="Memory used (MB) vs time.",
+            x_label="Time (s)",
+            y_label="Memory (MB)",
+            enable_zoom=True,
+        )
+        mem = summary.get("memory", {})
+        total_mb = None
+        if "memory_total_mb" in df.columns and len(df) > 0:
+            total_mb = float(df["memory_total_mb"].iloc[0])
+        if mem and total_mb:
+            used = mem.get("mean_mb", 0) or 0
+            free = max(0, total_mb - used)
+            report.add_interactive_pie_chart(
+                labels=["Used (mean)", "Free"],
+                data=[round(used, 1), round(free, 1)],
+                title="Memory Summary",
+                section="Memory",
+                description="Mean usage vs free (total {:.0f} MB).".format(total_mb),
+                doughnut=True,
+            )
+
+    # ----- Throughput -----
+    if "throughput_fps" in df.columns and has_elapsed:
+        exclude_warmup = "is_warmup" in df.columns
+        plot_df = df[~df["is_warmup"]] if exclude_warmup else df
+        plot_df = _downsample_for_chart(
+            plot_df, "elapsed_seconds", ["throughput_fps"], max_points=500
+        )
+        if len(plot_df) > 0:
+            report.add_section("Throughput", section_descriptions["Throughput"])
+            labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
+            thr_list = plot_df["throughput_fps"].tolist()
+            datasets = [{"label": "Throughput", "data": thr_list}]
+            mean_fps = summary.get("throughput", {}).get("mean_fps")
+            if mean_fps is not None:
+                datasets.append({
+                    "label": "Mean",
+                    "data": [round(mean_fps, 2)] * len(thr_list),
+                })
+            report.add_interactive_line_chart(
+                labels=labels,
+                datasets=datasets,
+                title="Throughput Over Time",
+                section="Throughput",
+                description="Throughput (FPS) vs time, excluding warmup." if exclude_warmup else "Throughput (FPS) vs time.",
+                x_label="Time (s)",
+                y_label="Throughput (FPS)",
+                enable_zoom=True,
+            )
+
+    # ----- Summary Statistics table -----
+    rows: List[List[Union[str, int, float]]] = []
+    lat = summary.get("latency", {})
+    for label, key, fmt, unit in [
+        ("P50 Latency", "p50_ms", ".2f", "ms"),
+        ("P95 Latency", "p95_ms", ".2f", "ms"),
+        ("P99 Latency", "p99_ms", ".2f", "ms"),
+        ("Mean Latency", "mean_ms", ".2f", "ms"),
+    ]:
+        v = lat.get(key)
+        if v is not None:
+            rows.append([label, format(float(v), fmt), unit])
+    thr = summary.get("throughput", {})
+    v = thr.get("mean_fps")
+    if v is not None:
+        rows.append(["Mean Throughput", format(float(v), ".1f"), "FPS"])
+    pwr = summary.get("power", {})
+    v = pwr.get("mean_w")
+    if v is not None:
+        rows.append(["Mean Power", format(float(v), ".1f"), "W"])
+    gpu = summary.get("gpu", {})
+    v = gpu.get("mean_percent")
+    if v is not None:
+        rows.append(["Avg GPU", format(float(v), ".1f"), "%"])
+    cpu = summary.get("cpu", {})
+    v = cpu.get("mean_percent")
+    if v is not None:
+        rows.append(["Avg CPU", format(float(v), ".1f"), "%"])
+    mem = summary.get("memory", {})
+    v = mem.get("mean_mb")
+    if v is not None:
+        rows.append(["Mean Memory", format(float(v), ".0f"), "MB"])
+    if rows:
+        report.add_section("Summary Statistics", section_descriptions["Summary Statistics"])
+        report.add_table(
+            title="Key metrics",
+            headers=["Metric", "Value", "Unit"],
+            rows=[[str(c) for c in r] for r in rows],
+            section="Summary Statistics",
+        )
+
+
+def _histogram_bins(values: List[float], nbins: int = 30) -> tuple:
+    """Return (counts per bin, bin edges)."""
+    if not values or not PANDAS_AVAILABLE:
+        return [], []
+    import numpy as np
+
+    arr = np.array(values, dtype=float)
+    hist, bin_edges = np.histogram(arr, bins=nbins)
+    return hist.tolist(), bin_edges.tolist()
+
+
+# -----------------------------------------------------------------------------
 # All Charts Builder (for HTML/PDF reports)
 # -----------------------------------------------------------------------------
 
@@ -637,26 +942,55 @@ def build_all_charts(
 
 
 def add_charts_to_html_report(
-    report,
+    report: Any,
     df: "pd.DataFrame",
     summary: Dict[str, Any],
+    chart_engine: str = "chartjs",
 ) -> None:
-    """Add all Plotly charts to an HTMLReportGenerator as HTML figures.
+    """Add charts to an HTMLReportGenerator.
+
+    By default uses Chart.js interactive charts (chart_engine="chartjs") for
+    a polished, example-style report with hover, zoom, and filter. Set
+    chart_engine="plotly" to use Plotly figures instead (matches Streamlit UI).
 
     Args:
         report: HTMLReportGenerator instance
         df: DataFrame with sample data
         summary: Summary statistics dictionary
+        chart_engine: "chartjs" (default) or "plotly"
     """
+    if chart_engine == "chartjs":
+        add_interactive_charts_to_html_report(report, df, summary)
+        return
     if not PLOTLY_AVAILABLE:
         return
 
-    sections = build_all_charts(df, summary)
     plot_id = [0]
 
     def _next_id():
         plot_id[0] += 1
         return f"plotly_{plot_id[0]}"
+
+    def _fig_to_html(fig, caption: str) -> str:
+        """Convert a Plotly figure to HTML, preserving original layout."""
+        # Only update size-related properties, preserve all other layout settings
+        # Use height that matches CSS container (400px - padding)
+        fig.update_layout(
+            autosize=True,
+            height=380,
+            margin=dict(l=50, r=50, t=50, b=50),
+        )
+        return fig.to_html(
+            full_html=False,
+            include_plotlyjs=False,
+            div_id=_next_id(),
+            config={
+                "responsive": True,
+                "displayModeBar": True,
+                "displaylogo": False,
+                "scrollZoom": True,
+            },
+        )
 
     section_descriptions = {
         "Latency": "Latency analysis and distribution",
@@ -666,22 +1000,91 @@ def add_charts_to_html_report(
         "Throughput": "Throughput performance analysis",
     }
 
-    for section_name, chart_list in sections.items():
-        report.add_section(section_name, section_descriptions.get(section_name, ""))
-        for caption, fig in chart_list:
-            # Update figure layout for better HTML embedding
-            fig.update_layout(
-                autosize=True,
-                height=380,
-                margin=dict(l=50, r=50, t=50, b=50),
+    # Build charts using the SAME functions as Streamlit UI
+    # Latency section
+    latency_charts = []
+    if "latency_ms" in df.columns:
+        fig = create_latency_timeline(df)
+        if fig:
+            latency_charts.append(("Latency Over Time", fig))
+        fig = create_latency_histogram(df, summary)
+        if fig:
+            latency_charts.append(("Latency Distribution", fig))
+
+    if latency_charts:
+        report.add_section("Latency", section_descriptions["Latency"])
+        for caption, fig in latency_charts:
+            report.add_html_figure(_fig_to_html(fig, caption), caption, "Latency")
+
+    # Utilization section
+    util_charts = []
+    has_cpu = "cpu_percent" in df.columns
+    has_gpu = "gpu_percent" in df.columns
+    if has_cpu or has_gpu:
+        fig = create_utilization_timeline(df)
+        if fig:
+            util_charts.append(("CPU/GPU Utilization Over Time", fig))
+        fig = create_utilization_summary_bar(summary)
+        if fig:
+            util_charts.append(("Utilization Summary", fig))
+
+    if util_charts:
+        report.add_section("Utilization", section_descriptions["Utilization"])
+        for caption, fig in util_charts:
+            report.add_html_figure(_fig_to_html(fig, caption), caption, "Utilization")
+
+    # Power & Thermal section
+    power_charts = []
+    has_power = "power_w" in df.columns
+    has_temp = "temperature_c" in df.columns
+    if has_power or has_temp:
+        if has_power:
+            fig = create_power_timeline(df)
+            if fig:
+                power_charts.append(("Power Over Time", fig))
+        if has_temp:
+            fig = create_temperature_timeline(df)
+            if fig:
+                power_charts.append(("Temperature Over Time", fig))
+
+    if power_charts:
+        report.add_section("Power & Thermal", section_descriptions["Power & Thermal"])
+        for caption, fig in power_charts:
+            report.add_html_figure(
+                _fig_to_html(fig, caption), caption, "Power & Thermal"
             )
-            html_str = fig.to_html(
-                full_html=False,
-                include_plotlyjs=False,
-                div_id=_next_id(),
-                config={"responsive": True, "displayModeBar": True},
-            )
-            report.add_html_figure(html_str, caption, section_name)
+
+    # Memory section
+    memory_charts = []
+    if "memory_used_mb" in df.columns:
+        fig = create_memory_timeline(df)
+        if fig:
+            memory_charts.append(("Memory Over Time", fig))
+        total_mb = (
+            float(df["memory_total_mb"].iloc[0])
+            if "memory_total_mb" in df.columns and len(df) > 0
+            else None
+        )
+        fig = create_memory_gauge(summary, total_mb)
+        if fig:
+            memory_charts.append(("Memory Usage", fig))
+
+    if memory_charts:
+        report.add_section("Memory", section_descriptions["Memory"])
+        for caption, fig in memory_charts:
+            report.add_html_figure(_fig_to_html(fig, caption), caption, "Memory")
+
+    # Throughput section
+    throughput_charts = []
+    if "throughput_fps" in df.columns:
+        fig = create_throughput_timeline(df, summary)
+        if fig:
+            throughput_charts.append(("Throughput Over Time", fig))
+
+    if throughput_charts:
+        report.add_section("Throughput", section_descriptions["Throughput"])
+        for caption, fig in throughput_charts:
+            report.add_html_figure(_fig_to_html(fig, caption), caption, "Throughput")
 
 
 __all__ = [
@@ -700,4 +1103,5 @@ __all__ = [
     "create_throughput_comparison_bar",
     "build_all_charts",
     "add_charts_to_html_report",
+    "add_interactive_charts_to_html_report",
 ]

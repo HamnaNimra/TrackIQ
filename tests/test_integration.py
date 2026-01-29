@@ -15,6 +15,14 @@ from trackiq.collectors import SyntheticCollector
 from trackiq.runner import BenchmarkRunner
 from trackiq.reporting import HTMLReportGenerator, PerformanceVisualizer
 
+try:
+    from trackiq.reporting import charts as shared_charts
+
+    CHARTS_AVAILABLE = shared_charts.is_available()
+except ImportError:
+    CHARTS_AVAILABLE = False
+    shared_charts = None
+
 
 def test_full_benchmark_saves_json(tmp_path):
     """Run a short synthetic benchmark and save JSON results."""
@@ -80,3 +88,57 @@ def test_streamlit_ui_module_loads_with_results(tmp_path):
     assert loaded is not None
     assert loaded.get("collector_name") == "SyntheticCollector"
     assert "summary" in loaded
+
+
+@pytest.mark.skipif(
+    not CHARTS_AVAILABLE,
+    reason="trackiq.reporting.charts (pandas/plotly) not available",
+)
+def test_html_report_with_chartjs_from_benchmark(tmp_path):
+    """Run benchmark, build df/summary, add Chart.js charts via add_charts_to_html_report, generate HTML."""
+    config = {"warmup_samples": 2, "seed": 42}
+    collector = SyntheticCollector(config=config)
+    runner = BenchmarkRunner(
+        collector,
+        duration_seconds=0.4,
+        sample_interval_seconds=0.05,
+        quiet=True,
+    )
+    export = runner.run()
+    data = export.to_dict()
+
+    samples = data.get("samples", [])
+    summary = data.get("summary") or {}
+    assert samples, "benchmark should produce samples"
+
+    df = shared_charts.samples_to_dataframe(samples)
+    if "latency_ms" in df.columns and "throughput_fps" not in df.columns:
+        import numpy as np
+
+        df["throughput_fps"] = 1000.0 / df["latency_ms"].replace(0, np.nan)
+
+    report = HTMLReportGenerator(
+        title="Benchmark Chart.js Report",
+        author="Integration Test",
+        theme="light",
+    )
+    report.add_metadata("Collector", data.get("collector_name", "Unknown"))
+    report.add_summary_item("Samples", len(samples), "", "neutral")
+    if summary.get("latency"):
+        report.add_summary_item(
+            "P99 Latency",
+            f"{summary['latency'].get('p99_ms', 0):.2f}",
+            "ms",
+            "neutral",
+        )
+
+    shared_charts.add_charts_to_html_report(report, df, summary, chart_engine="chartjs")
+
+    html_path = tmp_path / "benchmark_chartjs_report.html"
+    out = report.generate_html(str(html_path))
+
+    assert Path(out).exists()
+    content = Path(out).read_text(encoding="utf-8")
+    assert "Benchmark Chart.js Report" in content
+    assert "chart.js" in content.lower() or "jsdelivr" in content.lower()
+    assert "latency" in content.lower() or "summary-statistics" in content
