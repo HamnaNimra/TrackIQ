@@ -41,6 +41,8 @@ env/
 
 # Testing
 .pytest_cache/
+.pytest-tmp/
+pytest_tmp/
 .coverage
 htmlcov/
 .tox/
@@ -73,3 +75,6 @@ tmp/
 .cla*/
 
 
+_bench_results.json
+run_results.json
+benchmark_report.html

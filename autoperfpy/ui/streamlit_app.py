@@ -858,7 +858,10 @@ def main():
                         st.session_state["data_list"] = []
                     st.session_state["data_list"] = [run_data]
                     st.success("Benchmark complete. Results loaded below.")
-                    st.rerun()
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:
+                        st.experimental_rerun()
             if "data_list" in st.session_state and st.session_state["data_list"]:
                 data_list = st.session_state["data_list"]
             else:

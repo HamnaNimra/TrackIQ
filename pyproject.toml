@@ -9,7 +9,7 @@ description = "Performance analysis and benchmarking toolkit for NVIDIA GPU plat
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Hamna Nimra" }]
-url = "https://github.com/HamnaNimra/AutoPerfPy"
+requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -22,7 +22,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
-python_requires = ">=3.8"
 dependencies = [
     "numpy>=1.19.0",
     "pandas>=1.1.0",
@@ -32,6 +31,10 @@ dependencies = [
     "plotly",
     "streamlit>=1.20.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/HamnaNimra/AutoPerfPy"
+Repository = "https://github.com/HamnaNimra/AutoPerfPy"
 
 [project.optional-dependencies]
 dev = [

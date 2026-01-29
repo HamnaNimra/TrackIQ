@@ -24,7 +24,6 @@ from autoperfpy.reporting import (
 from autoperfpy.collectors import SyntheticCollector
 from autoperfpy.profiles import (
     get_profile,
-    list_profiles,
     get_profile_info,
     validate_profile_collector,
     CollectorType,
@@ -33,6 +32,7 @@ from autoperfpy.profiles import (
 from trackiq.compare import RegressionDetector, RegressionThreshold
 from trackiq.errors import HardwareNotFoundError, DependencyError
 import json
+import numpy as np
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -305,6 +305,12 @@ Environment Variables:
     )
     html_parser.add_argument("--csv", help="CSV file with benchmark data")
     html_parser.add_argument(
+        "--json",
+        "-j",
+        metavar="FILE",
+        help="JSON file from autoperfpy run --export (benchmark results)",
+    )
+    html_parser.add_argument(
         "--output",
         "-o",
         default="performance_report.html",
@@ -417,7 +423,7 @@ def run_analyze_dnn_pipeline(args, config):
     print(f"Number of Layers: {metrics.get('num_layers', 0)}")
 
     timing = metrics.get("timing", {})
-    print(f"\n⏱️  Timing:")
+    print("\n⏱️  Timing:")
     print(
         f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms"
     )
@@ -425,7 +431,7 @@ def run_analyze_dnn_pipeline(args, config):
     print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
 
     device_split = metrics.get("device_split", {})
-    print(f"\n📊 Device Split:")
+    print("\n📊 Device Split:")
     print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
     print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
 
@@ -445,16 +451,18 @@ def run_analyze_dnn_pipeline(args, config):
 
     recommendations = metrics.get("recommendations", [])
     if recommendations:
-        print(f"\n💡 Recommendations:")
+        print("\n💡 Recommendations:")
         for rec in recommendations:
             print(f"  • {rec}")
 
     return result
 
 
-def run_analyze_tegrastats(args, config):
+def run_analyze_tegrastats(args, _config):
     """Run tegrastats analysis."""
-    analyzer = TegrastatsAnalyzer(throttle_temp_threshold=args.throttle_threshold)
+    analyzer = TegrastatsAnalyzer(
+        config={"throttle_temp_c": getattr(args, "throttle_threshold", 85.0)}
+    )
     result = analyzer.analyze(args.log)
 
     print("\n📊 Tegrastats Analysis")
@@ -471,7 +479,7 @@ def run_analyze_tegrastats(args, config):
 
     # GPU metrics
     gpu = metrics.get("gpu", {})
-    print(f"\n🎮 GPU:")
+    print("\n🎮 GPU:")
     print(f"  Average Utilization: {gpu.get('avg_utilization', 0):.1f}%")
     print(f"  Max Utilization: {gpu.get('max_utilization', 0):.1f}%")
     print(f"  Average Frequency: {gpu.get('avg_frequency_mhz', 0):.0f} MHz")
@@ -484,7 +492,7 @@ def run_analyze_tegrastats(args, config):
 
     # Thermal metrics
     thermal = metrics.get("thermal", {})
-    print(f"\n🌡️  Thermal:")
+    print("\n🌡️  Thermal:")
     print(f"  Average Temperature: {thermal.get('avg_temperature', 0):.1f}°C")
     print(f"  Max Temperature: {thermal.get('max_temperature', 0):.1f}°C")
     print(f"  Throttling Events: {thermal.get('throttle_events', 0)}")
@@ -539,7 +547,7 @@ def run_analyze_variability(args, config):
     print(f"Outliers: {metrics.get('outlier_count', 0)}")
     print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
 
-    print(f"\n📊 Percentiles:")
+    print("\n📊 Percentiles:")
     print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
     print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
     print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
@@ -597,8 +605,6 @@ def run_monitor_gpu(args, config):
     monitor.start()
 
     try:
-        import time
-
         remaining = args.duration
         while remaining > 0:
             metrics = monitor.get_metrics()
@@ -638,7 +644,81 @@ def run_report_html(args, config):
     viz = PerformanceVisualizer()
 
     # Add metadata
-    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
+    data_source = "Sample Data"
+    if args.csv:
+        data_source = args.csv
+    elif args.json:
+        data_source = args.json
+    report.add_metadata("Data Source", data_source)
+
+    if args.json:
+        # Load benchmark export JSON (from autoperfpy run --export)
+        with open(args.json, encoding="utf-8") as f:
+            data = json.load(f)
+        report.add_metadata("Collector", data.get("collector_name", "-"))
+        if data.get("profile"):
+            report.add_metadata("Profile", data["profile"])
+        summary = data.get("summary", {})
+        # Summary items from export summary (sample_count can be top-level in export)
+        sample_count = (
+            data.get("sample_count")
+            or summary.get("sample_count")
+            or len(data.get("samples", []))
+        )
+        report.add_summary_item("Samples", sample_count, "", "neutral")
+        lat = summary.get("latency", {})
+        if lat:
+            report.add_summary_item(
+                "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
+            )
+            report.add_summary_item(
+                "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
+            )
+            report.add_summary_item(
+                "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
+            )
+        thr = summary.get("throughput", {})
+        if thr:
+            report.add_summary_item(
+                "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
+            )
+        pwr = summary.get("power", {})
+        if pwr and pwr.get("mean_w") is not None:
+            report.add_summary_item(
+                "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
+            )
+        if data.get("validation"):
+            v = data["validation"]
+            status = "good" if v.get("overall_pass") else "critical"
+            report.add_summary_item(
+                "Run Status", "PASS" if v.get("overall_pass") else "FAIL", "", status
+            )
+        # Latency percentiles figure from samples if available
+        samples = data.get("samples", [])
+        if samples:
+            latencies = []
+            for s in samples:
+                m = (
+                    s.get("metrics", s)
+                    if isinstance(s, dict)
+                    else getattr(s, "metrics", {})
+                )
+                if isinstance(m, dict) and "latency_ms" in m:
+                    latencies.append(m["latency_ms"])
+            if latencies:
+                report.add_section("Latency Analysis", "From benchmark samples")
+                by_run = {
+                    "Run": {
+                        "P50": float(np.percentile(latencies, 50)),
+                        "P95": float(np.percentile(latencies, 95)),
+                        "P99": float(np.percentile(latencies, 99)),
+                    }
+                }
+                fig = viz.plot_latency_percentiles(by_run)
+                report.add_figure(fig, "Latency Percentiles", "Latency Analysis")
+        output_path = report.generate_html(args.output)
+        print(f"\n[OK] HTML report generated: {output_path}")
+        return {"output_path": output_path}
 
     if args.csv:
         # Load and analyze data
@@ -752,18 +832,25 @@ def run_report_html(args, config):
     else:
         # No data: report only metadata, no static/demo graphs
         report.add_summary_item("Status", "No data file provided", "", "warning")
-        report.add_summary_item("Note", "Provide --csv with benchmark data for dynamic graphs", "", "neutral")
-        report.add_section("No Data", "Run a benchmark and pass --csv to generate visualizations from current data.")
+        report.add_summary_item(
+            "Note",
+            "Provide --csv with benchmark data for dynamic graphs",
+            "",
+            "neutral",
+        )
+        report.add_section(
+            "No Data",
+            "Run a benchmark and pass --csv to generate visualizations from current data.",
+        )
 
     output_path = report.generate_html(args.output)
-    print(f"\n✅ HTML report generated: {output_path}")
+    print(f"\n[OK] HTML report generated: {output_path}")
     return {"output_path": output_path}
 
 
 def run_ui(args):
     """Launch Streamlit dashboard."""
     import subprocess
-    import sys
     from pathlib import Path
 
     # Get path to streamlit_app.py
@@ -872,10 +959,12 @@ def run_report_pdf(args, config):
             report.add_figure(fig, "Latency vs Throughput Trade-off")
 
     else:
-        report.add_metadata("Status", "No data file provided. Use --csv for dynamic report content.")
+        report.add_metadata(
+            "Status", "No data file provided. Use --csv for dynamic report content."
+        )
 
     output_path = report.generate_pdf(args.output)
-    print(f"\n✅ PDF report generated: {output_path}")
+    print(f"\n[OK] PDF report generated: {output_path}")
     return {"output_path": output_path}
 
 
@@ -904,7 +993,7 @@ def run_compare(args):
         p99_percent=getattr(args, "p99_pct", 10.0),
     )
 
-    with open(args.current, "r") as f:
+    with open(args.current, "r", encoding="utf-8") as f:
         current_data = json.load(f)
     summary = current_data.get("summary", current_data.get("metrics", current_data))
     current_metrics = (
@@ -917,7 +1006,7 @@ def run_compare(args):
         return 0
 
     try:
-        baseline_metrics = detector.load_baseline(args.baseline)
+        detector.load_baseline(args.baseline)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         print(
@@ -945,14 +1034,14 @@ def run_profiles(args):
         print(f"\nProfile: {profile.name}")
         print("=" * 60)
         print(f"Description: {profile.description}")
-        print(f"\nLatency Requirements:")
+        print("\nLatency Requirements:")
         print(f"  Threshold (P99): {profile.latency_threshold_ms}ms")
         print(f"  Target: {profile.latency_target_ms}ms")
         print(f"  Percentiles: {profile.latency_percentiles}")
         print(f"\nThroughput Requirements:")
         print(f"  Minimum: {profile.throughput_min_fps} FPS")
         print(f"  Target: {profile.throughput_target_fps} FPS")
-        print(f"\nConstraints:")
+        print("\nConstraints:")
         print(
             f"  Power Budget: {profile.power_budget_w}W"
             if profile.power_budget_w
@@ -964,7 +1053,7 @@ def run_profiles(args):
             if profile.memory_limit_mb
             else "  Memory Limit: None"
         )
-        print(f"\nBenchmark Settings:")
+        print("\nBenchmark Settings:")
         print(f"  Batch Sizes: {profile.batch_sizes}")
         print(f"  Warmup Iterations: {profile.warmup_iterations}")
         print(f"  Test Iterations: {profile.test_iterations}")
@@ -972,7 +1061,7 @@ def run_profiles(args):
         print(f"\nMonitoring Settings:")
         print(f"  Sample Interval: {profile.sample_interval_ms}ms")
         print(f"  Duration: {profile.duration_seconds}s")
-        print(f"\nSupported Collectors:")
+        print("\nSupported Collectors:")
         for c in profile.supported_collectors:
             print(f"  - {c.value}")
         print(f"\nTags: {', '.join(profile.tags)}")
@@ -995,7 +1084,7 @@ def run_profiles(args):
     return 0
 
 
-def run_with_profile(args, config):
+def run_with_profile(args, _config):
     """Run performance test with a profile."""
     # Get the profile
     profile_name = args.profile
@@ -1047,6 +1136,7 @@ def run_with_profile(args, config):
         print("=" * 60)
 
     # Create collector based on type (no synthetic fallback: fail explicitly if unavailable)
+    collector = None
     if collector_type == CollectorType.NVML:
         try:
             from autoperfpy.collectors import NVMLCollector
@@ -1155,7 +1245,7 @@ def run_with_profile(args, config):
     print("=" * 60)
     print(f"Samples Collected: {summary.get('sample_count', 0)}")
 
-    print(f"\nLatency (excluding warmup):")
+    print("\nLatency (excluding warmup):")
     latency_status = "PASS" if latency_pass else "FAIL"
     print(
         f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]"
@@ -1164,7 +1254,7 @@ def run_with_profile(args, config):
     print(f"  P50: {summary.get('latency', {}).get('p50_ms', 0):.2f}ms")
     print(f"  Mean: {summary.get('latency', {}).get('mean_ms', 0):.2f}ms")
 
-    print(f"\nThroughput:")
+    print("\nThroughput:")
     throughput_status = "PASS" if throughput_pass else "FAIL"
     print(
         f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]"
@@ -1179,7 +1269,7 @@ def run_with_profile(args, config):
     else:
         print(f"  Mean: {power_avg:.1f}W (no budget constraint)")
 
-    print(f"\nResource Utilization:")
+    print("\nResource Utilization:")
     print(f"  GPU: {summary.get('gpu', {}).get('mean_percent', 0):.1f}% avg")
     print(f"  CPU: {summary.get('cpu', {}).get('mean_percent', 0):.1f}% avg")
     print(f"  Memory: {summary.get('memory', {}).get('mean_mb', 0):.0f}MB avg")
@@ -1198,7 +1288,7 @@ def run_with_profile(args, config):
             "power_pass": power_pass,
             "overall_pass": overall_pass,
         }
-        with open(args.export, "w") as f:
+        with open(args.export, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2)
         print(f"\nResults exported to: {args.export}")
 
@@ -1259,18 +1349,18 @@ def main():
     except (HardwareNotFoundError, DependencyError, ProfileValidationError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
 
-    # Save output if requested
-    if args.output and result:
-        with open(args.output, "w") as f:
+    # Save output if requested (report html/pdf already write to args.output; do not overwrite)
+    if args.output and result and getattr(args, "command", None) != "report":
+        with open(args.output, "w", encoding="utf-8") as f:
             if hasattr(result, "to_dict"):
                 json.dump(result.to_dict(), f, indent=2)
             else:
                 json.dump(result, f, indent=2)
-        print(f"\n✅ Results saved to {args.output}")
+        print(f"\n[OK] Results saved to {args.output}")
 
     return 0
 

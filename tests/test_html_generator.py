@@ -163,55 +163,48 @@ class TestHTMLReportGenerator:
         assert "Test" in summary_html
         assert "100" in summary_html
 
-    def test_generate_html_creates_file(self, report, sample_figure):
+    def test_generate_html_creates_file(self, report, sample_figure, tmp_path):
         """Test that generate_html creates a file."""
         report.add_metadata("Test", "Value")
         report.add_figure(sample_figure, caption="Test Figure")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            result = report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        result = report.generate_html(str(output_path))
 
-            assert result == output_path
-            assert os.path.exists(output_path)
+        assert result == str(output_path)
+        assert output_path.exists()
 
-    def test_generate_html_content(self, report, sample_figure):
+    def test_generate_html_content(self, report, sample_figure, tmp_path):
         """Test generated HTML content."""
         report.add_metadata("Platform", "Test Platform")
         report.add_summary_item("Metric", "42", "units", "good")
         report.add_section("Test Section", "Test Description")
         report.add_figure(sample_figure, caption="Test Figure", section="Test Section")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
+        content = output_path.read_text(encoding="utf-8")
+        assert "<!DOCTYPE html>" in content
+        assert "<title>Test Report</title>" in content
+        assert "Test Author" in content
+        assert "Platform" in content
+        assert "Test Platform" in content
+        assert "Test Section" in content
+        assert "Test Figure" in content
+        assert "data:image/png;base64," in content
 
-            assert "<!DOCTYPE html>" in content
-            assert "<title>Test Report</title>" in content
-            assert "Test Author" in content
-            assert "Platform" in content
-            assert "Test Platform" in content
-            assert "Test Section" in content
-            assert "Test Figure" in content
-            assert "data:image/png;base64," in content
-
-    def test_generate_html_without_summary(self, report, sample_figure):
+    def test_generate_html_without_summary(self, report, sample_figure, tmp_path):
         """Test HTML generation without summary section."""
         report.add_figure(sample_figure, caption="Test Figure")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path, include_summary=False)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path), include_summary=False)
 
-            with open(output_path, "r") as f:
-                content = f.read()
+        content = output_path.read_text(encoding="utf-8")
+        assert 'id="summary"' not in content
 
-            assert 'id="summary"' not in content
-
-    def test_generate_html_with_tables(self, report):
+    def test_generate_html_with_tables(self, report, tmp_path):
         """Test HTML generation with tables."""
         report.add_table(
             "Test Table",
@@ -220,17 +213,14 @@ class TestHTMLReportGenerator:
             "Data Section",
         )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
-
-            assert "<table>" in content
-            assert "<th>A</th>" in content
-            assert "<td>1</td>" in content
-            assert "Test Table" in content
+        content = output_path.read_text(encoding="utf-8")
+        assert "<table>" in content
+        assert "<th>A</th>" in content
+        assert "<td>1</td>" in content
+        assert "Test Table" in content
 
     def test_clear(self, report, sample_figure):
         """Test clearing all data."""
@@ -281,62 +271,52 @@ class TestHTMLReportGenerator:
         assert "Version" in html
         assert "1.0" in html
 
-    def test_nested_directory_creation(self, report, sample_figure):
+    def test_nested_directory_creation(self, report, sample_figure, tmp_path):
         """Test that nested directories are created."""
         report.add_figure(sample_figure, caption="Test")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "nested", "deep", "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "nested" / "deep" / "report.html"
+        report.generate_html(str(output_path))
 
-            assert os.path.exists(output_path)
+        assert output_path.exists()
 
-    def test_javascript_included(self, report, sample_figure):
+    def test_javascript_included(self, report, sample_figure, tmp_path):
         """Test that JavaScript for navigation is included."""
         report.add_figure(sample_figure, caption="Test")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
+        content = output_path.read_text(encoding="utf-8")
+        assert "<script>" in content
+        assert "scrollIntoView" in content
+        assert "addEventListener" in content
 
-            assert "<script>" in content
-            assert "scrollIntoView" in content
-            assert "addEventListener" in content
-
-    def test_print_styles_included(self, report, sample_figure):
+    def test_print_styles_included(self, report, sample_figure, tmp_path):
         """Test that print-friendly CSS is included."""
         report.add_figure(sample_figure, caption="Test")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
+        content = output_path.read_text(encoding="utf-8")
+        assert "@media print" in content
 
-            assert "@media print" in content
-
-    def test_responsive_styles_included(self, report, sample_figure):
+    def test_responsive_styles_included(self, report, sample_figure, tmp_path):
         """Test that responsive CSS is included."""
         report.add_figure(sample_figure, caption="Test")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
-
-            assert "@media (max-width:" in content
+        content = output_path.read_text(encoding="utf-8")
+        assert "@media (max-width:" in content
 
 
 class TestHTMLReportGeneratorIntegration:
     """Integration tests for HTMLReportGenerator with full workflow."""
 
-    def test_full_workflow(self):
+    def test_full_workflow(self, tmp_path):
         """Test complete report generation workflow."""
         report = HTMLReportGenerator(
             title="Integration Test Report",
@@ -383,27 +363,24 @@ class TestHTMLReportGeneratorIntegration:
         )
 
         # Generate report
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "full_report.html")
-            result = report.generate_html(output_path)
+        output_path = tmp_path / "full_report.html"
+        result = report.generate_html(str(output_path))
 
-            assert os.path.exists(result)
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
 
-            with open(result, "r") as f:
-                content = f.read()
-
-            # Verify all components are present
-            assert "Integration Test Report" in content
-            assert "Test Platform" in content
-            assert "Latency Analysis" in content
-            assert "Power Analysis" in content
-            assert "1000" in content
-            assert "Configuration Results" in content
-            assert "data:image/png;base64," in content
+        # Verify all components are present
+        assert "Integration Test Report" in content
+        assert "Test Platform" in content
+        assert "Latency Analysis" in content
+        assert "Power Analysis" in content
+        assert "1000" in content
+        assert "Configuration Results" in content
+        assert "data:image/png;base64," in content
 
         viz.close_all()
 
-    def test_dark_theme_integration(self):
+    def test_dark_theme_integration(self, tmp_path):
         """Test dark theme styling is properly applied."""
         report = HTMLReportGenerator(
             title="Dark Theme Test",
@@ -412,13 +389,10 @@ class TestHTMLReportGeneratorIntegration:
 
         report.add_summary_item("Test", "Value", "", "neutral")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "dark_report.html")
-            report.generate_html(output_path)
+        output_path = tmp_path / "dark_report.html"
+        report.generate_html(str(output_path))
 
-            with open(output_path, "r") as f:
-                content = f.read()
-
-            # Dark theme specific colors
-            assert "#1a1a2e" in content  # Dark background
-            assert "#eaeaea" in content  # Light text
+        content = output_path.read_text(encoding="utf-8")
+        # Dark theme specific colors
+        assert "#1a1a2e" in content  # Dark background
+        assert "#eaeaea" in content  # Light text

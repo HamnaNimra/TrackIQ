@@ -3,6 +3,7 @@
 This document explains key performance engineering concepts used throughout AutoPerfPy.
 
 ## Table of Contents
+0. [Architecture: trackiq vs autoperfpy](#architecture-trackiq-vs-autoperfpy)
 1. [Latency Basics](#latency-basics)
 2. [Percentiles (P99, P95, P50)](#percentiles-p99-p95-p50)
 3. [Throughput & Batching](#throughput--batching)
@@ -10,6 +11,29 @@ This document explains key performance engineering concepts used throughout Auto
 5. [GPU Memory Management](#gpu-memory-management)
 6. [Regression Detection](#regression-detection)
 7. [Testing & Quality Assurance](#testing--quality-assurance)
+
+---
+
+## Architecture: trackiq vs autoperfpy
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  autoperfpy (app layer)                                          │
+│  CLI • Streamlit UI • TensorRT/automotive benchmarks • profiles  │
+│  DNN pipeline • Tegrastats analyzers                             │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ imports
+┌───────────────────────────────▼─────────────────────────────────┐
+│  trackiq (core library)                                          │
+│  platform/   collectors/   runner/   config/   results/   compare/│
+│  errors.py   analyzers/   reporting/   profiles (registry)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- **Collectors**: Plugins that gather metrics (synthetic, psutil, NVML, Tegrastats in app). Each implements `start()`, `sample(timestamp)`, `stop()`, `export()` → `CollectorExport`.
+- **Runner**: `BenchmarkRunner` runs a collector for a fixed duration and sample interval, returns `CollectorExport` (samples + summary).
+- **Results schema**: `CollectorExport` (collector_name, start_time, end_time, samples, summary, config); `AnalysisResult` (name, timestamp, metrics). Summary is nested (e.g. `latency.p99_ms`, `throughput.mean_fps`).
+- **Comparison logic**: `trackiq.compare` provides `RegressionDetector`, `RegressionThreshold`, `MetricComparison`. Save baselines, compare current run to baseline, detect regressions by threshold (e.g. latency +5%, throughput -5%). Used by `autoperfpy compare`.
 
 ---
 
