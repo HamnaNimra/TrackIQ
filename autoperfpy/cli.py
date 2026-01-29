@@ -16,7 +16,11 @@ from autoperfpy.analyzers import (
 )
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from autoperfpy.monitoring import GPUMemoryMonitor
-from autoperfpy.reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
+from autoperfpy.reporting import (
+    PerformanceVisualizer,
+    PDFReportGenerator,
+    HTMLReportGenerator,
+)
 from autoperfpy.collectors import SyntheticCollector
 from autoperfpy.profiles import (
     get_profile,
@@ -90,106 +94,187 @@ Environment Variables:
     parser.add_argument("--config", help="Path to configuration file (YAML/JSON)")
     parser.add_argument("--output", help="Output file for results (JSON)")
     parser.add_argument(
-        "--profile", "-p",
-        help="Performance profile to use (automotive_safety, edge_max_perf, edge_low_power, ci_smoke)"
+        "--profile",
+        "-p",
+        help="Performance profile to use (automotive_safety, edge_max_perf, edge_low_power, ci_smoke)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Profiles command
-    profiles_parser = subparsers.add_parser("profiles", help="List and inspect performance profiles")
-    profiles_parser.add_argument("--list", "-l", action="store_true", help="List all available profiles")
-    profiles_parser.add_argument("--info", "-i", metavar="NAME", help="Show detailed info for a profile")
+    profiles_parser = subparsers.add_parser(
+        "profiles", help="List and inspect performance profiles"
+    )
+    profiles_parser.add_argument(
+        "--list", "-l", action="store_true", help="List all available profiles"
+    )
+    profiles_parser.add_argument(
+        "--info", "-i", metavar="NAME", help="Show detailed info for a profile"
+    )
 
     # Run command (profile-based execution)
-    run_parser = subparsers.add_parser("run", help="Run performance test with a profile")
-    run_parser.add_argument(
-        "--profile", "-p",
-        default=os.environ.get("AUTOPERFPY_PROFILE", "ci_smoke"),
-        help="Profile to use (default: ci_smoke or AUTOPERFPY_PROFILE env var)"
+    run_parser = subparsers.add_parser(
+        "run", help="Run performance test with a profile"
     )
     run_parser.add_argument(
-        "--collector", "-c",
+        "--profile",
+        "-p",
+        default=os.environ.get("AUTOPERFPY_PROFILE", "ci_smoke"),
+        help="Profile to use (default: ci_smoke or AUTOPERFPY_PROFILE env var)",
+    )
+    run_parser.add_argument(
+        "--collector",
+        "-c",
         default=os.environ.get("AUTOPERFPY_COLLECTOR", "synthetic"),
         choices=["synthetic", "nvml", "tegrastats", "psutil"],
-        help="Collector type (default: synthetic)"
+        help="Collector type (default: synthetic)",
     )
-    run_parser.add_argument("--duration", "-d", type=int, help="Override test duration (seconds)")
+    run_parser.add_argument(
+        "--duration", "-d", type=int, help="Override test duration (seconds)"
+    )
     run_parser.add_argument("--batch-size", "-b", type=int, help="Override batch size")
-    run_parser.add_argument("--iterations", "-n", type=int, help="Override number of iterations")
-    run_parser.add_argument("--warmup", "-w", type=int, help="Override warmup iterations")
-    run_parser.add_argument("--export", "-e", metavar="FILE", help="Export results to JSON file")
-    run_parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output (summary only)")
-    run_parser.add_argument("--validate-only", action="store_true", help="Validate profile and exit")
     run_parser.add_argument(
-        "--device", "-D",
-        help="Device ID or name (e.g. 0 for GPU 0, or device name)"
+        "--iterations", "-n", type=int, help="Override number of iterations"
     )
     run_parser.add_argument(
-        "--precision", "-P",
+        "--warmup", "-w", type=int, help="Override warmup iterations"
+    )
+    run_parser.add_argument(
+        "--export", "-e", metavar="FILE", help="Export results to JSON file"
+    )
+    run_parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Minimal output (summary only)"
+    )
+    run_parser.add_argument(
+        "--validate-only", action="store_true", help="Validate profile and exit"
+    )
+    run_parser.add_argument(
+        "--device", "-D", help="Device ID or name (e.g. 0 for GPU 0, or device name)"
+    )
+    run_parser.add_argument(
+        "--precision",
+        "-P",
         choices=["fp32", "fp16", "int8"],
         default="fp32",
-        help="Inference precision (default: fp32)"
+        help="Inference precision (default: fp32)",
     )
 
     # Compare command (uses trackiq comparison module)
-    compare_parser = subparsers.add_parser("compare", help="Compare run results against a baseline (trackiq)")
-    compare_parser.add_argument("--baseline", "-b", required=True, help="Baseline name or path to baseline JSON")
-    compare_parser.add_argument("--current", "-c", required=True, help="Path to current run JSON (metrics)")
-    compare_parser.add_argument("--baseline-dir", default=".trackiq/baselines", help="Directory for baseline files")
-    compare_parser.add_argument("--latency-pct", type=float, default=5.0, help="Latency regression threshold %%")
-    compare_parser.add_argument("--throughput-pct", type=float, default=5.0, help="Throughput regression threshold %%")
-    compare_parser.add_argument("--p99-pct", type=float, default=10.0, help="P99 regression threshold %%")
-    compare_parser.add_argument("--save-baseline", action="store_true", help="Save --current as new baseline named --baseline")
+    compare_parser = subparsers.add_parser(
+        "compare", help="Compare run results against a baseline (trackiq)"
+    )
+    compare_parser.add_argument(
+        "--baseline", "-b", required=True, help="Baseline name or path to baseline JSON"
+    )
+    compare_parser.add_argument(
+        "--current", "-c", required=True, help="Path to current run JSON (metrics)"
+    )
+    compare_parser.add_argument(
+        "--baseline-dir",
+        default=".trackiq/baselines",
+        help="Directory for baseline files",
+    )
+    compare_parser.add_argument(
+        "--latency-pct", type=float, default=5.0, help="Latency regression threshold %%"
+    )
+    compare_parser.add_argument(
+        "--throughput-pct",
+        type=float,
+        default=5.0,
+        help="Throughput regression threshold %%",
+    )
+    compare_parser.add_argument(
+        "--p99-pct", type=float, default=10.0, help="P99 regression threshold %%"
+    )
+    compare_parser.add_argument(
+        "--save-baseline",
+        action="store_true",
+        help="Save --current as new baseline named --baseline",
+    )
 
     # Analyze commands
     analyze_parser = subparsers.add_parser("analyze", help="Analyze performance data")
     analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_type")
 
     # Analyze latency
-    latency_parser = analyze_subparsers.add_parser("latency", help="Analyze percentile latencies")
-    latency_parser.add_argument("--csv", required=True, help="CSV file with benchmark data")
+    latency_parser = analyze_subparsers.add_parser(
+        "latency", help="Analyze percentile latencies"
+    )
+    latency_parser.add_argument(
+        "--csv", required=True, help="CSV file with benchmark data"
+    )
 
     # Analyze logs
     log_parser = analyze_subparsers.add_parser("logs", help="Analyze performance logs")
     log_parser.add_argument("--log", required=True, help="Log file to analyze")
-    log_parser.add_argument("--threshold", type=float, default=50.0, help="Latency threshold (ms)")
+    log_parser.add_argument(
+        "--threshold", type=float, default=50.0, help="Latency threshold (ms)"
+    )
 
     # Analyze DNN pipeline
-    dnn_parser = analyze_subparsers.add_parser("dnn-pipeline", help="Analyze DNN inference pipeline")
+    dnn_parser = analyze_subparsers.add_parser(
+        "dnn-pipeline", help="Analyze DNN inference pipeline"
+    )
     dnn_parser.add_argument("--csv", help="CSV file with layer timings")
     dnn_parser.add_argument("--profiler", help="Profiler output text file")
     dnn_parser.add_argument("--batch-size", type=int, default=1, help="Batch size used")
-    dnn_parser.add_argument("--top-layers", type=int, default=5, help="Number of slowest layers to report")
+    dnn_parser.add_argument(
+        "--top-layers", type=int, default=5, help="Number of slowest layers to report"
+    )
 
     # Analyze tegrastats
-    tegra_parser = analyze_subparsers.add_parser("tegrastats", help="Analyze Tegrastats output")
+    tegra_parser = analyze_subparsers.add_parser(
+        "tegrastats", help="Analyze Tegrastats output"
+    )
     tegra_parser.add_argument("--log", required=True, help="Tegrastats log file")
-    tegra_parser.add_argument("--throttle-threshold", type=float, default=85.0, help="Thermal throttling threshold (°C)")
+    tegra_parser.add_argument(
+        "--throttle-threshold",
+        type=float,
+        default=85.0,
+        help="Thermal throttling threshold (°C)",
+    )
 
     # Analyze efficiency
-    eff_parser = analyze_subparsers.add_parser("efficiency", help="Analyze power efficiency")
+    eff_parser = analyze_subparsers.add_parser(
+        "efficiency", help="Analyze power efficiency"
+    )
     eff_parser.add_argument("--csv", required=True, help="CSV file with benchmark data")
 
     # Analyze variability
-    var_parser = analyze_subparsers.add_parser("variability", help="Analyze latency variability")
+    var_parser = analyze_subparsers.add_parser(
+        "variability", help="Analyze latency variability"
+    )
     var_parser.add_argument("--csv", required=True, help="CSV file with latency data")
-    var_parser.add_argument("--column", default="latency_ms", help="Column name for latency values")
+    var_parser.add_argument(
+        "--column", default="latency_ms", help="Column name for latency values"
+    )
 
     # Benchmark commands
     bench_parser = subparsers.add_parser("benchmark", help="Run benchmarks")
     bench_subparsers = bench_parser.add_subparsers(dest="bench_type")
 
     # Batch size benchmark
-    batch_parser = bench_subparsers.add_parser("batching", help="Batch size trade-off analysis")
-    batch_parser.add_argument("--batch-sizes", default="1,4,8,16,32", help="Comma-separated batch sizes")
-    batch_parser.add_argument("--images", type=int, default=1000, help="Number of images")
+    batch_parser = bench_subparsers.add_parser(
+        "batching", help="Batch size trade-off analysis"
+    )
+    batch_parser.add_argument(
+        "--batch-sizes", default="1,4,8,16,32", help="Comma-separated batch sizes"
+    )
+    batch_parser.add_argument(
+        "--images", type=int, default=1000, help="Number of images"
+    )
 
     # LLM benchmark
     llm_parser = bench_subparsers.add_parser("llm", help="LLM inference latency")
-    llm_parser.add_argument("--prompt-length", type=int, default=512, help="Prompt token count")
-    llm_parser.add_argument("--output-tokens", type=int, default=256, help="Output token count")
-    llm_parser.add_argument("--runs", type=int, default=10, help="Number of benchmark runs")
+    llm_parser.add_argument(
+        "--prompt-length", type=int, default=512, help="Prompt token count"
+    )
+    llm_parser.add_argument(
+        "--output-tokens", type=int, default=256, help="Output token count"
+    )
+    llm_parser.add_argument(
+        "--runs", type=int, default=10, help="Number of benchmark runs"
+    )
 
     # Monitor commands
     monitor_parser = subparsers.add_parser("monitor", help="Monitor system metrics")
@@ -197,39 +282,79 @@ Environment Variables:
 
     # GPU monitor
     gpu_parser = monitor_subparsers.add_parser("gpu", help="Monitor GPU metrics")
-    gpu_parser.add_argument("--duration", type=int, default=300, help="Monitor duration (seconds)")
-    gpu_parser.add_argument("--interval", type=int, default=1, help="Sample interval (seconds)")
+    gpu_parser.add_argument(
+        "--duration", type=int, default=300, help="Monitor duration (seconds)"
+    )
+    gpu_parser.add_argument(
+        "--interval", type=int, default=1, help="Sample interval (seconds)"
+    )
 
     # KV cache monitor
     cache_parser = monitor_subparsers.add_parser("kv-cache", help="Monitor KV cache")
-    cache_parser.add_argument("--max-length", type=int, default=2048, help="Max sequence length")
+    cache_parser.add_argument(
+        "--max-length", type=int, default=2048, help="Max sequence length"
+    )
 
     # Report commands
     report_parser = subparsers.add_parser("report", help="Generate performance reports")
     report_subparsers = report_parser.add_subparsers(dest="report_type")
 
     # HTML report
-    html_parser = report_subparsers.add_parser("html", help="Generate interactive HTML report")
+    html_parser = report_subparsers.add_parser(
+        "html", help="Generate interactive HTML report"
+    )
     html_parser.add_argument("--csv", help="CSV file with benchmark data")
-    html_parser.add_argument("--output", "-o", default="performance_report.html", help="Output HTML file path")
-    html_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
-    html_parser.add_argument("--theme", choices=["light", "dark"], default="light", help="Color theme")
+    html_parser.add_argument(
+        "--output",
+        "-o",
+        default="performance_report.html",
+        help="Output HTML file path",
+    )
+    html_parser.add_argument(
+        "--title", default="Performance Analysis Report", help="Report title"
+    )
+    html_parser.add_argument(
+        "--theme", choices=["light", "dark"], default="light", help="Color theme"
+    )
     html_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
     # PDF report
     pdf_parser = report_subparsers.add_parser("pdf", help="Generate PDF report")
     pdf_parser.add_argument("--csv", help="CSV file with benchmark data")
-    pdf_parser.add_argument("--output", "-o", default="performance_report.pdf", help="Output PDF file path")
-    pdf_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    pdf_parser.add_argument(
+        "--output", "-o", default="performance_report.pdf", help="Output PDF file path"
+    )
+    pdf_parser.add_argument(
+        "--title", default="Performance Analysis Report", help="Report title"
+    )
     pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
     # UI command (Streamlit dashboard)
-    ui_parser = subparsers.add_parser("ui", help="Launch interactive Streamlit dashboard")
-    ui_parser.add_argument("--data", "-d", help="Path to collector export JSON or CSV file")
-    ui_parser.add_argument("--port", "-p", type=int, default=8501, help="Port to run Streamlit on (default: 8501)")
-    ui_parser.add_argument("--host", default="localhost", help="Host to bind to (default: localhost)")
-    ui_parser.add_argument("--browser", action="store_true", default=True, help="Open browser automatically (default: True)")
-    ui_parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
+    ui_parser = subparsers.add_parser(
+        "ui", help="Launch interactive Streamlit dashboard"
+    )
+    ui_parser.add_argument(
+        "--data", "-d", help="Path to collector export JSON or CSV file"
+    )
+    ui_parser.add_argument(
+        "--port",
+        "-p",
+        type=int,
+        default=8501,
+        help="Port to run Streamlit on (default: 8501)",
+    )
+    ui_parser.add_argument(
+        "--host", default="localhost", help="Host to bind to (default: localhost)"
+    )
+    ui_parser.add_argument(
+        "--browser",
+        action="store_true",
+        default=True,
+        help="Open browser automatically (default: True)",
+    )
+    ui_parser.add_argument(
+        "--no-browser", action="store_true", help="Don't open browser automatically"
+    )
 
     return parser
 
@@ -293,7 +418,9 @@ def run_analyze_dnn_pipeline(args, config):
 
     timing = metrics.get("timing", {})
     print(f"\n⏱️  Timing:")
-    print(f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms")
+    print(
+        f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms"
+    )
     print(f"  GPU Time: {timing.get('gpu_time_ms', 0):.2f}ms")
     print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
 
@@ -302,7 +429,9 @@ def run_analyze_dnn_pipeline(args, config):
     print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
     print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
 
-    throughput = metrics.get("throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0))
+    throughput = metrics.get(
+        "throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0)
+    )
     print(f"\n🚀 Throughput: {throughput:.1f} FPS")
 
     slowest = metrics.get("slowest_layers", [])
@@ -439,7 +568,11 @@ def run_benchmark_batching(args, config):
 def run_benchmark_llm(args, config):
     """Run LLM latency benchmark."""
     benchmark = LLMLatencyBenchmark(config)
-    results = benchmark.run(prompt_tokens=args.prompt_length, output_tokens=args.output_tokens, num_runs=args.runs)
+    results = benchmark.run(
+        prompt_tokens=args.prompt_length,
+        output_tokens=args.output_tokens,
+        num_runs=args.runs,
+    )
 
     print("\n🤖 LLM Latency Benchmark")
     print("=" * 60)
@@ -514,16 +647,22 @@ def run_report_html(args, config):
         # Add summary items based on available columns
         if "latency_ms" in df.columns:
             report.add_summary_item("Samples", len(df), "", "neutral")
-            report.add_summary_item("Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral")
-            report.add_summary_item("P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral")
+            report.add_summary_item(
+                "Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral"
+            )
+            report.add_summary_item(
+                "P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral"
+            )
 
-            cv = df['latency_ms'].std() / df['latency_ms'].mean() * 100
+            cv = df["latency_ms"].std() / df["latency_ms"].mean() * 100
             status = "good" if cv < 10 else "warning" if cv < 20 else "critical"
             report.add_summary_item("CV", f"{cv:.1f}", "%", status)
 
         # Generate visualizations based on available data
         if "workload" in df.columns and "latency_ms" in df.columns:
-            report.add_section("Latency Analysis", "Percentile latency comparisons across workloads")
+            report.add_section(
+                "Latency Analysis", "Percentile latency comparisons across workloads"
+            )
 
             latencies_by_workload = {}
             for workload in df["workload"].unique():
@@ -534,25 +673,40 @@ def run_report_html(args, config):
                     "P99": wdf.quantile(0.99),
                 }
             fig = viz.plot_latency_percentiles(latencies_by_workload)
-            report.add_figure(fig, "Latency Percentiles by Workload", "Latency Analysis")
+            report.add_figure(
+                fig, "Latency Percentiles by Workload", "Latency Analysis"
+            )
 
             # Distribution comparison
-            data_dict = {w: df[df["workload"] == w]["latency_ms"].tolist() for w in df["workload"].unique()}
+            data_dict = {
+                w: df[df["workload"] == w]["latency_ms"].tolist()
+                for w in df["workload"].unique()
+            }
             fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
             report.add_figure(fig, "Latency Distribution", "Latency Analysis")
 
         if "batch_size" in df.columns and "latency_ms" in df.columns:
             report.add_section("Batch Analysis", "Performance vs batch size")
 
-            batch_df = df.groupby("batch_size").agg({
-                "latency_ms": "mean",
-            }).reset_index()
+            batch_df = (
+                df.groupby("batch_size")
+                .agg(
+                    {
+                        "latency_ms": "mean",
+                    }
+                )
+                .reset_index()
+            )
 
             # Calculate throughput if not present
             if "throughput" not in df.columns:
-                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+                batch_df["throughput"] = (
+                    batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+                )
             else:
-                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+                batch_df["throughput"] = (
+                    df.groupby("batch_size")["throughput"].mean().values
+                )
 
             fig = viz.plot_latency_throughput_tradeoff(
                 batch_df["batch_size"].tolist(),
@@ -562,14 +716,23 @@ def run_report_html(args, config):
             report.add_figure(fig, "Latency vs Throughput Trade-off", "Batch Analysis")
 
         if "power_w" in df.columns:
-            report.add_section("Power Analysis", "Power consumption and efficiency metrics")
+            report.add_section(
+                "Power Analysis", "Power consumption and efficiency metrics"
+            )
 
             if "workload" in df.columns:
                 workloads = df["workload"].unique().tolist()
-                power_values = [df[df["workload"] == w]["power_w"].mean() for w in workloads]
+                power_values = [
+                    df[df["workload"] == w]["power_w"].mean() for w in workloads
+                ]
                 if "latency_ms" in df.columns:
-                    perf_values = [1000 / df[df["workload"] == w]["latency_ms"].mean() for w in workloads]
-                    fig = viz.plot_power_vs_performance(workloads, power_values, perf_values)
+                    perf_values = [
+                        1000 / df[df["workload"] == w]["latency_ms"].mean()
+                        for w in workloads
+                    ]
+                    fig = viz.plot_power_vs_performance(
+                        workloads, power_values, perf_values
+                    )
                     report.add_figure(fig, "Power vs Performance", "Power Analysis")
 
         # Add data table
@@ -578,8 +741,12 @@ def run_report_html(args, config):
             headers = sample_df.columns.tolist()
             rows = sample_df.values.tolist()
             # Format numeric values
-            rows = [[f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows]
-            report.add_table("Sample Data (First 20 rows)", headers, rows, "Data Overview")
+            rows = [
+                [f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows
+            ]
+            report.add_table(
+                "Sample Data (First 20 rows)", headers, rows, "Data Overview"
+            )
             report.add_section("Data Overview", "Raw data samples")
 
     else:
@@ -625,10 +792,15 @@ def run_ui(args):
 
     # Build streamlit command
     cmd = [
-        sys.executable, "-m", "streamlit", "run",
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
         str(ui_module),
-        "--server.port", str(args.port),
-        "--server.address", args.host,
+        "--server.port",
+        str(args.port),
+        "--server.address",
+        args.host,
     ]
 
     # Handle browser option
@@ -656,7 +828,10 @@ def run_ui(args):
         print("\nMake sure Streamlit is installed: pip install streamlit plotly pandas")
         return 1
     except FileNotFoundError:
-        print("Error: Streamlit not found. Install with: pip install streamlit", file=sys.stderr)
+        print(
+            "Error: Streamlit not found. Install with: pip install streamlit",
+            file=sys.stderr,
+        )
         return 1
 
     return 0
@@ -694,11 +869,17 @@ def run_report_pdf(args, config):
             report.add_figure(fig, "Latency Percentiles by Workload")
 
         if "batch_size" in df.columns and "latency_ms" in df.columns:
-            batch_df = df.groupby("batch_size").agg({"latency_ms": "mean"}).reset_index()
+            batch_df = (
+                df.groupby("batch_size").agg({"latency_ms": "mean"}).reset_index()
+            )
             if "throughput" not in df.columns:
-                batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+                batch_df["throughput"] = (
+                    batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+                )
             else:
-                batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
+                batch_df["throughput"] = (
+                    df.groupby("batch_size")["throughput"].mean().values
+                )
 
             fig = viz.plot_latency_throughput_tradeoff(
                 batch_df["batch_size"].tolist(),
@@ -719,6 +900,59 @@ def run_report_pdf(args, config):
     output_path = report.generate_pdf(args.output)
     print(f"\n✅ PDF report generated: {output_path}")
     return {"output_path": output_path}
+
+
+def _flatten_summary_for_compare(summary: dict) -> dict:
+    """Flatten export summary to metric_name -> float for trackiq compare."""
+    flat = {}
+    for section, data in summary.items():
+        if section in ("sample_count", "warmup_samples", "duration_seconds"):
+            continue
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, (int, float)):
+                    flat[f"{section}_{k}"] = float(v)
+    return flat
+
+
+def run_compare(args):
+    """Compare current run against baseline using trackiq comparison module."""
+    baseline_dir = (
+        getattr(args, "baseline_dir", ".trackiq/baselines") or ".trackiq/baselines"
+    )
+    detector = RegressionDetector(baseline_dir=baseline_dir)
+    thresholds = RegressionThreshold(
+        latency_percent=getattr(args, "latency_pct", 5.0),
+        throughput_percent=getattr(args, "throughput_pct", 5.0),
+        p99_percent=getattr(args, "p99_pct", 10.0),
+    )
+
+    with open(args.current, "r") as f:
+        current_data = json.load(f)
+    summary = current_data.get("summary", current_data.get("metrics", current_data))
+    current_metrics = (
+        _flatten_summary_for_compare(summary) if isinstance(summary, dict) else {}
+    )
+
+    if getattr(args, "save_baseline", False):
+        detector.save_baseline(args.baseline, current_metrics)
+        print(f"Baseline '{args.baseline}' saved from {args.current}")
+        return 0
+
+    try:
+        baseline_metrics = detector.load_baseline(args.baseline)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        print(
+            "Save a baseline first: autoperfpy compare --save-baseline --baseline NAME --current run.json",
+            file=sys.stderr,
+        )
+        return 1
+
+    report = detector.generate_report(args.baseline, current_metrics, thresholds)
+    print(report)
+    result = detector.detect_regressions(args.baseline, current_metrics, thresholds)
+    return 1 if result.get("has_regressions") else 0
 
 
 def run_profiles(args):
@@ -742,9 +976,17 @@ def run_profiles(args):
         print(f"  Minimum: {profile.throughput_min_fps} FPS")
         print(f"  Target: {profile.throughput_target_fps} FPS")
         print(f"\nConstraints:")
-        print(f"  Power Budget: {profile.power_budget_w}W" if profile.power_budget_w else "  Power Budget: None")
+        print(
+            f"  Power Budget: {profile.power_budget_w}W"
+            if profile.power_budget_w
+            else "  Power Budget: None"
+        )
         print(f"  Thermal Limit: {profile.thermal_limit_c}C")
-        print(f"  Memory Limit: {profile.memory_limit_mb}MB" if profile.memory_limit_mb else "  Memory Limit: None")
+        print(
+            f"  Memory Limit: {profile.memory_limit_mb}MB"
+            if profile.memory_limit_mb
+            else "  Memory Limit: None"
+        )
         print(f"\nBenchmark Settings:")
         print(f"  Batch Sizes: {profile.batch_sizes}")
         print(f"  Warmup Iterations: {profile.warmup_iterations}")
@@ -766,9 +1008,11 @@ def run_profiles(args):
     for name, details in info.items():
         print(f"\n{name}")
         print(f"  {details['description']}")
-        print(f"  Latency threshold: {details['latency_threshold_ms']}ms | "
-              f"Throughput target: {details['throughput_target_fps']} FPS")
-        power = f"{details['power_budget_w']}W" if details['power_budget_w'] else "None"
+        print(
+            f"  Latency threshold: {details['latency_threshold_ms']}ms | "
+            f"Throughput target: {details['throughput_target_fps']} FPS"
+        )
+        power = f"{details['power_budget_w']}W" if details["power_budget_w"] else "None"
         print(f"  Power budget: {power} | Tags: {', '.join(details['tags'][:3])}")
     print(f"\nUse 'autoperfpy profiles --info <name>' for detailed information.")
     return 0
@@ -801,8 +1045,14 @@ def run_with_profile(args, config):
         return None
 
     if args.validate_only:
-        print(f"Profile '{profile_name}' validated successfully with collector '{args.collector}'")
-        return {"status": "validated", "profile": profile_name, "collector": args.collector}
+        print(
+            f"Profile '{profile_name}' validated successfully with collector '{args.collector}'"
+        )
+        return {
+            "status": "validated",
+            "profile": profile_name,
+            "collector": args.collector,
+        }
 
     # Apply CLI overrides
     duration = args.duration if args.duration else profile.duration_seconds
@@ -825,24 +1075,41 @@ def run_with_profile(args, config):
             from autoperfpy.collectors import NVMLCollector
         except ImportError as e:
             print(f"Error: NVML collector requires pynvml. {e}", file=sys.stderr)
-            raise DependencyError("NVML collector requires pynvml. Install with: pip install pynvml") from e
+            raise DependencyError(
+                "NVML collector requires pynvml. Install with: pip install pynvml"
+            ) from e
         from trackiq.platform import get_memory_metrics
+
         if get_memory_metrics() is None:
-            raise HardwareNotFoundError("No NVIDIA GPU or nvidia-smi not available. Use --collector synthetic for simulation.")
-        collector = NVMLCollector(config=profile.get_synthetic_config() or {})
+            raise HardwareNotFoundError(
+                "No NVIDIA GPU or nvidia-smi not available. Use --collector synthetic for simulation."
+            )
+        device_index = 0
+        if getattr(args, "device", None) is not None:
+            try:
+                device_index = int(args.device)
+            except ValueError:
+                pass  # device might be a name; NVML uses index
+        collector = NVMLCollector(
+            device_index=device_index, config=profile.get_synthetic_config() or {}
+        )
     elif collector_type == CollectorType.PSUTIL:
         try:
             from autoperfpy.collectors import PsutilCollector
         except ImportError as e:
             print(f"Error: Psutil collector requires psutil. {e}", file=sys.stderr)
-            raise DependencyError("Psutil collector requires psutil. Install with: pip install psutil") from e
+            raise DependencyError(
+                "Psutil collector requires psutil. Install with: pip install psutil"
+            ) from e
         collector = PsutilCollector(config=profile.get_synthetic_config() or {})
     elif collector_type == CollectorType.TEGRASTATS:
         try:
             from autoperfpy.collectors import TegrastatsCollector
         except ImportError as e:
             print(f"Error: Tegrastats collector not available. {e}", file=sys.stderr)
-            raise DependencyError("Tegrastats collector requires Jetson/tegrastats. Use --collector synthetic on non-Jetson.") from e
+            raise DependencyError(
+                "Tegrastats collector requires Jetson/tegrastats. Use --collector synthetic on non-Jetson."
+            ) from e
         collector = TegrastatsCollector(config=profile.get_synthetic_config() or {})
     else:
         # Synthetic
@@ -872,13 +1139,16 @@ def run_with_profile(args, config):
             timestamp = time.time()
             metrics = collector.sample(timestamp)
 
-            if not args.quiet:
+            if not args.quiet and metrics:
                 warmup_marker = "[WARMUP]" if metrics.get("is_warmup") else ""
+                latency = metrics.get("latency_ms", 0)
+                gpu = metrics.get("gpu_percent", 0)
+                power = metrics.get("power_w", 0)
                 print(
                     f"[{sample_count:4d}] "
-                    f"Latency: {metrics['latency_ms']:6.2f}ms | "
-                    f"GPU: {metrics['gpu_percent']:5.1f}% | "
-                    f"Power: {metrics['power_w']:5.1f}W "
+                    f"Latency: {latency:6.2f}ms | "
+                    f"GPU: {gpu:5.1f}% | "
+                    f"Power: {power:5.1f}W "
                     f"{warmup_marker}"
                 )
 
@@ -910,19 +1180,25 @@ def run_with_profile(args, config):
 
     print(f"\nLatency (excluding warmup):")
     latency_status = "PASS" if latency_pass else "FAIL"
-    print(f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]")
+    print(
+        f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]"
+    )
     print(f"  P95: {summary.get('latency', {}).get('p95_ms', 0):.2f}ms")
     print(f"  P50: {summary.get('latency', {}).get('p50_ms', 0):.2f}ms")
     print(f"  Mean: {summary.get('latency', {}).get('mean_ms', 0):.2f}ms")
 
     print(f"\nThroughput:")
     throughput_status = "PASS" if throughput_pass else "FAIL"
-    print(f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]")
+    print(
+        f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]"
+    )
 
     print(f"\nPower:")
     if profile.power_budget_w:
         power_status = "PASS" if power_pass else "FAIL"
-        print(f"  Mean: {power_avg:.1f}W (budget: {profile.power_budget_w}W) [{power_status}]")
+        print(
+            f"  Mean: {power_avg:.1f}W (budget: {profile.power_budget_w}W) [{power_status}]"
+        )
     else:
         print(f"  Mean: {power_avg:.1f}W (no budget constraint)")
 
@@ -1001,6 +1277,11 @@ def main():
                 result = run_report_pdf(args, config)
         elif args.command == "ui":
             return run_ui(args)
+        elif args.command == "compare":
+            return run_compare(args)
+    except (HardwareNotFoundError, DependencyError, ProfileValidationError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
