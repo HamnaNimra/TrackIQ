@@ -1,13 +1,8 @@
-"""Shared GPU utilities for TrackIQ hardware detection.
-
-This module provides common functionality for GPU monitoring and
-environment detection via nvidia-smi.
-"""
+"""GPU detection and metrics via nvidia-smi for TrackIQ platform."""
 
 import subprocess
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-# Default timeout for nvidia-smi commands
 DEFAULT_NVIDIA_SMI_TIMEOUT = 5
 
 
@@ -55,7 +50,9 @@ def parse_gpu_metrics(
         return None
 
 
-def get_memory_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Dict[str, Any]]:
+def get_memory_metrics(
+    timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
+) -> Optional[Dict[str, Any]]:
     """Get GPU memory metrics."""
     output = query_nvidia_smi(
         ["memory.used", "memory.total", "utilization.gpu"],
@@ -83,7 +80,9 @@ def get_memory_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Di
     return parsed
 
 
-def get_performance_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Optional[Dict[str, float]]:
+def get_performance_metrics(
+    timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
+) -> Optional[Dict[str, float]]:
     """Get GPU performance metrics (utilization, temperature, power)."""
     output = query_nvidia_smi(
         ["utilization.gpu", "temperature.gpu", "power.draw"],
@@ -97,12 +96,3 @@ def get_performance_metrics(timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT) -> Option
         output,
         ["utilization", "temperature", "power"],
     )
-
-
-__all__ = [
-    "query_nvidia_smi",
-    "parse_gpu_metrics",
-    "get_memory_metrics",
-    "get_performance_metrics",
-    "DEFAULT_NVIDIA_SMI_TIMEOUT",
-]

@@ -26,6 +26,8 @@ from autoperfpy.profiles import (
     CollectorType,
     ProfileValidationError,
 )
+from trackiq.compare import RegressionDetector, RegressionThreshold
+from trackiq.errors import HardwareNotFoundError, DependencyError
 import json
 
 
@@ -119,6 +121,26 @@ Environment Variables:
     run_parser.add_argument("--export", "-e", metavar="FILE", help="Export results to JSON file")
     run_parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output (summary only)")
     run_parser.add_argument("--validate-only", action="store_true", help="Validate profile and exit")
+    run_parser.add_argument(
+        "--device", "-D",
+        help="Device ID or name (e.g. 0 for GPU 0, or device name)"
+    )
+    run_parser.add_argument(
+        "--precision", "-P",
+        choices=["fp32", "fp16", "int8"],
+        default="fp32",
+        help="Inference precision (default: fp32)"
+    )
+
+    # Compare command (uses trackiq comparison module)
+    compare_parser = subparsers.add_parser("compare", help="Compare run results against a baseline (trackiq)")
+    compare_parser.add_argument("--baseline", "-b", required=True, help="Baseline name or path to baseline JSON")
+    compare_parser.add_argument("--current", "-c", required=True, help="Path to current run JSON (metrics)")
+    compare_parser.add_argument("--baseline-dir", default=".trackiq/baselines", help="Directory for baseline files")
+    compare_parser.add_argument("--latency-pct", type=float, default=5.0, help="Latency regression threshold %%")
+    compare_parser.add_argument("--throughput-pct", type=float, default=5.0, help="Throughput regression threshold %%")
+    compare_parser.add_argument("--p99-pct", type=float, default=10.0, help="P99 regression threshold %%")
+    compare_parser.add_argument("--save-baseline", action="store_true", help="Save --current as new baseline named --baseline")
 
     # Analyze commands
     analyze_parser = subparsers.add_parser("analyze", help="Analyze performance data")
@@ -797,20 +819,47 @@ def run_with_profile(args, config):
         print(f"Latency Threshold: {profile.latency_threshold_ms}ms")
         print("=" * 60)
 
-    # Create collector based on type
-    # TODO: Implement real collectors (NVML, tegrastats, psutil)
-    if collector_type != CollectorType.SYNTHETIC:
-        print(f"Warning: Collector '{args.collector}' not yet implemented. Using synthetic collector.")
+    # Create collector based on type (no synthetic fallback: fail explicitly if unavailable)
+    if collector_type == CollectorType.NVML:
+        try:
+            from autoperfpy.collectors import NVMLCollector
+        except ImportError as e:
+            print(f"Error: NVML collector requires pynvml. {e}", file=sys.stderr)
+            raise DependencyError("NVML collector requires pynvml. Install with: pip install pynvml") from e
+        from trackiq.platform import get_memory_metrics
+        if get_memory_metrics() is None:
+            raise HardwareNotFoundError("No NVIDIA GPU or nvidia-smi not available. Use --collector synthetic for simulation.")
+        collector = NVMLCollector(config=profile.get_synthetic_config() or {})
+    elif collector_type == CollectorType.PSUTIL:
+        try:
+            from autoperfpy.collectors import PsutilCollector
+        except ImportError as e:
+            print(f"Error: Psutil collector requires psutil. {e}", file=sys.stderr)
+            raise DependencyError("Psutil collector requires psutil. Install with: pip install psutil") from e
+        collector = PsutilCollector(config=profile.get_synthetic_config() or {})
+    elif collector_type == CollectorType.TEGRASTATS:
+        try:
+            from autoperfpy.collectors import TegrastatsCollector
+        except ImportError as e:
+            print(f"Error: Tegrastats collector not available. {e}", file=sys.stderr)
+            raise DependencyError("Tegrastats collector requires Jetson/tegrastats. Use --collector synthetic on non-Jetson.") from e
+        collector = TegrastatsCollector(config=profile.get_synthetic_config() or {})
+    else:
+        # Synthetic
+        pass
 
-    # Configure synthetic collector based on profile
-    collector_config = profile.get_synthetic_config()
-    collector_config["warmup_samples"] = warmup
+    if collector_type == CollectorType.SYNTHETIC:
+        collector_config = profile.get_synthetic_config()
+        collector_config["warmup_samples"] = warmup
+        if args.batch_size:
+            collector_config["batch_sizes"] = [args.batch_size]
+        collector = SyntheticCollector(config=collector_config)
 
-    # Apply batch size override if provided
-    if args.batch_size:
-        collector_config["batch_sizes"] = [args.batch_size]
-
-    collector = SyntheticCollector(config=collector_config)
+    # Optional: pass device/precision into run context (for app-specific use)
+    _device = getattr(args, "device", None)
+    _precision = getattr(args, "precision", "fp32")
+    if not args.quiet and (_device is not None or _precision != "fp32"):
+        print(f"Device: {_device or 'default'} | Precision: {_precision}")
 
     # Run collection
     collector.start()

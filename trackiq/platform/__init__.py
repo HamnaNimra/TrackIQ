@@ -1,6 +1,6 @@
-"""Hardware detection and query utilities for TrackIQ."""
+"""Platform and hardware detection for TrackIQ."""
 
-from .gpu_common import (
+from .gpu import (
     query_nvidia_smi,
     parse_gpu_metrics,
     get_memory_metrics,

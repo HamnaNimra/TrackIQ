@@ -1,8 +1,9 @@
 """Core module for TrackIQ."""
 
-from .base import BaseAnalyzer, BaseBenchmark, BaseMonitor, AnalysisResult
+from .base import BaseAnalyzer, BaseBenchmark, BaseMonitor
 from .utils import DataLoader, LatencyStats, PerformanceComparator
-from .regression import RegressionDetector, RegressionThreshold, MetricComparison
+from trackiq.results import AnalysisResult
+from trackiq.compare import RegressionDetector, RegressionThreshold, MetricComparison
 from .efficiency import (
     EfficiencyMetrics,
     EfficiencyCalculator,

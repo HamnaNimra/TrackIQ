@@ -1,4 +1,4 @@
-﻿"""TrackIQ - Generic performance tracking and analysis library."""
+"""TrackIQ - Generic performance tracking and analysis library."""
 
 __version__ = "0.1.0"
 
@@ -26,7 +26,7 @@ from .core import (
     EfficiencyCalculator,
     BatchEfficiencyAnalyzer,
 )
-from .hardware import (
+from .platform import (
     query_nvidia_smi,
     parse_gpu_metrics,
     get_memory_metrics,
@@ -53,6 +53,13 @@ from .profiles import (
     get_profile_info,
     validate_profile_collector,
     ProfileValidationError,
+)
+from .runner import BenchmarkRunner
+from .errors import (
+    TrackIQError,
+    HardwareNotFoundError,
+    ConfigError,
+    DependencyError,
 )
 
 __all__ = [
@@ -97,4 +104,9 @@ __all__ = [
     "get_profile_info",
     "validate_profile_collector",
     "ProfileValidationError",
+    "BenchmarkRunner",
+    "TrackIQError",
+    "HardwareNotFoundError",
+    "ConfigError",
+    "DependencyError",
 ]

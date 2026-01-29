@@ -9,9 +9,12 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from enum import Enum
 
+from trackiq.errors import ProfileValidationError
+
 
 class CollectorType(Enum):
     """Types of collectors that can be used with profiles."""
+
     SYNTHETIC = "synthetic"
     NVML = "nvml"
     TEGRASTATS = "tegrastats"
@@ -143,11 +146,6 @@ def get_profile_info() -> Dict[str, Dict[str, Any]]:
         }
         for name, p in _PROFILE_REGISTRY.items()
     }
-
-
-class ProfileValidationError(Exception):
-    """Raised when profile validation fails."""
-    pass
 
 
 def validate_profile_collector(profile: Profile, collector_type: CollectorType) -> None:

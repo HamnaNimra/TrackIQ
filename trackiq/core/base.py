@@ -2,26 +2,8 @@
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
-from dataclasses import dataclass, field
-from datetime import datetime
 
-
-@dataclass
-class AnalysisResult:
-    """Base class for analysis results."""
-
-    name: str
-    timestamp: datetime = field(default_factory=datetime.now)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    raw_data: Any = None
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert result to dictionary."""
-        return {
-            "name": self.name,
-            "timestamp": self.timestamp.isoformat(),
-            "metrics": self.metrics,
-        }
+from trackiq.results import AnalysisResult
 
 
 class BaseAnalyzer(ABC):

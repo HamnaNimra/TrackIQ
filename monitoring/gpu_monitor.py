@@ -23,7 +23,7 @@ from typing import Optional, Dict
 # Import shared GPU utilities from autoperfpy package
 sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
 try:
-    from trackiq.hardware import get_performance_metrics
+    from trackiq.platform import get_performance_metrics
 
     _USE_SHARED_UTILS = True
 except ImportError:
