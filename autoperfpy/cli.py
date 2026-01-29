@@ -201,6 +201,14 @@ Environment Variables:
     pdf_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
     pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
+    # UI command (Streamlit dashboard)
+    ui_parser = subparsers.add_parser("ui", help="Launch interactive Streamlit dashboard")
+    ui_parser.add_argument("--data", "-d", help="Path to collector export JSON or CSV file")
+    ui_parser.add_argument("--port", "-p", type=int, default=8501, help="Port to run Streamlit on (default: 8501)")
+    ui_parser.add_argument("--host", default="localhost", help="Host to bind to (default: localhost)")
+    ui_parser.add_argument("--browser", action="store_true", default=True, help="Open browser automatically (default: True)")
+    ui_parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
+
     return parser
 
 
@@ -580,6 +588,58 @@ def run_report_html(args, config):
     return {"output_path": output_path}
 
 
+def run_ui(args):
+    """Launch Streamlit dashboard."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    # Get path to streamlit_app.py
+    ui_module = Path(__file__).parent / "ui" / "streamlit_app.py"
+
+    if not ui_module.exists():
+        print(f"Error: Streamlit app not found at {ui_module}", file=sys.stderr)
+        return 1
+
+    # Build streamlit command
+    cmd = [
+        sys.executable, "-m", "streamlit", "run",
+        str(ui_module),
+        "--server.port", str(args.port),
+        "--server.address", args.host,
+    ]
+
+    # Handle browser option
+    if args.no_browser:
+        cmd.extend(["--server.headless", "true"])
+
+    # Pass data file if provided
+    if args.data:
+        cmd.extend(["--", "--data", args.data])
+
+    print(f"Launching AutoPerfPy Dashboard...")
+    print(f"URL: http://{args.host}:{args.port}")
+
+    if args.data:
+        print(f"Data file: {args.data}")
+
+    print("\nPress Ctrl+C to stop the server\n")
+
+    try:
+        subprocess.run(cmd, check=True)
+    except KeyboardInterrupt:
+        print("\nDashboard stopped")
+    except subprocess.CalledProcessError as e:
+        print(f"Error launching Streamlit: {e}", file=sys.stderr)
+        print("\nMake sure Streamlit is installed: pip install streamlit plotly pandas")
+        return 1
+    except FileNotFoundError:
+        print("Error: Streamlit not found. Install with: pip install streamlit", file=sys.stderr)
+        return 1
+
+    return 0
+
+
 def run_report_pdf(args, config):
     """Generate PDF report."""
     import pandas as pd
@@ -890,6 +950,8 @@ def main():
                 result = run_report_html(args, config)
             elif args.report_type == "pdf":
                 result = run_report_pdf(args, config)
+        elif args.command == "ui":
+            return run_ui(args)
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
