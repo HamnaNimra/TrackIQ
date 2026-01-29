@@ -1,4 +1,4 @@
-"""Core utilities for AutoPerfPy."""
+"""Core utilities for TrackIQ."""
 
 import pandas as pd
 from typing import List, Dict, Any, Optional

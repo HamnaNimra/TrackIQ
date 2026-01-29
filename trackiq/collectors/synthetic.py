@@ -37,9 +37,11 @@ Example usage:
 import math
 import random
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from .base import CollectorBase, CollectorExport, CollectorSample
+from trackiq_core.stats import percentile as _percentile
+
+from .base import CollectorBase, CollectorExport
 
 
 class SyntheticCollector(CollectorBase):
@@ -66,52 +68,46 @@ class SyntheticCollector(CollectorBase):
     # Default configuration values
     DEFAULT_CONFIG = {
         # Warmup settings
-        "warmup_samples": 10,           # Number of samples in warmup period
-        "warmup_latency_factor": 2.0,   # Latency multiplier during warmup
-
+        "warmup_samples": 10,  # Number of samples in warmup period
+        "warmup_latency_factor": 2.0,  # Latency multiplier during warmup
         # Latency settings
-        "base_latency_ms": 25.0,        # Base inference latency
-        "latency_jitter_percent": 10.0, # Random jitter as percentage
-        "latency_spike_prob": 0.02,     # Probability of latency spike
-        "latency_spike_factor": 3.0,    # Spike multiplier
-
+        "base_latency_ms": 25.0,  # Base inference latency
+        "latency_jitter_percent": 10.0,  # Random jitter as percentage
+        "latency_spike_prob": 0.02,  # Probability of latency spike
+        "latency_spike_factor": 3.0,  # Spike multiplier
         # CPU settings
-        "base_cpu_percent": 45.0,       # Base CPU utilization
-        "cpu_noise_std": 8.0,           # Standard deviation of CPU noise
-        "cpu_correlation": 0.7,         # Correlation with previous sample
-
+        "base_cpu_percent": 45.0,  # Base CPU utilization
+        "cpu_noise_std": 8.0,  # Standard deviation of CPU noise
+        "cpu_correlation": 0.7,  # Correlation with previous sample
         # GPU settings
-        "base_gpu_percent": 75.0,       # Base GPU utilization
-        "gpu_noise_std": 5.0,           # Standard deviation of GPU noise
-        "gpu_correlation": 0.8,         # Correlation with previous sample
-
+        "base_gpu_percent": 75.0,  # Base GPU utilization
+        "gpu_noise_std": 5.0,  # Standard deviation of GPU noise
+        "gpu_correlation": 0.8,  # Correlation with previous sample
         # Memory settings
-        "base_memory_mb": 4096.0,       # Base memory usage in MB
-        "total_memory_mb": 16384.0,     # Total available memory
-        "memory_drift_rate": 0.5,       # MB per sample drift
-        "memory_spike_prob": 0.01,      # Probability of memory spike
-        "memory_spike_mb": 512.0,       # Size of memory spikes
-
+        "base_memory_mb": 4096.0,  # Base memory usage in MB
+        "total_memory_mb": 16384.0,  # Total available memory
+        "memory_drift_rate": 0.5,  # MB per sample drift
+        "memory_spike_prob": 0.01,  # Probability of memory spike
+        "memory_spike_mb": 512.0,  # Size of memory spikes
         # Power settings
-        "idle_power_w": 15.0,           # Idle power consumption
-        "max_power_w": 150.0,           # Maximum power consumption
-        "power_noise_std": 3.0,         # Power measurement noise
-
+        "idle_power_w": 15.0,  # Idle power consumption
+        "max_power_w": 150.0,  # Maximum power consumption
+        "power_noise_std": 3.0,  # Power measurement noise
         # Temperature settings
-        "base_temperature_c": 45.0,     # Base temperature
-        "max_temperature_c": 85.0,      # Maximum temperature
-        "thermal_inertia": 0.9,         # Temperature change smoothing
-
+        "base_temperature_c": 45.0,  # Base temperature
+        "max_temperature_c": 85.0,  # Maximum temperature
+        "thermal_inertia": 0.9,  # Temperature change smoothing
         # Throughput settings
-        "base_throughput_fps": 40.0,    # Base throughput in FPS
-        "throughput_noise_std": 2.0,    # Throughput variation
-
+        "base_throughput_fps": 40.0,  # Base throughput in FPS
+        "throughput_noise_std": 2.0,  # Throughput variation
         # Workload simulation
-        "workload_pattern": "steady",   # steady, cyclic, ramp, burst
-        "cycle_period_samples": 50,     # Period for cyclic pattern
+        "workload_pattern": "steady",  # steady, cyclic, ramp, burst
+        "cycle_period_samples": 50,  # Period for cyclic pattern
     }
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None, name: str = "SyntheticCollector"):
+    def __init__(
+        self, config: Optional[Dict[str, Any]] = None, name: str = "SyntheticCollector"
+    ):
         """Initialize the synthetic collector.
 
         Args:
@@ -191,7 +187,8 @@ class SyntheticCollector(CollectorBase):
             "gpu_percent": self._generate_gpu(workload_factor),
             "memory_used_mb": self._generate_memory(),
             "memory_total_mb": self._cfg["total_memory_mb"],
-            "memory_percent": (self._current_memory / self._cfg["total_memory_mb"]) * 100,
+            "memory_percent": (self._current_memory / self._cfg["total_memory_mb"])
+            * 100,
             "power_w": self._generate_power(),
             "temperature_c": self._generate_temperature(),
             "throughput_fps": self._generate_throughput(workload_factor),
@@ -380,7 +377,10 @@ class SyntheticCollector(CollectorBase):
         alpha = self._cfg["thermal_inertia"]
         self._prev_temp = alpha * self._prev_temp + (1 - alpha) * (target_temp + noise)
 
-        return max(self._cfg["base_temperature_c"], min(self._cfg["max_temperature_c"], self._prev_temp))
+        return max(
+            self._cfg["base_temperature_c"],
+            min(self._cfg["max_temperature_c"], self._prev_temp),
+        )
 
     def _generate_throughput(self, workload_factor: float) -> float:
         """Generate throughput inversely related to latency.
@@ -420,66 +420,60 @@ class SyntheticCollector(CollectorBase):
 
         # Exclude warmup samples for latency stats
         warmup_count = self._cfg["warmup_samples"]
-        steady_latencies = latencies[warmup_count:] if len(latencies) > warmup_count else latencies
+        steady_latencies = (
+            latencies[warmup_count:] if len(latencies) > warmup_count else latencies
+        )
 
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (self._end_time - self._start_time) if self._end_time else None,
+            "duration_seconds": (
+                (self._end_time - self._start_time) if self._end_time else None
+            ),
             "latency": {
-                "mean_ms": sum(steady_latencies) / len(steady_latencies) if steady_latencies else 0,
-                "min_ms": min(steady_latencies) if steady_latencies else 0,
-                "max_ms": max(steady_latencies) if steady_latencies else 0,
-                "p50_ms": self._percentile(steady_latencies, 50),
-                "p95_ms": self._percentile(steady_latencies, 95),
-                "p99_ms": self._percentile(steady_latencies, 99),
+                "mean_ms": (
+                    sum(steady_latencies) / len(steady_latencies)
+                    if steady_latencies
+                    else 0
+                ),
+                "min_ms": min(steady_latencies, default=0),
+                "max_ms": max(steady_latencies, default=0),
+                "p50_ms": _percentile(steady_latencies, 50),
+                "p95_ms": _percentile(steady_latencies, 95),
+                "p99_ms": _percentile(steady_latencies, 99),
             },
             "cpu": {
-                "mean_percent": sum(cpu_values) / len(cpu_values),
-                "max_percent": max(cpu_values),
+                "mean_percent": sum(cpu_values) / len(cpu_values) if cpu_values else 0,
+                "max_percent": max(cpu_values, default=0),
             },
             "gpu": {
-                "mean_percent": sum(gpu_values) / len(gpu_values),
-                "max_percent": max(gpu_values),
+                "mean_percent": sum(gpu_values) / len(gpu_values) if gpu_values else 0,
+                "max_percent": max(gpu_values, default=0),
             },
             "memory": {
-                "mean_mb": sum(memory_values) / len(memory_values),
-                "max_mb": max(memory_values),
-                "min_mb": min(memory_values),
+                "mean_mb": (
+                    sum(memory_values) / len(memory_values) if memory_values else 0
+                ),
+                "max_mb": max(memory_values, default=0),
+                "min_mb": min(memory_values, default=0),
             },
             "power": {
-                "mean_w": sum(power_values) / len(power_values),
-                "max_w": max(power_values),
+                "mean_w": sum(power_values) / len(power_values) if power_values else 0,
+                "max_w": max(power_values, default=0),
             },
             "temperature": {
-                "mean_c": sum(temp_values) / len(temp_values),
-                "max_c": max(temp_values),
+                "mean_c": sum(temp_values) / len(temp_values) if temp_values else 0,
+                "max_c": max(temp_values, default=0),
             },
             "throughput": {
-                "mean_fps": sum(throughput_values) / len(throughput_values),
-                "min_fps": min(throughput_values),
+                "mean_fps": (
+                    sum(throughput_values) / len(throughput_values)
+                    if throughput_values
+                    else 0
+                ),
+                "min_fps": min(throughput_values, default=0),
             },
         }
-
-    @staticmethod
-    def _percentile(data: List[float], percentile: float) -> float:
-        """Calculate percentile of a list of values.
-
-        Args:
-            data: List of numeric values
-            percentile: Percentile to calculate (0-100)
-
-        Returns:
-            Percentile value
-        """
-        if not data:
-            return 0.0
-        sorted_data = sorted(data)
-        index = (percentile / 100.0) * (len(sorted_data) - 1)
-        lower = int(index)
-        upper = min(lower + 1, len(sorted_data) - 1)
-        weight = index - lower
-        return sorted_data[lower] * (1 - weight) + sorted_data[upper] * weight
 
 
 __all__ = ["SyntheticCollector"]

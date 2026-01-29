@@ -82,6 +82,112 @@ def samples_to_dataframe(samples: List[Dict]) -> "pd.DataFrame":
     return df
 
 
+def ensure_throughput_column(df: "pd.DataFrame") -> None:
+    """Add throughput_fps column from latency_ms if missing (mutates df in place).
+
+    Used by report generators when building charts from samples/CSV that lack
+    throughput. Idempotent if throughput_fps already present.
+    """
+    if not PANDAS_AVAILABLE:
+        return
+    if "latency_ms" not in df.columns or "throughput_fps" in df.columns:
+        return
+    import numpy as np
+
+    df["throughput_fps"] = 1000.0 / df["latency_ms"].replace(0, np.nan)
+
+
+def compute_summary_from_dataframe(df: "pd.DataFrame") -> Dict[str, Any]:
+    """Compute summary statistics from a DataFrame when summary is missing.
+
+    Produces a dict compatible with chart helpers and report generators (e.g.
+    CSV upload, or export without precomputed summary).
+
+    Args:
+        df: DataFrame with sample data (latency_ms, throughput_fps, etc.)
+
+    Returns:
+        Summary dict with latency, throughput, cpu, gpu, memory, power, temperature.
+    """
+    if not PANDAS_AVAILABLE:
+        return {}
+    import numpy as np
+
+    def _pct(arr: "pd.Series", p: float) -> float:
+        arr = arr.dropna()
+        if len(arr) == 0:
+            return 0.0
+        return float(np.percentile(arr, p))
+
+    summary: Dict[str, Any] = {"sample_count": len(df)}
+
+    if "latency_ms" in df.columns:
+        lat = df["latency_ms"].dropna()
+        if len(lat) > 0:
+            summary["latency"] = {
+                "mean_ms": float(lat.mean()),
+                "min_ms": float(lat.min()),
+                "max_ms": float(lat.max()),
+                "p50_ms": _pct(lat, 50),
+                "p95_ms": _pct(lat, 95),
+                "p99_ms": _pct(lat, 99),
+            }
+
+    if "throughput_fps" in df.columns:
+        thr = df["throughput_fps"].dropna()
+        if len(thr) > 0:
+            summary["throughput"] = {
+                "mean_fps": float(thr.mean()),
+                "min_fps": float(thr.min()),
+                "max_fps": float(thr.max()),
+            }
+
+    if "cpu_percent" in df.columns:
+        cpu = df["cpu_percent"].dropna()
+        if len(cpu) > 0:
+            summary["cpu"] = {
+                "mean_percent": float(cpu.mean()),
+                "max_percent": float(cpu.max()),
+            }
+
+    if "gpu_percent" in df.columns:
+        gpu = df["gpu_percent"].dropna()
+        if len(gpu) > 0:
+            summary["gpu"] = {
+                "mean_percent": float(gpu.mean()),
+                "max_percent": float(gpu.max()),
+            }
+
+    if "memory_used_mb" in df.columns:
+        mem = df["memory_used_mb"].dropna()
+        if len(mem) > 0:
+            summary["memory"] = {
+                "mean_mb": float(mem.mean()),
+                "max_mb": float(mem.max()),
+                "min_mb": float(mem.min()),
+            }
+            if "memory_total_mb" in df.columns:
+                summary["memory"]["total_mb"] = float(df["memory_total_mb"].iloc[0])
+
+    if "power_w" in df.columns:
+        pwr = df["power_w"].dropna()
+        if len(pwr) > 0:
+            summary["power"] = {
+                "mean_w": float(pwr.mean()),
+                "max_w": float(pwr.max()),
+            }
+
+    if "temperature_c" in df.columns:
+        temp = df["temperature_c"].dropna()
+        if len(temp) > 0:
+            summary["temperature"] = {
+                "mean_c": float(temp.mean()),
+                "max_c": float(temp.max()),
+            }
+
+    return summary
+
+
 # -----------------------------------------------------------------------------
 # Latency Charts
 # -----------------------------------------------------------------------------
@@ -649,13 +755,20 @@ def add_interactive_charts_to_html_report(
         if len(plot_df_hist) > 0:
             hist, bin_edges = _histogram_bins(plot_df_hist.tolist(), nbins=20)
             if hist and len(bin_edges) > 1:
-                bin_labels = [f"{bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}" for i in range(len(bin_edges) - 1)]
+                bin_labels = [
+                    f"{bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}"
+                    for i in range(len(bin_edges) - 1)
+                ]
                 report.add_interactive_bar_chart(
                     labels=bin_labels,
                     datasets=[{"label": "Count", "data": hist}],
                     title="Latency Distribution",
                     section="Latency",
-                    description="Excluding warmup samples." if exclude_warmup else "Distribution of latency values.",
+                    description=(
+                        "Excluding warmup samples."
+                        if exclude_warmup
+                        else "Distribution of latency values."
+                    ),
                     x_label="Latency (ms)",
                     y_label="Count",
                 )
@@ -737,7 +850,9 @@ def add_interactive_charts_to_html_report(
         if "temperature_c" in plot_df.columns:
             report.add_interactive_line_chart(
                 labels=labels,
-                datasets=[{"label": "Temperature", "data": plot_df["temperature_c"].tolist()}],
+                datasets=[
+                    {"label": "Temperature", "data": plot_df["temperature_c"].tolist()}
+                ],
                 title="Temperature Over Time",
                 section="Power & Thermal",
                 description="Temperature (°C) vs time.",
@@ -755,7 +870,9 @@ def add_interactive_charts_to_html_report(
         labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
         report.add_interactive_line_chart(
             labels=labels,
-            datasets=[{"label": "Memory Used", "data": plot_df["memory_used_mb"].tolist()}],
+            datasets=[
+                {"label": "Memory Used", "data": plot_df["memory_used_mb"].tolist()}
+            ],
             title="Memory Over Time",
             section="Memory",
             description="Memory used (MB) vs time.",
@@ -793,16 +910,22 @@ def add_interactive_charts_to_html_report(
             datasets = [{"label": "Throughput", "data": thr_list}]
             mean_fps = summary.get("throughput", {}).get("mean_fps")
             if mean_fps is not None:
-                datasets.append({
-                    "label": "Mean",
-                    "data": [round(mean_fps, 2)] * len(thr_list),
-                })
+                datasets.append(
+                    {
+                        "label": "Mean",
+                        "data": [round(mean_fps, 2)] * len(thr_list),
+                    }
+                )
             report.add_interactive_line_chart(
                 labels=labels,
                 datasets=datasets,
                 title="Throughput Over Time",
                 section="Throughput",
-                description="Throughput (FPS) vs time, excluding warmup." if exclude_warmup else "Throughput (FPS) vs time.",
+                description=(
+                    "Throughput (FPS) vs time, excluding warmup."
+                    if exclude_warmup
+                    else "Throughput (FPS) vs time."
+                ),
                 x_label="Time (s)",
                 y_label="Throughput (FPS)",
                 enable_zoom=True,
@@ -841,7 +964,9 @@ def add_interactive_charts_to_html_report(
     if v is not None:
         rows.append(["Mean Memory", format(float(v), ".0f"), "MB"])
     if rows:
-        report.add_section("Summary Statistics", section_descriptions["Summary Statistics"])
+        report.add_section(
+            "Summary Statistics", section_descriptions["Summary Statistics"]
+        )
         report.add_table(
             title="Key metrics",
             headers=["Metric", "Value", "Unit"],
@@ -1090,6 +1215,8 @@ def add_charts_to_html_report(
 __all__ = [
     "is_available",
     "samples_to_dataframe",
+    "ensure_throughput_column",
+    "compute_summary_from_dataframe",
     "create_latency_timeline",
     "create_latency_histogram",
     "create_utilization_timeline",

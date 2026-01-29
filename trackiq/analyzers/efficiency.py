@@ -1,8 +1,8 @@
 """Efficiency analyzer for performance data."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from ..core import BaseAnalyzer, AnalysisResult, DataLoader
-from ..core.efficiency import EfficiencyCalculator, EfficiencyMetrics, BatchEfficiencyAnalyzer
+from ..core.efficiency import EfficiencyCalculator, BatchEfficiencyAnalyzer
 import numpy as np
 
 
@@ -71,15 +71,13 @@ class EfficiencyAnalyzer(BaseAnalyzer):
         for group_name, group_df in df.groupby(group_by):
             latencies = group_df[latency_col].tolist()
             power_samples = group_df[power_col].tolist()
+            avg_latency = np.mean(latencies)
 
             # Calculate throughput from latency if not provided
             if throughput_col and throughput_col in group_df.columns:
                 throughput = group_df[throughput_col].mean()
             else:
-                avg_latency = np.mean(latencies)
                 throughput = 1000.0 / avg_latency if avg_latency > 0 else 0.0
-
-            avg_latency = np.mean(latencies)
 
             efficiency_metrics = self.calculator.calculate_efficiency_metrics(
                 throughput=throughput,
@@ -134,12 +132,14 @@ class EfficiencyAnalyzer(BaseAnalyzer):
                 avg_latency = np.mean(latencies)
                 throughput = 1000.0 / avg_latency if avg_latency > 0 else 0.0
 
-            batch_results.append({
-                "batch_size": int(batch_size),
-                "throughput": throughput,
-                "latency_ms": np.mean(latencies),
-                "power_samples": power_samples,
-            })
+            batch_results.append(
+                {
+                    "batch_size": int(batch_size),
+                    "throughput": throughput,
+                    "latency_ms": np.mean(latencies),
+                    "power_samples": power_samples,
+                }
+            )
 
         analysis = self.batch_analyzer.analyze_batch_efficiency(batch_results)
         pareto_optimal = self.batch_analyzer.find_pareto_optimal(batch_results)
@@ -247,7 +247,7 @@ class EfficiencyAnalyzer(BaseAnalyzer):
         summary = {
             "total_analyses": len(self.results),
             "best_perf_per_watt": 0.0,
-            "lowest_energy_per_inference": float('inf'),
+            "lowest_energy_per_inference": float("inf"),
             "configurations_analyzed": [],
         }
 
@@ -261,7 +261,7 @@ class EfficiencyAnalyzer(BaseAnalyzer):
                         summary["best_perf_per_watt"] = perf_per_watt
                         summary["best_config_for_efficiency"] = config_name
 
-                    energy = metrics.get("energy_per_inference_joules", float('inf'))
+                    energy = metrics.get("energy_per_inference_joules", float("inf"))
                     if energy < summary["lowest_energy_per_inference"]:
                         summary["lowest_energy_per_inference"] = energy
                         summary["best_config_for_energy"] = config_name

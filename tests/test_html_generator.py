@@ -1,9 +1,5 @@
 """Tests for HTMLReportGenerator."""
 
-import os
-import tempfile
-from pathlib import Path
-
 # Use non-interactive backend so tests run without Tk (e.g. on Windows without tk/tcl)
 import matplotlib
 
@@ -462,7 +458,7 @@ class TestHTMLReportGeneratorIntegration:
 
         # Generate report
         output_path = tmp_path / "full_report.html"
-        result = report.generate_html(str(output_path))
+        report.generate_html(str(output_path))
 
         assert output_path.exists()
         content = output_path.read_text(encoding="utf-8")

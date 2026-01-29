@@ -1,12 +1,30 @@
 """Configuration management system for AutoPerfPy."""
 
+# TODO: Config/ConfigManager duplicate trackiq.config logic (get, update, to_dict,
+# load_yaml, load_json, save_*). Differ in defaults (DEFAULT_CONFIG) and update
+# semantics for nested dicts. Consider sharing a base or delegating to trackiq
+# with app-specific overrides.
+
 import os
-import json
 from typing import Any, Dict, Optional
 from dataclasses import asdict
-import yaml
 
-from .defaults import DEFAULT_CONFIG, BenchmarkConfig, LLMConfig, MonitoringConfig, AnalysisConfig, ProcessMonitorConfig
+from trackiq_core.config_io import (
+    ensure_parent_dir,
+    load_json_file,
+    load_yaml_file,
+    save_json_file,
+    save_yaml_file,
+)
+
+from .defaults import (
+    DEFAULT_CONFIG,
+    BenchmarkConfig,
+    LLMConfig,
+    MonitoringConfig,
+    AnalysisConfig,
+    ProcessMonitorConfig,
+)
 
 
 class Config:
@@ -107,9 +125,8 @@ class ConfigManager:
         Returns:
             Config object
         """
-        with open(filepath, "r") as f:
-            config_dict = yaml.safe_load(f)
-        return Config(config_dict)
+        config_dict = load_yaml_file(filepath)
+        return Config(config_dict or {})
 
     @staticmethod
     def load_json(filepath: str) -> Config:
@@ -121,9 +138,8 @@ class ConfigManager:
         Returns:
             Config object
         """
-        with open(filepath, "r") as f:
-            config_dict = json.load(f)
-        return Config(config_dict)
+        config_dict = load_json_file(filepath)
+        return Config(config_dict or {})
 
     @staticmethod
     def save_yaml(config: Config, filepath: str) -> None:
@@ -133,9 +149,8 @@ class ConfigManager:
             config: Config object to save
             filepath: Output YAML file path
         """
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w") as f:
-            yaml.dump(config.to_dict(), f, default_flow_style=False)
+        ensure_parent_dir(filepath)
+        save_yaml_file(filepath, config.to_dict())
 
     @staticmethod
     def save_json(config: Config, filepath: str) -> None:
@@ -145,9 +160,8 @@ class ConfigManager:
             config: Config object to save
             filepath: Output JSON file path
         """
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w") as f:
-            json.dump(config.to_dict(), f, indent=2)
+        ensure_parent_dir(filepath)
+        save_json_file(filepath, config.to_dict())
 
     @staticmethod
     def load_or_default(filepath: Optional[str] = None) -> Config:

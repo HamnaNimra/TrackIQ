@@ -5,7 +5,6 @@ import pytest
 from trackiq.compare import (
     RegressionDetector,
     RegressionThreshold,
-    MetricComparison,
 )
 
 

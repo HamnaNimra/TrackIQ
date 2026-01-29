@@ -295,7 +295,6 @@ class TestVariabilityAnalyzer:
 
         # Moderately consistent (CV 0.2-0.3)
         result = analyzer.analyze_from_list([10.0, 13.0, 7.0, 12.0, 8.0], "test3")
-        cv = result.metrics["test3"]["cv"]
         rating = result.metrics["test3"]["consistency_rating"]
         assert rating in ["consistent", "moderately_consistent", "high_variability"]
 

@@ -36,9 +36,11 @@ Authors:
 
 import random
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from .base import CollectorBase, CollectorExport, CollectorSample
+from trackiq_core.stats import percentile as _percentile, stats_from_values
+
+from .base import CollectorBase, CollectorExport
 
 
 class PsutilCollector(CollectorBase):
@@ -440,35 +442,17 @@ class PsutilCollector(CollectorBase):
             else self._samples
         )
 
-        def safe_stats(key: str) -> Dict[str, Optional[float]]:
-            """Calculate stats for a metric, handling missing values."""
-            values = [
-                s.metrics.get(key)
-                for s in steady_samples
-                if s.metrics.get(key) is not None
+        def _values_for(key: str):
+            """Extract non-None values for a metric key from steady samples."""
+            return [
+                val for s in steady_samples if (val := s.metrics.get(key)) is not None
             ]
-            if not values:
-                return {}
-            return {
-                "mean": sum(values) / len(values),
-                "min": min(values),
-                "max": max(values),
-            }
 
-        def percentile(key: str, p: float) -> float:
-            """Calculate percentile of a metric."""
-            values = [
-                s.metrics.get(key)
-                for s in steady_samples
-                if s.metrics.get(key) is not None
-            ]
-            if not values:
-                return 0.0
-            sorted_values = sorted(values)
-            k = (len(sorted_values) - 1) * (p / 100.0)
-            f = int(k)
-            c = f + 1 if f + 1 < len(sorted_values) else f
-            return sorted_values[f] + (k - f) * (sorted_values[c] - sorted_values[f])
+        def _safe_stats(key: str) -> Dict[str, Optional[float]]:
+            return stats_from_values(_values_for(key))
+
+        def _pct(key: str, p: float) -> float:
+            return _percentile(_values_for(key), p)
 
         summary = {
             "sample_count": len(self._samples),
@@ -478,24 +462,24 @@ class PsutilCollector(CollectorBase):
             ),
             # Latency statistics (required for UI latency charts)
             "latency": {
-                "mean_ms": safe_stats("latency_ms").get("mean", 0),
-                "min_ms": safe_stats("latency_ms").get("min", 0),
-                "max_ms": safe_stats("latency_ms").get("max", 0),
-                "p50_ms": percentile("latency_ms", 50),
-                "p95_ms": percentile("latency_ms", 95),
-                "p99_ms": percentile("latency_ms", 99),
+                "mean_ms": _safe_stats("latency_ms").get("mean", 0),
+                "min_ms": _safe_stats("latency_ms").get("min", 0),
+                "max_ms": _safe_stats("latency_ms").get("max", 0),
+                "p50_ms": _pct("latency_ms", 50),
+                "p95_ms": _pct("latency_ms", 95),
+                "p99_ms": _pct("latency_ms", 99),
             },
             # Throughput statistics (required for UI throughput charts)
             "throughput": {
-                "mean_fps": safe_stats("throughput_fps").get("mean", 0),
-                "min_fps": safe_stats("throughput_fps").get("min", 0),
-                "max_fps": safe_stats("throughput_fps").get("max", 0),
+                "mean_fps": _safe_stats("throughput_fps").get("mean", 0),
+                "min_fps": _safe_stats("throughput_fps").get("min", 0),
+                "max_fps": _safe_stats("throughput_fps").get("max", 0),
             },
             # CPU utilization
             "cpu": {
-                "mean_percent": safe_stats("cpu_percent").get("mean"),
-                "max_percent": safe_stats("cpu_percent").get("max"),
-                "min_percent": safe_stats("cpu_percent").get("min"),
+                "mean_percent": _safe_stats("cpu_percent").get("mean"),
+                "max_percent": _safe_stats("cpu_percent").get("max"),
+                "min_percent": _safe_stats("cpu_percent").get("min"),
             },
             # GPU utilization (placeholder for CPU-only collector)
             "gpu": {
@@ -504,25 +488,25 @@ class PsutilCollector(CollectorBase):
             },
             # Memory usage
             "memory": {
-                "mean_mb": safe_stats("memory_used_mb").get("mean"),
-                "max_mb": safe_stats("memory_used_mb").get("max"),
-                "min_mb": safe_stats("memory_used_mb").get("min"),
+                "mean_mb": _safe_stats("memory_used_mb").get("mean"),
+                "max_mb": _safe_stats("memory_used_mb").get("max"),
+                "min_mb": _safe_stats("memory_used_mb").get("min"),
                 "total_mb": (
                     steady_samples[0].metrics.get("memory_total_mb")
                     if steady_samples
                     else None
                 ),
-                "mean_percent": safe_stats("memory_percent").get("mean"),
+                "mean_percent": _safe_stats("memory_percent").get("mean"),
             },
             "swap": {
-                "mean_mb": safe_stats("swap_used_mb").get("mean"),
-                "max_mb": safe_stats("swap_used_mb").get("max"),
-                "mean_percent": safe_stats("swap_percent").get("mean"),
+                "mean_mb": _safe_stats("swap_used_mb").get("mean"),
+                "max_mb": _safe_stats("swap_used_mb").get("max"),
+                "mean_percent": _safe_stats("swap_percent").get("mean"),
             },
         }
 
         # Temperature stats if available
-        temp_stats = safe_stats("temperature_c")
+        temp_stats = _safe_stats("temperature_c")
         if temp_stats:
             summary["temperature"] = {
                 "mean_c": temp_stats.get("mean"),
@@ -530,7 +514,7 @@ class PsutilCollector(CollectorBase):
             }
 
         # Load average stats if available
-        load_stats = safe_stats("load_avg_1m")
+        load_stats = _safe_stats("load_avg_1m")
         if load_stats:
             summary["load_avg"] = {
                 "mean_1m": load_stats.get("mean"),
@@ -538,7 +522,7 @@ class PsutilCollector(CollectorBase):
             }
 
         # Process stats if available
-        process_cpu = safe_stats("process_cpu_percent")
+        process_cpu = _safe_stats("process_cpu_percent")
         if process_cpu:
             summary["process"] = {
                 "mean_cpu_percent": process_cpu.get("mean"),
@@ -630,7 +614,7 @@ class PsutilCollector(CollectorBase):
             True if psutil is installed
         """
         try:
-            import psutil
+            import psutil  # noqa: F401 - import for availability check only
 
             return True
         except ImportError:

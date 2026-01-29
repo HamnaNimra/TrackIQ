@@ -799,7 +799,7 @@ class PerformanceVisualizer:
         ax1 = axes[0]
         cv = [variability_data[w].get("cv_percent", 0) for w in workloads]
         colors1 = ["#E74C3C" if c > 20 else "#F39C12" if c > 10 else "#2ECC71" for c in cv]
-        bars1 = ax1.bar(x, cv, color=colors1, alpha=0.8)
+        ax1.bar(x, cv, color=colors1, alpha=0.8)
         ax1.axhline(y=10, color="orange", linestyle="--", alpha=0.5, label="Moderate (10%)")
         ax1.axhline(y=20, color="red", linestyle="--", alpha=0.5, label="High (20%)")
         ax1.set_xlabel("Workload", fontsize=10, fontweight="bold")
@@ -813,7 +813,7 @@ class PerformanceVisualizer:
         # Jitter
         ax2 = axes[1]
         jitter = [variability_data[w].get("jitter_ms", 0) for w in workloads]
-        bars2 = ax2.bar(x, jitter, color="#9B59B6", alpha=0.8)
+        ax2.bar(x, jitter, color="#9B59B6", alpha=0.8)
         ax2.set_xlabel("Workload", fontsize=10, fontweight="bold")
         ax2.set_ylabel("Jitter (ms)", fontsize=10, fontweight="bold")
         ax2.set_title("Latency Jitter", fontsize=12, fontweight="bold")
@@ -824,7 +824,7 @@ class PerformanceVisualizer:
         # IQR
         ax3 = axes[2]
         iqr = [variability_data[w].get("iqr_ms", 0) for w in workloads]
-        bars3 = ax3.bar(x, iqr, color="#3498DB", alpha=0.8)
+        ax3.bar(x, iqr, color="#3498DB", alpha=0.8)
         ax3.set_xlabel("Workload", fontsize=10, fontweight="bold")
         ax3.set_ylabel("IQR (ms)", fontsize=10, fontweight="bold")
         ax3.set_title("Interquartile Range", fontsize=12, fontweight="bold")

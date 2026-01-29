@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 import matplotlib.pyplot as plt
 
 
+# TODO: # Multi-Run Comparison Chart from charts.py is not implemented yet, need to implement it.
 class HTMLReportGenerator:
     """Generate interactive HTML reports from performance analysis."""
 

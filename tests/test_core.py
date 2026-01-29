@@ -1,7 +1,6 @@
 """Tests for AutoPerfPy core module."""
 
 import pytest
-import numpy as np
 import pandas as pd
 import tempfile
 from pathlib import Path

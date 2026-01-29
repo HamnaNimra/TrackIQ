@@ -1,7 +1,6 @@
 """Benchmark run orchestration."""
 
 import time
-from typing import Any, Optional
 
 from trackiq.collectors import CollectorBase, CollectorExport
 

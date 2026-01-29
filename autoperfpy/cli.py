@@ -39,7 +39,6 @@ import numpy as np
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 # Phase 5: auto/manual run
 from autoperfpy.device_config import (
@@ -1396,46 +1395,31 @@ def run_report_pdf(args, config):
             return {"output_path": output_path}
 
         if getattr(args, "csv", None):
+            from trackiq.reporting.charts import (
+                ensure_throughput_column,
+                compute_summary_from_dataframe,
+            )
+
             df = pd.read_csv(args.csv)
             report.add_metadata("Total Samples", str(len(df)))
 
-            # Build summary from CSV for charts
-            summary = {}
-            if "latency_ms" in df.columns:
-                summary["latency"] = {
-                    "mean_ms": df["latency_ms"].mean(),
-                    "p50_ms": df["latency_ms"].quantile(0.5),
-                    "p95_ms": df["latency_ms"].quantile(0.95),
-                    "p99_ms": df["latency_ms"].quantile(0.99),
-                    "min_ms": df["latency_ms"].min(),
-                    "max_ms": df["latency_ms"].max(),
-                }
+            if "throughput" in df.columns and "throughput_fps" not in df.columns:
+                df["throughput_fps"] = df["throughput"]
+            ensure_throughput_column(df)
+            summary = compute_summary_from_dataframe(df)
+
+            if summary.get("latency"):
                 report.add_summary_item(
                     "P99 Latency",
                     f"{summary['latency']['p99_ms']:.2f}",
                     "ms",
                     "neutral",
                 )
-            if "throughput" in df.columns:
-                summary["throughput"] = {
-                    "mean_fps": df["throughput"].mean(),
-                    "min_fps": df["throughput"].min(),
-                }
-            if "power_w" in df.columns:
-                summary["power"] = {
-                    "mean_w": df["power_w"].mean(),
-                    "max_w": df["power_w"].max(),
-                }
 
-            # Convert CSV rows to samples format for chart generation
-            samples = []
-            for _, row in df.iterrows():
-                samples.append(
-                    {
-                        "timestamp": row.get("timestamp", 0),
-                        "metrics": row.to_dict(),
-                    }
-                )
+            samples = [
+                {"timestamp": row.get("timestamp", 0), "metrics": row.to_dict()}
+                for _, row in df.iterrows()
+            ]
             if samples:
                 report.add_charts_from_data(samples, summary)
         else:

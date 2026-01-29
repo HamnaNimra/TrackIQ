@@ -1,10 +1,20 @@
 """Configuration management system for TrackIQ."""
 
+# TODO: autoperfpy.config duplicates Config/ConfigManager (get, update, to_dict,
+# load_yaml, load_json, etc.) with app-specific defaults and update semantics.
+# Consider extracting a shared base or allowing app config to extend this.
+
 import os
-import json
 from typing import Any, Dict, Optional
 from dataclasses import asdict
-import yaml
+
+from trackiq_core.config_io import (
+    ensure_parent_dir,
+    load_json_file,
+    load_yaml_file,
+    save_json_file,
+    save_yaml_file,
+)
 
 
 class Config:
@@ -80,8 +90,7 @@ class ConfigManager:
         Returns:
             Config object
         """
-        with open(filepath, "r") as f:
-            config_dict = yaml.safe_load(f)
+        config_dict = load_yaml_file(filepath)
         return Config(config_dict or {})
 
     @staticmethod
@@ -94,8 +103,7 @@ class ConfigManager:
         Returns:
             Config object
         """
-        with open(filepath, "r") as f:
-            config_dict = json.load(f)
+        config_dict = load_json_file(filepath)
         return Config(config_dict or {})
 
     @staticmethod
@@ -106,9 +114,8 @@ class ConfigManager:
             config: Config object to save
             filepath: Output YAML file path
         """
-        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
-        with open(filepath, "w") as f:
-            yaml.dump(config.to_dict(), f, default_flow_style=False)
+        ensure_parent_dir(filepath)
+        save_yaml_file(filepath, config.to_dict())
 
     @staticmethod
     def save_json(config: Config, filepath: str) -> None:
@@ -118,9 +125,8 @@ class ConfigManager:
             config: Config object to save
             filepath: Output JSON file path
         """
-        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
-        with open(filepath, "w") as f:
-            json.dump(config.to_dict(), f, indent=2)
+        ensure_parent_dir(filepath)
+        save_json_file(filepath, config.to_dict())
 
     @staticmethod
     def load_or_default(

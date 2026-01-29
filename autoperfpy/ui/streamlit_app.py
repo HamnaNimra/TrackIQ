@@ -24,7 +24,6 @@ Authors:
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -38,8 +37,6 @@ if __name__ == "__main__":
 
 try:
     import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
     from trackiq.reporting import charts as shared_charts
 
 except ImportError as e:
@@ -161,7 +158,10 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
     steady_samples = samples[warmup_samples:]
     latencies = [s["metrics"]["latency_ms"] for s in steady_samples]
 
-    def percentile(data, p):
+    def _percentile_nearest(data, p):
+        """Nearest-index percentile for demo summary (preserves existing behavior)."""
+        if not data:
+            return 0.0
         sorted_data = sorted(data)
         idx = int(p / 100 * (len(sorted_data) - 1))
         return sorted_data[idx]
@@ -180,9 +180,9 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
                 "mean_ms": round(sum(latencies) / len(latencies), 2),
                 "min_ms": round(min(latencies), 2),
                 "max_ms": round(max(latencies), 2),
-                "p50_ms": round(percentile(latencies, 50), 2),
-                "p95_ms": round(percentile(latencies, 95), 2),
-                "p99_ms": round(percentile(latencies, 99), 2),
+                "p50_ms": round(_percentile_nearest(latencies, 50), 2),
+                "p95_ms": round(_percentile_nearest(latencies, 95), 2),
+                "p99_ms": round(_percentile_nearest(latencies, 99), 2),
             },
             "cpu": {
                 "mean_percent": round(
@@ -270,25 +270,6 @@ def samples_to_dataframe(samples: List[Dict]) -> pd.DataFrame:
     if "timestamp" in df.columns:
         df["datetime"] = pd.to_datetime(df["timestamp"], unit="s")
     return df
-
-
-def safe_get(d: Dict, *keys, default=None):
-    """Safely get nested dictionary value.
-
-    Args:
-        d: Dictionary to search
-        *keys: Keys to traverse
-        default: Default value if key not found
-
-    Returns:
-        Value at nested key or default
-    """
-    for key in keys:
-        if isinstance(d, dict):
-            d = d.get(key, default)
-        else:
-            return default
-    return d if d is not None else default
 
 
 def get_platform_metadata() -> Dict[str, Any]:
@@ -460,99 +441,6 @@ def _run_synthetic_fallback_ui(
     return data
 
 
-def _compute_summary_from_df(df: pd.DataFrame) -> Dict[str, Any]:
-    """Compute summary statistics from a DataFrame when summary is missing.
-
-    Args:
-        df: DataFrame with sample data
-
-    Returns:
-        Summary dictionary compatible with chart functions
-    """
-    import numpy as np
-
-    def percentile(arr, p):
-        arr = arr.dropna()
-        if len(arr) == 0:
-            return 0
-        return float(np.percentile(arr, p))
-
-    summary = {"sample_count": len(df)}
-
-    # Latency
-    if "latency_ms" in df.columns:
-        lat = df["latency_ms"].dropna()
-        if len(lat) > 0:
-            summary["latency"] = {
-                "mean_ms": float(lat.mean()),
-                "min_ms": float(lat.min()),
-                "max_ms": float(lat.max()),
-                "p50_ms": percentile(lat, 50),
-                "p95_ms": percentile(lat, 95),
-                "p99_ms": percentile(lat, 99),
-            }
-
-    # Throughput
-    if "throughput_fps" in df.columns:
-        thr = df["throughput_fps"].dropna()
-        if len(thr) > 0:
-            summary["throughput"] = {
-                "mean_fps": float(thr.mean()),
-                "min_fps": float(thr.min()),
-                "max_fps": float(thr.max()),
-            }
-
-    # CPU
-    if "cpu_percent" in df.columns:
-        cpu = df["cpu_percent"].dropna()
-        if len(cpu) > 0:
-            summary["cpu"] = {
-                "mean_percent": float(cpu.mean()),
-                "max_percent": float(cpu.max()),
-            }
-
-    # GPU
-    if "gpu_percent" in df.columns:
-        gpu = df["gpu_percent"].dropna()
-        if len(gpu) > 0:
-            summary["gpu"] = {
-                "mean_percent": float(gpu.mean()),
-                "max_percent": float(gpu.max()),
-            }
-
-    # Memory
-    if "memory_used_mb" in df.columns:
-        mem = df["memory_used_mb"].dropna()
-        if len(mem) > 0:
-            summary["memory"] = {
-                "mean_mb": float(mem.mean()),
-                "max_mb": float(mem.max()),
-                "min_mb": float(mem.min()),
-            }
-            if "memory_total_mb" in df.columns:
-                summary["memory"]["total_mb"] = float(df["memory_total_mb"].iloc[0])
-
-    # Power
-    if "power_w" in df.columns:
-        pwr = df["power_w"].dropna()
-        if len(pwr) > 0:
-            summary["power"] = {
-                "mean_w": float(pwr.mean()),
-                "max_w": float(pwr.max()),
-            }
-
-    # Temperature
-    if "temperature_c" in df.columns:
-        temp = df["temperature_c"].dropna()
-        if len(temp) > 0:
-            summary["temperature"] = {
-                "mean_c": float(temp.mean()),
-                "max_c": float(temp.max()),
-            }
-
-    return summary
-
-
 def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -> tuple:
     """Generate HTML report directly without using CLI subprocess.
 
@@ -577,16 +465,11 @@ def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -
 
     # Build DataFrame from samples
     df = shared_charts.samples_to_dataframe(samples)
-
-    # Ensure throughput_fps exists
-    if "latency_ms" in df.columns and "throughput_fps" not in df.columns:
-        import numpy as np
-
-        df["throughput_fps"] = 1000.0 / df["latency_ms"].replace(0, np.nan)
+    shared_charts.ensure_throughput_column(df)
 
     # Compute summary from DataFrame if empty (e.g., from CSV upload)
     if not summary or not summary.get("latency"):
-        summary = _compute_summary_from_df(df)
+        summary = shared_charts.compute_summary_from_dataframe(df)
 
     # Create report generator
     report = HTMLReportGenerator(

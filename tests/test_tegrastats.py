@@ -9,7 +9,6 @@ from autoperfpy.analyzers.tegrastats import TegrastatsAnalyzer
 from autoperfpy.core.tegrastats import (
     TegrastatsParser,
     TegrastatsCalculator,
-    TegrastatsSnapshot,
     CPUCoreStats,
     GPUStats,
     MemoryStats,

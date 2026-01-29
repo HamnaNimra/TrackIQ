@@ -16,11 +16,12 @@ Usage:
 import sys
 import time
 import argparse
+import subprocess
 from collections import deque
 from datetime import datetime
 from typing import Optional, Dict
 
-# Import shared GPU utilities from autoperfpy package
+# Prefer trackiq.platform (or autoperfpy.monitoring re-export); fallback when unavailable.
 sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
 try:
     from trackiq.platform import get_performance_metrics
@@ -33,7 +34,40 @@ except ImportError:
         _USE_SHARED_UTILS = True
     except ImportError:
         _USE_SHARED_UTILS = False
-        import subprocess
+
+
+def _nvidia_smi_fallback() -> Optional[Dict[str, float]]:
+    """Query nvidia-smi when trackiq.platform is unavailable.
+
+    Mirrors trackiq.platform.gpu.get_performance_metrics (utilization, temperature, power).
+    Used only for standalone runs without the TrackIQ/AutoPerfPy env.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,temperature.gpu,power.draw",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            print(f"[ERROR] nvidia-smi failed: {result.stderr}")
+            return None
+        values = result.stdout.strip().split(", ")
+        return {
+            "utilization": float(values[0]),
+            "temperature": float(values[1]),
+            "power": float(values[2]),
+        }
+    except subprocess.TimeoutExpired:
+        print("[ERROR] nvidia-smi timeout")
+        return None
+    except Exception as e:
+        print(f"[ERROR] Failed to query GPU: {e}")
+        return None
 
 
 class GPUMonitor:
@@ -65,40 +99,10 @@ class GPUMonitor:
         self.power_history = deque(maxlen=window_size)
 
     def get_gpu_metrics(self) -> Optional[Dict[str, float]]:
-        """Query nvidia-smi for GPU metrics using shared utilities."""
+        """Query GPU metrics via trackiq.platform when available, else nvidia-smi fallback."""
         if _USE_SHARED_UTILS:
             return get_performance_metrics()
-
-        # Fallback if shared utilities not available
-        try:
-            result = subprocess.run(
-                [
-                    "nvidia-smi",
-                    "--query-gpu=utilization.gpu,temperature.gpu,power.draw",
-                    "--format=csv,noheader,nounits",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-
-            if result.returncode == 0:
-                values = result.stdout.strip().split(", ")
-                return {
-                    "utilization": float(values[0]),
-                    "temperature": float(values[1]),
-                    "power": float(values[2]),
-                }
-            else:
-                print(f"[ERROR] nvidia-smi failed: {result.stderr}")
-                return None
-
-        except subprocess.TimeoutExpired:
-            print("[ERROR] nvidia-smi timeout")
-            return None
-        except Exception as e:
-            print(f"[ERROR] Failed to query GPU: {e}")
-            return None
+        return _nvidia_smi_fallback()
 
     def detect_anomalies(self, current: Dict[str, float]) -> None:
         """Detect and log anomalies"""

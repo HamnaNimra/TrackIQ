@@ -79,3 +79,7 @@ _bench_results.json
 run_results.json
 benchmark_report.html
 docs/IMPROVEMENTS_RECOMMENDATIONS.md
+test_performance_report.html
+interactive_report.html
+.gitignore
+debug_test_report.html

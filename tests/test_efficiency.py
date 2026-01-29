@@ -2,7 +2,6 @@
 
 import pytest
 import tempfile
-import numpy as np
 from pathlib import Path
 
 from autoperfpy.core import (

@@ -175,14 +175,14 @@ class PDFReportGenerator:
             summary: Summary statistics dictionary
         """
         try:
-            from .charts import samples_to_dataframe, add_charts_to_html_report
+            from .charts import (
+                samples_to_dataframe,
+                ensure_throughput_column,
+                add_charts_to_html_report,
+            )
 
             df = samples_to_dataframe(samples)
-            # Add throughput_fps if missing
-            import numpy as np
-
-            if "latency_ms" in df.columns and "throughput_fps" not in df.columns:
-                df["throughput_fps"] = 1000.0 / df["latency_ms"].replace(0, np.nan)
+            ensure_throughput_column(df)
             add_charts_to_html_report(self._get_html_generator(), df, summary)
         except ImportError:
             pass  # charts module or dependencies not available

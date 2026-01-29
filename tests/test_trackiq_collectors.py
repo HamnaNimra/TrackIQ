@@ -5,8 +5,6 @@ import time
 import pytest
 
 from trackiq.collectors import (
-    CollectorBase,
-    CollectorSample,
     CollectorExport,
     SyntheticCollector,
 )

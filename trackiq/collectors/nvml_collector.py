@@ -41,6 +41,8 @@ import random
 import time
 from typing import Any, Dict, List, Optional
 
+from trackiq_core.stats import percentile as _percentile, stats_from_values
+
 from .base import CollectorBase, CollectorExport, CollectorSample
 
 
@@ -136,7 +138,8 @@ class NVMLCollector(CollectorBase):
         self._sample_index = 0
         self._psutil_available = False
         try:
-            import psutil
+            import psutil  # noqa: F401 - import for availability check only
+
             self._psutil_available = True
         except ImportError:
             pass
@@ -299,6 +302,7 @@ class NVMLCollector(CollectorBase):
         if self._cfg.get("include_cpu", True) and self._psutil_available:
             try:
                 import psutil
+
                 metrics["cpu_percent"] = psutil.cpu_percent(interval=None)
             except Exception:
                 metrics["cpu_percent"] = 0.0
@@ -327,13 +331,12 @@ class NVMLCollector(CollectorBase):
         metrics["latency_ms"] = max(1.0, latency)
 
         # Estimate throughput (inversely related to latency)
-        base_throughput = self._cfg.get("base_throughput_fps", 100.0)
         throughput_noise = self._cfg.get("throughput_noise_std", 2.0)
 
         # Throughput: frames per second = 1000ms / latency_ms
         throughput = 1000.0 / metrics["latency_ms"]
         # Scale by utilization (higher utilization = actually processing more)
-        throughput *= (0.5 + 0.5 * util_factor)
+        throughput *= 0.5 + 0.5 * util_factor
         throughput += random.gauss(0, throughput_noise)
 
         # Warmup has lower throughput
@@ -414,28 +417,11 @@ class NVMLCollector(CollectorBase):
             else self._samples
         )
 
-        def safe_stats(key: str, samples: List[CollectorSample]) -> Dict[str, float]:
-            """Calculate stats for a metric, handling None values."""
+        def _safe_stats(key: str, samples: List[CollectorSample]) -> Dict[str, float]:
             values = [
                 s.metrics.get(key) for s in samples if s.metrics.get(key) is not None
             ]
-            if not values:
-                return {}
-            return {
-                "mean": sum(values) / len(values),
-                "min": min(values),
-                "max": max(values),
-            }
-
-        def percentile(values: List[float], p: float) -> float:
-            """Calculate percentile of a list of values."""
-            if not values:
-                return 0.0
-            sorted_values = sorted(values)
-            k = (len(sorted_values) - 1) * (p / 100.0)
-            f = int(k)
-            c = f + 1 if f + 1 < len(sorted_values) else f
-            return sorted_values[f] + (k - f) * (sorted_values[c] - sorted_values[f])
+            return stats_from_values(values)
 
         # Extract latency values for percentile calculations
         latencies = [
@@ -463,39 +449,43 @@ class NVMLCollector(CollectorBase):
             },
             # Latency statistics (required for UI latency charts)
             "latency": {
-                "mean_ms": sum(latencies) / len(latencies) if latencies else 0,
-                "min_ms": min(latencies) if latencies else 0,
-                "max_ms": max(latencies) if latencies else 0,
-                "p50_ms": percentile(latencies, 50) if latencies else 0,
-                "p95_ms": percentile(latencies, 95) if latencies else 0,
-                "p99_ms": percentile(latencies, 99) if latencies else 0,
+                "mean_ms": (sum(latencies) / len(latencies)) if latencies else 0,
+                "min_ms": min(latencies, default=0),
+                "max_ms": max(latencies, default=0),
+                "p50_ms": _percentile(latencies, 50) if latencies else 0,
+                "p95_ms": _percentile(latencies, 95) if latencies else 0,
+                "p99_ms": _percentile(latencies, 99) if latencies else 0,
             },
             # Throughput statistics (required for UI throughput charts)
             "throughput": {
-                "mean_fps": sum(throughputs) / len(throughputs) if throughputs else 0,
-                "min_fps": min(throughputs) if throughputs else 0,
-                "max_fps": max(throughputs) if throughputs else 0,
+                "mean_fps": (sum(throughputs) / len(throughputs)) if throughputs else 0,
+                "min_fps": min(throughputs, default=0),
+                "max_fps": max(throughputs, default=0),
             },
             # CPU utilization (required for UI utilization charts)
             "cpu": {
-                "mean_percent": safe_stats("cpu_percent", steady_samples).get("mean", 0),
-                "max_percent": safe_stats("cpu_percent", steady_samples).get("max", 0),
+                "mean_percent": _safe_stats("cpu_percent", steady_samples).get(
+                    "mean", 0
+                ),
+                "max_percent": _safe_stats("cpu_percent", steady_samples).get("max", 0),
             },
             # GPU utilization
             "gpu": {
-                "mean_percent": safe_stats("gpu_percent", steady_samples).get("mean", 0),
-                "max_percent": safe_stats("gpu_percent", steady_samples).get("max", 0),
+                "mean_percent": _safe_stats("gpu_percent", steady_samples).get(
+                    "mean", 0
+                ),
+                "max_percent": _safe_stats("gpu_percent", steady_samples).get("max", 0),
             },
             # Memory utilization
             "memory_utilization": {
-                **safe_stats("memory_percent", steady_samples),
+                **_safe_stats("memory_percent", steady_samples),
                 "unit": "percent",
             },
             # Memory usage
             "memory": {
-                "mean_mb": safe_stats("memory_used_mb", steady_samples).get("mean"),
-                "max_mb": safe_stats("memory_used_mb", steady_samples).get("max"),
-                "min_mb": safe_stats("memory_used_mb", steady_samples).get("min"),
+                "mean_mb": _safe_stats("memory_used_mb", steady_samples).get("mean"),
+                "max_mb": _safe_stats("memory_used_mb", steady_samples).get("max"),
+                "min_mb": _safe_stats("memory_used_mb", steady_samples).get("min"),
                 "total_mb": (
                     steady_samples[0].metrics.get("memory_total_mb")
                     if steady_samples
@@ -504,13 +494,13 @@ class NVMLCollector(CollectorBase):
             },
             # Power consumption
             "power": {
-                "mean_w": safe_stats("power_w", steady_samples).get("mean"),
-                "max_w": safe_stats("power_w", steady_samples).get("max"),
+                "mean_w": _safe_stats("power_w", steady_samples).get("mean"),
+                "max_w": _safe_stats("power_w", steady_samples).get("max"),
             },
             # Temperature
             "temperature": {
-                "mean_c": safe_stats("temperature_c", steady_samples).get("mean"),
-                "max_c": safe_stats("temperature_c", steady_samples).get("max"),
+                "mean_c": _safe_stats("temperature_c", steady_samples).get("mean"),
+                "max_c": _safe_stats("temperature_c", steady_samples).get("max"),
             },
         }
 

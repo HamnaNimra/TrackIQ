@@ -1,12 +1,5 @@
 """Unit tests for trackiq config loader."""
 
-import json
-import tempfile
-from pathlib import Path
-
-import pytest
-import yaml
-
 from trackiq.config import Config, ConfigManager
 
 
