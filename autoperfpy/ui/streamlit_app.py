@@ -259,6 +259,50 @@ def safe_get(d: Dict, *keys, default=None):
     return d if d is not None else default
 
 
+def get_platform_metadata() -> Dict[str, Any]:
+    """Get device name, CPU, GPU, SoC, power mode for display."""
+    meta = {"device_name": "Unknown", "cpu": "Unknown", "gpu": "Unknown", "soc": "N/A", "power_mode": "N/A"}
+    try:
+        import platform as plat
+        meta["cpu"] = plat.processor() or plat.machine() or "Unknown"
+    except Exception:
+        pass
+    try:
+        from trackiq.platform import query_nvidia_smi, get_memory_metrics
+        name_out = query_nvidia_smi(["name"], timeout=2)
+        if name_out:
+            meta["gpu"] = name_out.strip()
+            meta["device_name"] = name_out.strip()
+        mem = get_memory_metrics(timeout=2)
+        if mem:
+            meta["power_mode"] = f"GPU mem: {mem.get('gpu_memory_percent', 0):.0f}%"
+    except Exception:
+        pass
+    return meta
+
+
+def run_benchmark_from_ui(duration_seconds: int, device: str, precision: str) -> Optional[Dict[str, Any]]:
+    """Run synthetic benchmark from UI and return export dict."""
+    try:
+        from trackiq.collectors import SyntheticCollector
+        from trackiq.runner import BenchmarkRunner
+    except ImportError:
+        return None
+    config = {"warmup_samples": 5, "seed": 42}
+    collector = SyntheticCollector(config=config)
+    runner = BenchmarkRunner(
+        collector,
+        duration_seconds=float(duration_seconds),
+        sample_interval_seconds=0.2,
+        quiet=True,
+    )
+    export = runner.run()
+    data = export.to_dict()
+    data["platform_metadata"] = get_platform_metadata()
+    data["inference_config"] = {"device": device, "precision": precision}
+    return data
+
+
 def render_summary_metrics(data: Dict[str, Any]):
     """Render summary metrics cards.
 
@@ -765,7 +809,7 @@ def main():
 
         data_source = st.radio(
             "Select data source",
-            options=["Upload File", "Demo Data"],
+            options=["Upload File", "Demo Data", "Run Benchmark"],
             index=1,  # Default to demo
         )
 
@@ -796,6 +840,29 @@ def main():
                             })
                     except Exception as e:
                         st.error(f"Error loading {uploaded_file.name}: {e}")
+        elif data_source == "Run Benchmark":
+            st.subheader("Benchmark settings")
+            device_ui = st.text_input("Device (e.g. 0 for GPU 0)", value="0", help="Device ID or name")
+            precision_ui = st.selectbox(
+                "Inference precision",
+                options=["fp32", "fp16", "int8"],
+                index=0,
+                help="Precision for inference (fp32, fp16, int8)",
+            )
+            duration_ui = st.number_input("Duration (seconds)", min_value=1, max_value=300, value=10)
+            if st.button("Run benchmark"):
+                with st.spinner("Running benchmark..."):
+                    run_data = run_benchmark_from_ui(duration_ui, device_ui, precision_ui)
+                if run_data:
+                    if "data_list" not in st.session_state:
+                        st.session_state["data_list"] = []
+                    st.session_state["data_list"] = [run_data]
+                    st.success("Benchmark complete. Results loaded below.")
+                    st.rerun()
+            if "data_list" in st.session_state and st.session_state["data_list"]:
+                data_list = st.session_state["data_list"]
+            else:
+                st.info("Click **Run benchmark** to run a short synthetic benchmark and load results.")
         else:
             st.info("Using synthetic demo data")
             data_list = [generate_synthetic_demo_data()]
@@ -809,7 +876,10 @@ def main():
 
     # Main content
     if not data_list:
-        st.info("Please upload a data file or select Demo Data to get started")
+        if data_source == "Run Benchmark":
+            st.info("Configure benchmark settings in the sidebar and click **Run benchmark** to start.")
+        else:
+            st.info("Please upload a data file or select Demo Data to get started")
 
         st.markdown("""
         ### Supported Data Formats
@@ -830,12 +900,12 @@ def main():
 
         ### Getting Started
 
-        1. Run a collector to generate data:
+        1. Run a benchmark from the UI (sidebar → Run Benchmark) or CLI:
            ```bash
            autoperfpy run --profile ci_smoke --export results.json
            ```
 
-        2. Upload the results file to visualize
+        2. Upload the results file or use Demo Data to visualize
         """)
         return
 
@@ -863,6 +933,27 @@ def main():
     if summary.get("duration_seconds"):
         st.markdown(f"**Duration:** {summary['duration_seconds']:.1f} seconds | "
                     f"**Samples:** {summary.get('sample_count', len(samples))}")
+
+    # Platform metadata (device name, CPU, GPU, SoC, power mode)
+    platform_meta = data.get("platform_metadata") or {}
+    inference_cfg = data.get("inference_config") or {}
+    if platform_meta or inference_cfg:
+        with st.expander("Platform & run metadata", expanded=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("**Device**")
+                st.text(platform_meta.get("device_name") or inference_cfg.get("device") or "N/A")
+                st.markdown("**GPU**")
+                st.text(platform_meta.get("gpu", "N/A"))
+            with c2:
+                st.markdown("**CPU**")
+                st.text(platform_meta.get("cpu", "N/A"))
+                st.markdown("**Precision**")
+                st.text(inference_cfg.get("precision") or "N/A")
+            with c3:
+                st.markdown("**SoC / Power**")
+                st.text(platform_meta.get("soc", "N/A"))
+                st.text(platform_meta.get("power_mode", "N/A"))
 
     st.divider()
 

@@ -750,27 +750,10 @@ def run_report_html(args, config):
             report.add_section("Data Overview", "Raw data samples")
 
     else:
-        # Generate sample report with demo data
-        report.add_summary_item("Status", "Demo Mode", "", "warning")
-        report.add_summary_item("Note", "No data file provided", "", "neutral")
-
-        report.add_section("Demo Visualizations", "Sample graphs with synthetic data")
-
-        # Demo latency percentiles
-        demo_latencies = {
-            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
-            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
-            "BERT": {"P50": 45.1, "P95": 52.3, "P99": 65.8},
-        }
-        fig = viz.plot_latency_percentiles(demo_latencies)
-        report.add_figure(fig, "Demo Latency Percentiles", "Demo Visualizations")
-
-        # Demo batch scaling
-        batch_sizes = [1, 2, 4, 8, 16]
-        latencies = [25.0, 28.5, 35.2, 48.1, 78.5]
-        throughputs = [40, 70, 114, 166, 204]
-        fig = viz.plot_latency_throughput_tradeoff(batch_sizes, latencies, throughputs)
-        report.add_figure(fig, "Demo Batch Scaling", "Demo Visualizations")
+        # No data: report only metadata, no static/demo graphs
+        report.add_summary_item("Status", "No data file provided", "", "warning")
+        report.add_summary_item("Note", "Provide --csv with benchmark data for dynamic graphs", "", "neutral")
+        report.add_section("No Data", "Run a benchmark and pass --csv to generate visualizations from current data.")
 
     output_path = report.generate_html(args.output)
     print(f"\n✅ HTML report generated: {output_path}")
@@ -889,13 +872,7 @@ def run_report_pdf(args, config):
             report.add_figure(fig, "Latency vs Throughput Trade-off")
 
     else:
-        # Generate sample report with demo data
-        demo_latencies = {
-            "ResNet50": {"P50": 25.5, "P95": 28.3, "P99": 32.1},
-            "YOLO": {"P50": 30.2, "P95": 35.8, "P99": 42.5},
-        }
-        fig = viz.plot_latency_percentiles(demo_latencies)
-        report.add_figure(fig, "Demo Latency Percentiles")
+        report.add_metadata("Status", "No data file provided. Use --csv for dynamic report content.")
 
     output_path = report.generate_pdf(args.output)
     print(f"\n✅ PDF report generated: {output_path}")
