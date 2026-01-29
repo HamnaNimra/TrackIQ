@@ -1,7 +1,9 @@
 """Command-line interface for AutoPerfPy."""
 
 import argparse
+import os
 import sys
+import time
 
 from autoperfpy.config import ConfigManager
 from autoperfpy.analyzers import (
@@ -15,6 +17,15 @@ from autoperfpy.analyzers import (
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from autoperfpy.monitoring import GPUMemoryMonitor
 from autoperfpy.reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
+from autoperfpy.collectors import SyntheticCollector
+from autoperfpy.profiles import (
+    get_profile,
+    list_profiles,
+    get_profile_info,
+    validate_profile_collector,
+    CollectorType,
+    ProfileValidationError,
+)
 import json
 
 
@@ -30,6 +41,15 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Run with a profile
+  autoperfpy run --profile automotive_safety --batch-size 4
+  autoperfpy run --profile ci_smoke --duration 10
+  autoperfpy run --profile edge_low_power --collector synthetic
+
+  # List available profiles
+  autoperfpy profiles --list
+  autoperfpy profiles --info automotive_safety
+
   # Latency analysis
   autoperfpy analyze latency --csv data.csv
   autoperfpy analyze logs --log performance.log --threshold 50
@@ -57,13 +77,48 @@ Examples:
   # Report generation
   autoperfpy report html --csv data.csv --output report.html --title "My Report"
   autoperfpy report pdf --csv data.csv --output report.pdf
+
+Environment Variables:
+  AUTOPERFPY_PROFILE    Default profile name
+  AUTOPERFPY_CONFIG     Default config file path
+  AUTOPERFPY_COLLECTOR  Default collector type (synthetic, nvml, tegrastats, psutil)
         """,
     )
 
     parser.add_argument("--config", help="Path to configuration file (YAML/JSON)")
     parser.add_argument("--output", help="Output file for results (JSON)")
+    parser.add_argument(
+        "--profile", "-p",
+        help="Performance profile to use (automotive_safety, edge_max_perf, edge_low_power, ci_smoke)"
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # Profiles command
+    profiles_parser = subparsers.add_parser("profiles", help="List and inspect performance profiles")
+    profiles_parser.add_argument("--list", "-l", action="store_true", help="List all available profiles")
+    profiles_parser.add_argument("--info", "-i", metavar="NAME", help="Show detailed info for a profile")
+
+    # Run command (profile-based execution)
+    run_parser = subparsers.add_parser("run", help="Run performance test with a profile")
+    run_parser.add_argument(
+        "--profile", "-p",
+        default=os.environ.get("AUTOPERFPY_PROFILE", "ci_smoke"),
+        help="Profile to use (default: ci_smoke or AUTOPERFPY_PROFILE env var)"
+    )
+    run_parser.add_argument(
+        "--collector", "-c",
+        default=os.environ.get("AUTOPERFPY_COLLECTOR", "synthetic"),
+        choices=["synthetic", "nvml", "tegrastats", "psutil"],
+        help="Collector type (default: synthetic)"
+    )
+    run_parser.add_argument("--duration", "-d", type=int, help="Override test duration (seconds)")
+    run_parser.add_argument("--batch-size", "-b", type=int, help="Override batch size")
+    run_parser.add_argument("--iterations", "-n", type=int, help="Override number of iterations")
+    run_parser.add_argument("--warmup", "-w", type=int, help="Override warmup iterations")
+    run_parser.add_argument("--export", "-e", metavar="FILE", help="Export results to JSON file")
+    run_parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output (summary only)")
+    run_parser.add_argument("--validate-only", action="store_true", help="Validate profile and exit")
 
     # Analyze commands
     analyze_parser = subparsers.add_parser("analyze", help="Analyze performance data")
@@ -584,6 +639,210 @@ def run_report_pdf(args, config):
     return {"output_path": output_path}
 
 
+def run_profiles(args):
+    """Handle profiles command."""
+    if args.info:
+        # Show detailed info for a specific profile
+        try:
+            profile = get_profile(args.info)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+        print(f"\nProfile: {profile.name}")
+        print("=" * 60)
+        print(f"Description: {profile.description}")
+        print(f"\nLatency Requirements:")
+        print(f"  Threshold (P99): {profile.latency_threshold_ms}ms")
+        print(f"  Target: {profile.latency_target_ms}ms")
+        print(f"  Percentiles: {profile.latency_percentiles}")
+        print(f"\nThroughput Requirements:")
+        print(f"  Minimum: {profile.throughput_min_fps} FPS")
+        print(f"  Target: {profile.throughput_target_fps} FPS")
+        print(f"\nConstraints:")
+        print(f"  Power Budget: {profile.power_budget_w}W" if profile.power_budget_w else "  Power Budget: None")
+        print(f"  Thermal Limit: {profile.thermal_limit_c}C")
+        print(f"  Memory Limit: {profile.memory_limit_mb}MB" if profile.memory_limit_mb else "  Memory Limit: None")
+        print(f"\nBenchmark Settings:")
+        print(f"  Batch Sizes: {profile.batch_sizes}")
+        print(f"  Warmup Iterations: {profile.warmup_iterations}")
+        print(f"  Test Iterations: {profile.test_iterations}")
+        print(f"  Runs: {profile.num_runs}")
+        print(f"\nMonitoring Settings:")
+        print(f"  Sample Interval: {profile.sample_interval_ms}ms")
+        print(f"  Duration: {profile.duration_seconds}s")
+        print(f"\nSupported Collectors:")
+        for c in profile.supported_collectors:
+            print(f"  - {c.value}")
+        print(f"\nTags: {', '.join(profile.tags)}")
+        return 0
+
+    # Default: list all profiles
+    print("\nAvailable Performance Profiles")
+    print("=" * 60)
+    info = get_profile_info()
+    for name, details in info.items():
+        print(f"\n{name}")
+        print(f"  {details['description']}")
+        print(f"  Latency threshold: {details['latency_threshold_ms']}ms | "
+              f"Throughput target: {details['throughput_target_fps']} FPS")
+        power = f"{details['power_budget_w']}W" if details['power_budget_w'] else "None"
+        print(f"  Power budget: {power} | Tags: {', '.join(details['tags'][:3])}")
+    print(f"\nUse 'autoperfpy profiles --info <name>' for detailed information.")
+    return 0
+
+
+def run_with_profile(args, config):
+    """Run performance test with a profile."""
+    # Get the profile
+    profile_name = args.profile
+    try:
+        profile = get_profile(profile_name)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return None
+
+    # Map collector string to CollectorType
+    collector_map = {
+        "synthetic": CollectorType.SYNTHETIC,
+        "nvml": CollectorType.NVML,
+        "tegrastats": CollectorType.TEGRASTATS,
+        "psutil": CollectorType.PSUTIL,
+    }
+    collector_type = collector_map.get(args.collector, CollectorType.SYNTHETIC)
+
+    # Validate collector compatibility
+    try:
+        validate_profile_collector(profile, collector_type)
+    except ProfileValidationError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return None
+
+    if args.validate_only:
+        print(f"Profile '{profile_name}' validated successfully with collector '{args.collector}'")
+        return {"status": "validated", "profile": profile_name, "collector": args.collector}
+
+    # Apply CLI overrides
+    duration = args.duration if args.duration else profile.duration_seconds
+    iterations = args.iterations if args.iterations else profile.test_iterations
+    warmup = args.warmup if args.warmup else profile.warmup_iterations
+
+    if not args.quiet:
+        print(f"\nRunning with profile: {profile_name}")
+        print("=" * 60)
+        print(f"Collector: {args.collector}")
+        print(f"Duration: {duration}s")
+        print(f"Iterations: {iterations}")
+        print(f"Warmup: {warmup}")
+        print(f"Latency Threshold: {profile.latency_threshold_ms}ms")
+        print("=" * 60)
+
+    # Create collector based on type
+    # TODO: Implement real collectors (NVML, tegrastats, psutil)
+    if collector_type != CollectorType.SYNTHETIC:
+        print(f"Warning: Collector '{args.collector}' not yet implemented. Using synthetic collector.")
+
+    # Configure synthetic collector based on profile
+    collector_config = profile.get_synthetic_config()
+    collector_config["warmup_samples"] = warmup
+
+    # Apply batch size override if provided
+    if args.batch_size:
+        collector_config["batch_sizes"] = [args.batch_size]
+
+    collector = SyntheticCollector(config=collector_config)
+
+    # Run collection
+    collector.start()
+    sample_count = 0
+    sample_interval = profile.sample_interval_ms / 1000.0  # Convert to seconds
+
+    start_time = time.time()
+    try:
+        while time.time() - start_time < duration and sample_count < iterations:
+            timestamp = time.time()
+            metrics = collector.sample(timestamp)
+
+            if not args.quiet:
+                warmup_marker = "[WARMUP]" if metrics.get("is_warmup") else ""
+                print(
+                    f"[{sample_count:4d}] "
+                    f"Latency: {metrics['latency_ms']:6.2f}ms | "
+                    f"GPU: {metrics['gpu_percent']:5.1f}% | "
+                    f"Power: {metrics['power_w']:5.1f}W "
+                    f"{warmup_marker}"
+                )
+
+            sample_count += 1
+            time.sleep(sample_interval)
+
+    except KeyboardInterrupt:
+        print("\nCollection interrupted by user")
+
+    collector.stop()
+
+    # Export and analyze results
+    export = collector.export()
+    summary = export.summary
+
+    # Check against profile thresholds
+    latency_p99 = summary.get("latency", {}).get("p99_ms", 0)
+    throughput = summary.get("throughput", {}).get("mean_fps", 0)
+    power_avg = summary.get("power", {}).get("mean_w", 0)
+
+    latency_pass = latency_p99 <= profile.latency_threshold_ms
+    throughput_pass = throughput >= profile.throughput_min_fps
+    power_pass = profile.power_budget_w is None or power_avg <= profile.power_budget_w
+
+    print(f"\n{'=' * 60}")
+    print("Results Summary")
+    print("=" * 60)
+    print(f"Samples Collected: {summary.get('sample_count', 0)}")
+
+    print(f"\nLatency (excluding warmup):")
+    latency_status = "PASS" if latency_pass else "FAIL"
+    print(f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]")
+    print(f"  P95: {summary.get('latency', {}).get('p95_ms', 0):.2f}ms")
+    print(f"  P50: {summary.get('latency', {}).get('p50_ms', 0):.2f}ms")
+    print(f"  Mean: {summary.get('latency', {}).get('mean_ms', 0):.2f}ms")
+
+    print(f"\nThroughput:")
+    throughput_status = "PASS" if throughput_pass else "FAIL"
+    print(f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]")
+
+    print(f"\nPower:")
+    if profile.power_budget_w:
+        power_status = "PASS" if power_pass else "FAIL"
+        print(f"  Mean: {power_avg:.1f}W (budget: {profile.power_budget_w}W) [{power_status}]")
+    else:
+        print(f"  Mean: {power_avg:.1f}W (no budget constraint)")
+
+    print(f"\nResource Utilization:")
+    print(f"  GPU: {summary.get('gpu', {}).get('mean_percent', 0):.1f}% avg")
+    print(f"  CPU: {summary.get('cpu', {}).get('mean_percent', 0):.1f}% avg")
+    print(f"  Memory: {summary.get('memory', {}).get('mean_mb', 0):.0f}MB avg")
+
+    overall_pass = latency_pass and throughput_pass and power_pass
+    status_emoji = "PASS" if overall_pass else "FAIL"
+    print(f"\nOverall Status: [{status_emoji}]")
+
+    # Save export if requested
+    if args.export:
+        export_data = export.to_dict()
+        export_data["profile"] = profile.name
+        export_data["validation"] = {
+            "latency_pass": latency_pass,
+            "throughput_pass": throughput_pass,
+            "power_pass": power_pass,
+            "overall_pass": overall_pass,
+        }
+        with open(args.export, "w") as f:
+            json.dump(export_data, f, indent=2)
+        print(f"\nResults exported to: {args.export}")
+
+    return export
+
+
 def main():
     """Main CLI entry point."""
     parser = setup_parser()
@@ -599,7 +858,13 @@ def main():
     # Route to appropriate handler
     result = None
     try:
-        if args.command == "analyze":
+        if args.command == "profiles":
+            return run_profiles(args)
+        elif args.command == "run":
+            result = run_with_profile(args, config)
+            if result is None:
+                return 1
+        elif args.command == "analyze":
             if args.analyze_type == "latency":
                 result = run_analyze_latency(args, config)
             elif args.analyze_type == "logs":
