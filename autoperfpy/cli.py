@@ -31,8 +31,19 @@ from autoperfpy.profiles import (
 )
 from trackiq.compare import RegressionDetector, RegressionThreshold
 from trackiq.errors import HardwareNotFoundError, DependencyError
+from trackiq.platform import get_all_devices, DeviceProfile
 import json
 import numpy as np
+
+# Phase 5: auto/manual run
+from autoperfpy.device_config import (
+    InferenceConfig,
+    get_devices_and_configs_auto,
+    enumerate_inference_configs,
+    DEFAULT_WARMUP_RUNS,
+    DEFAULT_ITERATIONS,
+)
+from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -112,27 +123,42 @@ Environment Variables:
         "--info", "-i", metavar="NAME", help="Show detailed info for a profile"
     )
 
-    # Run command (profile-based execution)
+    # Run command (profile-based, auto, or manual)
     run_parser = subparsers.add_parser(
-        "run", help="Run performance test with a profile"
+        "run", help="Run performance test (auto-detect devices, profile, or manual)"
     )
     run_parser.add_argument(
         "--profile",
         "-p",
-        default=os.environ.get("AUTOPERFPY_PROFILE", "ci_smoke"),
-        help="Profile to use (default: ci_smoke or AUTOPERFPY_PROFILE env var)",
+        default=None,
+        help="Profile to use (e.g. ci_smoke). If omitted, auto mode runs on all detected devices.",
+    )
+    run_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Automatic mode: detect all devices, enumerate configs, run benchmarks (default if no --profile)",
+    )
+    run_parser.add_argument(
+        "--manual",
+        action="store_true",
+        help="Manual mode: use --device, --collector, --precision, etc. for a single run",
     )
     run_parser.add_argument(
         "--collector",
         "-c",
         default=os.environ.get("AUTOPERFPY_COLLECTOR", "synthetic"),
         choices=["synthetic", "nvml", "tegrastats", "psutil"],
-        help="Collector type (default: synthetic)",
+        help="Collector type (manual mode; default: synthetic)",
     )
     run_parser.add_argument(
-        "--duration", "-d", type=int, help="Override test duration (seconds)"
+        "--duration",
+        "-d",
+        type=int,
+        help="Duration in seconds (default: 10 for auto, profile value for profile)",
     )
-    run_parser.add_argument("--batch-size", "-b", type=int, help="Override batch size")
+    run_parser.add_argument(
+        "--batch-size", "-b", type=int, help="Batch size (manual or override)"
+    )
     run_parser.add_argument(
         "--iterations", "-n", type=int, help="Override number of iterations"
     )
@@ -149,7 +175,9 @@ Environment Variables:
         "--validate-only", action="store_true", help="Validate profile and exit"
     )
     run_parser.add_argument(
-        "--device", "-D", help="Device ID or name (e.g. 0 for GPU 0, or device name)"
+        "--device",
+        "-D",
+        help="Device ID (e.g. nvidia_0, cpu_0) or GPU index (e.g. 0). Manual mode.",
     )
     run_parser.add_argument(
         "--precision",
@@ -157,6 +185,27 @@ Environment Variables:
         choices=["fp32", "fp16", "int8"],
         default="fp32",
         help="Inference precision (default: fp32)",
+    )
+    run_parser.add_argument(
+        "--devices",
+        metavar="IDS",
+        help="Auto mode: comma-separated device IDs to include (e.g. nvidia_0,cpu_0). Omit to use all.",
+    )
+    run_parser.add_argument(
+        "--precisions",
+        default="fp32,fp16",
+        help="Auto mode: comma-separated precisions (default: fp32,fp16)",
+    )
+    run_parser.add_argument(
+        "--batch-sizes",
+        default="1,4",
+        help="Auto mode: comma-separated batch sizes (default: 1,4)",
+    )
+    run_parser.add_argument(
+        "--max-configs-per-device",
+        type=int,
+        default=6,
+        help="Auto mode: max (precision x batch) configs per device (default: 6)",
     )
 
     # Compare command (uses trackiq comparison module)
@@ -1295,6 +1344,132 @@ def run_with_profile(args, _config):
     return export
 
 
+def _resolve_device(device_id: str) -> DeviceProfile:
+    """Resolve device ID (e.g. nvidia_0, cpu_0, 0) to a DeviceProfile."""
+    all_devices = get_all_devices()
+    device_id = (device_id or "").strip().lower()
+    if device_id.isdigit():
+        idx = int(device_id)
+        for d in all_devices:
+            if d.device_type == "nvidia_gpu" and d.index == idx:
+                return d
+        for d in all_devices:
+            if d.index == idx:
+                return d
+    for d in all_devices:
+        if d.device_id == device_id:
+            return d
+    return all_devices[0] if all_devices else None
+
+
+def run_auto_benchmarks_cli(args) -> int:
+    """Run automatic benchmarks on all detected devices and configs."""
+    devices = get_all_devices()
+    if not devices:
+        print(
+            "No devices detected. Use --manual --device cpu_0 for synthetic.",
+            file=sys.stderr,
+        )
+        return 1
+    device_filter = None
+    if getattr(args, "devices", None):
+        device_filter = [s.strip() for s in args.devices.split(",") if s.strip()]
+    if device_filter:
+        devices = [d for d in devices if d.device_id in device_filter]
+    if not devices:
+        print("No devices match --devices filter.", file=sys.stderr)
+        return 1
+    precisions = [
+        s.strip() for s in getattr(args, "precisions", "fp32,fp16").split(",")
+    ]
+    batch_sizes = []
+    for s in getattr(args, "batch_sizes", "1,4").split(","):
+        try:
+            batch_sizes.append(int(s.strip()))
+        except ValueError:
+            pass
+    if not batch_sizes:
+        batch_sizes = [1, 4]
+    pairs = enumerate_inference_configs(
+        devices,
+        precisions=precisions,
+        batch_sizes=batch_sizes,
+        max_configs_per_device=getattr(args, "max_configs_per_device", 6),
+    )
+    if not pairs:
+        print("No (device, config) pairs to run.", file=sys.stderr)
+        return 1
+    duration = float(getattr(args, "duration", None) or 10)
+    if not args.quiet:
+        print("Auto mode: running benchmarks on all detected devices and configs")
+        print("=" * 60)
+        print(f"Devices: {[d.device_id for d in devices]}")
+        print(f"Runs: {len(pairs)} (duration {duration}s each)")
+        print("=" * 60)
+    results = run_auto_benchmarks(
+        pairs,
+        duration_seconds=duration,
+        sample_interval_seconds=0.2,
+        quiet=args.quiet,
+        progress_callback=(
+            None
+            if args.quiet
+            else lambda i, t, d, c: print(
+                f"[{i}/{t}] {d.device_id} {c.precision} bs{c.batch_size}..."
+            )
+        ),
+    )
+    if args.export:
+        with open(args.export, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print(f"\n[OK] Exported {len(results)} runs to {args.export}")
+    for r in results:
+        if "error" in r:
+            print(f"[FAIL] {r.get('run_label', '?')}: {r['error']}", file=sys.stderr)
+        elif not args.quiet:
+            s = r.get("summary", {})
+            lat = s.get("latency", {}).get("p99_ms", "N/A")
+            thr = s.get("throughput", {}).get("mean_fps", "N/A")
+            print(f"[OK] {r.get('run_label', '?')} P99={lat}ms Throughput={thr} FPS")
+    return 0
+
+
+def run_manual_single(args):
+    """Run a single benchmark with manually selected device and config."""
+    device_id = getattr(args, "device", None) or "cpu_0"
+    device = _resolve_device(device_id)
+    if device is None:
+        print("No device found. Use --device nvidia_0, cpu_0, or 0.", file=sys.stderr)
+        return None
+    config = InferenceConfig(
+        precision=getattr(args, "precision", "fp32"),
+        batch_size=getattr(args, "batch_size", None) or 1,
+        accelerator=device.device_id,
+        streams=1,
+        warmup_runs=getattr(args, "warmup", None) or DEFAULT_WARMUP_RUNS,
+        iterations=getattr(args, "iterations", None) or DEFAULT_ITERATIONS,
+    )
+    duration = float(getattr(args, "duration", None) or 10)
+    if not args.quiet:
+        print("Manual mode: single run")
+        print("=" * 60)
+        print(f"Device: {device.device_name} ({device.device_id})")
+        print(f"Precision: {config.precision}  Batch: {config.batch_size}")
+        print("=" * 60)
+    result = run_single_benchmark(
+        device,
+        config,
+        duration_seconds=duration,
+        sample_interval_seconds=0.2,
+        quiet=args.quiet,
+    )
+    if args.export:
+        with open(args.export, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+        print(f"\n[OK] Exported to {args.export}")
+    return result
+
+
 def main():
     """Main CLI entry point."""
     parser = setup_parser()
@@ -1307,15 +1482,35 @@ def main():
     # Load configuration
     config = ConfigManager.load_or_default(args.config)
 
+    # Backward compat: run with profile from env if no --profile and no manual/device
+    if (
+        args.command == "run"
+        and args.profile is None
+        and getattr(args, "device", None) is None
+    ):
+        env_profile = os.environ.get("AUTOPERFPY_PROFILE")
+        if env_profile:
+            args.profile = env_profile
+
     # Route to appropriate handler
     result = None
     try:
         if args.command == "profiles":
             return run_profiles(args)
         elif args.command == "run":
-            result = run_with_profile(args, config)
-            if result is None:
-                return 1
+            if args.profile is not None:
+                result = run_with_profile(args, config)
+                if result is None:
+                    return 1
+            elif (
+                getattr(args, "manual", False)
+                or getattr(args, "device", None) is not None
+            ):
+                result = run_manual_single(args)
+                if result is None:
+                    return 1
+            else:
+                return run_auto_benchmarks_cli(args)
         elif args.command == "analyze":
             if args.analyze_type == "latency":
                 result = run_analyze_latency(args, config)
