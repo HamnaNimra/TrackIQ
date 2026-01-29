@@ -17,6 +17,11 @@ from .hardware import (
     query_nvidia_smi, parse_gpu_metrics, get_memory_metrics,
     get_performance_metrics, DEFAULT_NVIDIA_SMI_TIMEOUT,
 )
+from .reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
+from .profiles import (
+    Profile, CollectorType, get_profile, list_profiles, register_profile,
+    get_profile_info, validate_profile_collector, ProfileValidationError,
+)
 __all__ = [
     "Config", "ConfigManager",
     "CollectorBase", "CollectorSample", "CollectorExport",
@@ -27,4 +32,7 @@ __all__ = [
     "EfficiencyMetrics", "EfficiencyCalculator", "BatchEfficiencyAnalyzer",
     "query_nvidia_smi", "parse_gpu_metrics", "get_memory_metrics",
     "get_performance_metrics", "DEFAULT_NVIDIA_SMI_TIMEOUT",
+    "PerformanceVisualizer", "PDFReportGenerator", "HTMLReportGenerator",
+    "Profile", "CollectorType", "get_profile", "list_profiles", "register_profile",
+    "get_profile_info", "validate_profile_collector", "ProfileValidationError",
 ]
