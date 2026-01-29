@@ -5,6 +5,12 @@ __author__ = "Hamna Nimra"
 __description__ = "Performance analysis and benchmarking toolkit for NVIDIA platforms"
 
 from .config import Config, ConfigManager
+from .collectors import (
+    CollectorBase,
+    CollectorSample,
+    CollectorExport,
+    SyntheticCollector,
+)
 from .core import (
     BaseAnalyzer,
     BaseBenchmark,
@@ -37,10 +43,26 @@ from .analyzers import (
 from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from .reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
+from .profiles import (
+    Profile,
+    CollectorType,
+    get_profile,
+    list_profiles,
+    register_profile,
+    get_profile_info,
+    validate_profile_collector,
+    ProfileValidationError,
+)
 
 __all__ = [
     "Config",
     "ConfigManager",
+    # Collectors
+    "CollectorBase",
+    "CollectorSample",
+    "CollectorExport",
+    "SyntheticCollector",
+    # Core base classes
     "BaseAnalyzer",
     "BaseBenchmark",
     "BaseMonitor",
@@ -78,4 +100,13 @@ __all__ = [
     "PerformanceVisualizer",
     "PDFReportGenerator",
     "HTMLReportGenerator",
+    # Profiles
+    "Profile",
+    "CollectorType",
+    "get_profile",
+    "list_profiles",
+    "register_profile",
+    "get_profile_info",
+    "validate_profile_collector",
+    "ProfileValidationError",
 ]
