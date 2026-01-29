@@ -23,11 +23,17 @@ from typing import Optional, Dict
 # Import shared GPU utilities from autoperfpy package
 sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
 try:
-    from autoperfpy.monitoring._gpu_common import get_performance_metrics
+    from trackiq.hardware import get_performance_metrics
+
     _USE_SHARED_UTILS = True
 except ImportError:
-    _USE_SHARED_UTILS = False
-    import subprocess
+    try:
+        from autoperfpy.monitoring import get_performance_metrics
+
+        _USE_SHARED_UTILS = True
+    except ImportError:
+        _USE_SHARED_UTILS = False
+        import subprocess
 
 
 class GPUMonitor:
@@ -78,7 +84,11 @@ class GPUMonitor:
 
             if result.returncode == 0:
                 values = result.stdout.strip().split(", ")
-                return {"utilization": float(values[0]), "temperature": float(values[1]), "power": float(values[2])}
+                return {
+                    "utilization": float(values[0]),
+                    "temperature": float(values[1]),
+                    "power": float(values[2]),
+                }
             else:
                 print(f"[ERROR] nvidia-smi failed: {result.stderr}")
                 return None
@@ -107,17 +117,23 @@ class GPUMonitor:
         util_drop = avg_util - current["utilization"]
         if util_drop > self.drop_threshold:
             anomalies.append(
-                f"Utilization drop: {avg_util:.1f}% → {current['utilization']:.1f}% " f"(Δ {util_drop:.1f}%)"
+                f"Utilization drop: {avg_util:.1f}% → {current['utilization']:.1f}% "
+                f"(Δ {util_drop:.1f}%)"
             )
 
         # Check thermal throttling
         if current["temperature"] > 85:
-            anomalies.append(f"High temperature: {current['temperature']:.1f}°C (thermal throttling likely)")
+            anomalies.append(
+                f"High temperature: {current['temperature']:.1f}°C (thermal throttling likely)"
+            )
 
         # Check power anomalies
         power_drop = avg_power - current["power"]
         if power_drop > 20:  # >20W drop
-            anomalies.append(f"Power drop: {avg_power:.1f}W → {current['power']:.1f}W " f"(Δ {power_drop:.1f}W)")
+            anomalies.append(
+                f"Power drop: {avg_power:.1f}W → {current['power']:.1f}W "
+                f"(Δ {power_drop:.1f}W)"
+            )
 
         # Log anomalies
         if anomalies:
@@ -182,17 +198,38 @@ class GPUMonitor:
 
 def main():
     parser = argparse.ArgumentParser(description="Monitor GPU performance")
-    parser.add_argument("--window", type=int, default=10, help="Rolling average window size (default: 10)")
-    parser.add_argument("--threshold", type=float, default=20.0, help="Utilization drop threshold %% (default: 20.0)")
-    parser.add_argument("--interval", type=float, default=2.0, help="Sample interval in seconds (default: 2.0)")
     parser.add_argument(
-        "--logfile", type=str, default="gpu_anomalies.log", help="Anomaly log file (default: gpu_anomalies.log)"
+        "--window",
+        type=int,
+        default=10,
+        help="Rolling average window size (default: 10)",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=20.0,
+        help="Utilization drop threshold %% (default: 20.0)",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="Sample interval in seconds (default: 2.0)",
+    )
+    parser.add_argument(
+        "--logfile",
+        type=str,
+        default="gpu_anomalies.log",
+        help="Anomaly log file (default: gpu_anomalies.log)",
     )
 
     args = parser.parse_args()
 
     monitor = GPUMonitor(
-        window_size=args.window, drop_threshold=args.threshold, interval=args.interval, log_file=args.logfile
+        window_size=args.window,
+        drop_threshold=args.threshold,
+        interval=args.interval,
+        log_file=args.logfile,
     )
 
     monitor.run()
