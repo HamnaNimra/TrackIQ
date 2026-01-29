@@ -34,7 +34,35 @@ class HTMLReportGenerator:
         self.summary_items: List[Dict[str, Any]] = []
         self.tables: List[Dict[str, Any]] = []
         self.interactive_charts: List[Dict[str, Any]] = []
+        self.html_figures: List[Dict[str, Any]] = []
         self._chart_id_counter = 0
+
+    def add_html_figure(
+        self,
+        html_content: str,
+        caption: str = "",
+        section: str = "General",
+        description: str = "",
+    ) -> None:
+        """Add an HTML figure fragment (e.g. Plotly chart) to the report.
+
+        Use this to embed charts that match the UI (e.g. Plotly.to_html()).
+        Plotly.js will be included automatically when any HTML figures are present.
+
+        Args:
+            html_content: Raw HTML fragment (div + script from e.g. fig.to_html())
+            caption: Caption for the figure
+            section: Section name to group the figure under
+            description: Additional description text
+        """
+        self.html_figures.append(
+            {
+                "html": html_content,
+                "caption": caption,
+                "section": section,
+                "description": description,
+            }
+        )
 
     def add_metadata(self, key: str, value: Any) -> None:
         """Add metadata to report.
@@ -60,12 +88,14 @@ class HTMLReportGenerator:
             section: Section name to group the figure under
             description: Additional description text
         """
-        self.figures.append({
-            "figure": fig,
-            "caption": caption,
-            "section": section,
-            "description": description,
-        })
+        self.figures.append(
+            {
+                "figure": fig,
+                "caption": caption,
+                "section": section,
+                "description": description,
+            }
+        )
 
     def add_figures_from_visualizer(
         self,
@@ -108,12 +138,14 @@ class HTMLReportGenerator:
             unit: Unit of measurement
             status: Status indicator ('good', 'warning', 'critical', 'neutral')
         """
-        self.summary_items.append({
-            "label": label,
-            "value": value,
-            "unit": unit,
-            "status": status,
-        })
+        self.summary_items.append(
+            {
+                "label": label,
+                "value": value,
+                "unit": unit,
+                "status": status,
+            }
+        )
 
     def add_table(
         self,
@@ -130,12 +162,14 @@ class HTMLReportGenerator:
             rows: Table data rows
             section: Section to place the table in
         """
-        self.tables.append({
-            "title": title,
-            "headers": headers,
-            "rows": rows,
-            "section": section,
-        })
+        self.tables.append(
+            {
+                "title": title,
+                "headers": headers,
+                "rows": rows,
+                "section": section,
+            }
+        )
 
     def _get_next_chart_id(self) -> str:
         """Generate unique chart ID."""
@@ -165,18 +199,20 @@ class HTMLReportGenerator:
             y_label: Y-axis label
             enable_zoom: Enable zoom/pan functionality
         """
-        self.interactive_charts.append({
-            "id": self._get_next_chart_id(),
-            "type": "line",
-            "labels": labels,
-            "datasets": datasets,
-            "title": title,
-            "section": section,
-            "description": description,
-            "x_label": x_label,
-            "y_label": y_label,
-            "enable_zoom": enable_zoom,
-        })
+        self.interactive_charts.append(
+            {
+                "id": self._get_next_chart_id(),
+                "type": "line",
+                "labels": labels,
+                "datasets": datasets,
+                "title": title,
+                "section": section,
+                "description": description,
+                "x_label": x_label,
+                "y_label": y_label,
+                "enable_zoom": enable_zoom,
+            }
+        )
 
     def add_interactive_bar_chart(
         self,
@@ -203,19 +239,21 @@ class HTMLReportGenerator:
             horizontal: Use horizontal bars
             stacked: Stack bars
         """
-        self.interactive_charts.append({
-            "id": self._get_next_chart_id(),
-            "type": "bar",
-            "labels": labels,
-            "datasets": datasets,
-            "title": title,
-            "section": section,
-            "description": description,
-            "x_label": x_label,
-            "y_label": y_label,
-            "horizontal": horizontal,
-            "stacked": stacked,
-        })
+        self.interactive_charts.append(
+            {
+                "id": self._get_next_chart_id(),
+                "type": "bar",
+                "labels": labels,
+                "datasets": datasets,
+                "title": title,
+                "section": section,
+                "description": description,
+                "x_label": x_label,
+                "y_label": y_label,
+                "horizontal": horizontal,
+                "stacked": stacked,
+            }
+        )
 
     def add_interactive_scatter_chart(
         self,
@@ -239,17 +277,19 @@ class HTMLReportGenerator:
             y_label: Y-axis label
             enable_zoom: Enable zoom/pan functionality
         """
-        self.interactive_charts.append({
-            "id": self._get_next_chart_id(),
-            "type": "scatter",
-            "datasets": datasets,
-            "title": title,
-            "section": section,
-            "description": description,
-            "x_label": x_label,
-            "y_label": y_label,
-            "enable_zoom": enable_zoom,
-        })
+        self.interactive_charts.append(
+            {
+                "id": self._get_next_chart_id(),
+                "type": "scatter",
+                "datasets": datasets,
+                "title": title,
+                "section": section,
+                "description": description,
+                "x_label": x_label,
+                "y_label": y_label,
+                "enable_zoom": enable_zoom,
+            }
+        )
 
     def add_interactive_pie_chart(
         self,
@@ -272,18 +312,22 @@ class HTMLReportGenerator:
             colors: Optional list of colors for slices
             doughnut: Use doughnut style instead of pie
         """
-        self.interactive_charts.append({
-            "id": self._get_next_chart_id(),
-            "type": "doughnut" if doughnut else "pie",
-            "labels": labels,
-            "data": data,
-            "title": title,
-            "section": section,
-            "description": description,
-            "colors": colors,
-        })
+        self.interactive_charts.append(
+            {
+                "id": self._get_next_chart_id(),
+                "type": "doughnut" if doughnut else "pie",
+                "labels": labels,
+                "data": data,
+                "title": title,
+                "section": section,
+                "description": description,
+                "colors": colors,
+            }
+        )
 
-    def _fig_to_base64(self, fig: plt.Figure, format: str = "png", dpi: int = 150) -> str:
+    def _fig_to_base64(
+        self, fig: plt.Figure, format: str = "png", dpi: int = 150
+    ) -> str:
         """Convert matplotlib figure to base64 string.
 
         Args:
@@ -401,6 +445,11 @@ class HTMLReportGenerator:
             position: sticky;
             top: 10px;
             z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }}
 
         .nav ul {{
@@ -408,6 +457,8 @@ class HTMLReportGenerator:
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
+            margin: 0;
+            padding: 0;
         }}
 
         .nav a {{
@@ -422,6 +473,33 @@ class HTMLReportGenerator:
         .nav a:hover {{
             background: var(--accent-color);
             color: white;
+        }}
+
+        /* Print Button */
+        .print-btn {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .print-btn:hover {{
+            background: #3182ce;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(66, 153, 225, 0.4);
+        }}
+
+        .print-btn svg {{
+            width: 18px;
+            height: 18px;
         }}
 
         /* Summary Cards */
@@ -519,6 +597,29 @@ class HTMLReportGenerator:
             display: block;
         }}
 
+        .figure-html {{
+            width: 100%;
+            min-height: 400px;
+            height: 400px;
+        }}
+
+        .figure-html > div {{
+            width: 100% !important;
+            height: 100% !important;
+        }}
+
+        .figure-html .plotly, 
+        .figure-html .js-plotly-plot,
+        .figure-html .plot-container {{
+            width: 100% !important;
+            height: 100% !important;
+        }}
+
+        .figure-html .main-svg {{
+            width: 100% !important;
+            height: 100% !important;
+        }}
+
         .figure-caption {{
             padding: 15px;
             text-align: center;
@@ -578,16 +679,123 @@ class HTMLReportGenerator:
             font-size: 0.9rem;
         }}
 
-        /* Print Styles */
+        /* Print Styles - Ensures PDF matches HTML appearance */
         @media print {{
-            .nav {{
-                display: none;
+            * {{
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }}
+            
+            body {{
+                background: white !important;
+                font-size: 11pt !important;
+            }}
+            
+            .nav {{
+                display: none !important;
+            }}
+            
+            .container {{
+                max-width: 100% !important;
+                padding: 10px !important;
+            }}
+            
+            .header {{
+                background: linear-gradient(135deg, #4299e1 0%, #805ad5 100%) !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                padding: 25px !important;
+                margin-bottom: 20px !important;
+            }}
+            
+            .header h1 {{
+                font-size: 1.8rem !important;
+            }}
+            
             .section {{
                 break-inside: avoid;
+                page-break-inside: avoid;
+                margin-bottom: 15px !important;
             }}
-            .figure-card {{
+            
+            .section-header {{
+                padding: 12px 15px !important;
+            }}
+            
+            .section-content {{
+                padding: 15px !important;
+            }}
+            
+            .figure-card, .chart-card, .summary-card, .table-card {{
                 break-inside: avoid;
+                page-break-inside: avoid;
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+            }}
+            
+            .figure-grid, .chart-grid {{
+                grid-template-columns: 1fr !important;
+                gap: 15px !important;
+            }}
+            
+            .figure-html {{
+                min-height: 300px !important;
+                width: 100% !important;
+            }}
+            
+            .figure-html .plotly {{
+                width: 100% !important;
+                min-height: 300px !important;
+            }}
+            
+            /* Ensure Plotly charts are visible in print */
+            .js-plotly-plot, .plotly {{
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }}
+            
+            .footer {{
+                display: none !important;
+            }}
+            
+            /* Summary cards in print */
+            .summary-grid {{
+                display: grid !important;
+                grid-template-columns: repeat(4, 1fr) !important;
+                gap: 10px !important;
+            }}
+            
+            .summary-card {{
+                padding: 12px !important;
+            }}
+            
+            .summary-card .value {{
+                font-size: 1.4rem !important;
+            }}
+            
+            /* Ensure table is readable */
+            table {{
+                font-size: 9pt !important;
+            }}
+            
+            th, td {{
+                padding: 8px 10px !important;
+            }}
+            
+            /* Page breaks for major sections */
+            .section:not(:first-of-type) {{
+                page-break-before: auto;
+            }}
+            
+            /* Hide chart controls in print */
+            .chart-controls {{
+                display: none !important;
+            }}
+            
+            /* Ensure metadata section prints nicely */
+            .metadata-grid {{
+                grid-template-columns: repeat(2, 1fr) !important;
             }}
         }}
 
@@ -707,6 +915,14 @@ class HTMLReportGenerator:
             <ul>
                 {''.join(nav_items)}
             </ul>
+            <button class="print-btn" onclick="window.print()" title="Print or save as PDF">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print / Save as PDF
+            </button>
         </nav>
         """
 
@@ -722,13 +938,17 @@ class HTMLReportGenerator:
         cards_html = []
         for item in self.summary_items:
             status_class = item.get("status", "neutral")
-            unit_html = f'<span class="unit">{item["unit"]}</span>' if item.get("unit") else ""
-            cards_html.append(f"""
+            unit_html = (
+                f'<span class="unit">{item["unit"]}</span>' if item.get("unit") else ""
+            )
+            cards_html.append(
+                f"""
             <div class="summary-card {status_class}">
                 <div class="label">{item['label']}</div>
                 <div class="value">{item['value']}{unit_html}</div>
             </div>
-            """)
+            """
+            )
 
         return f"""
         <section class="section" id="summary">
@@ -764,7 +984,8 @@ class HTMLReportGenerator:
             description = fig_data.get("description", "")
 
             desc_html = f"<p>{description}</p>" if description else ""
-            figure_cards.append(f"""
+            figure_cards.append(
+                f"""
             <div class="figure-card">
                 <img src="data:image/png;base64,{img_base64}" alt="{caption}">
                 <div class="figure-caption">
@@ -772,7 +993,46 @@ class HTMLReportGenerator:
                     {desc_html}
                 </div>
             </div>
-            """)
+            """
+            )
+
+        return f"""
+        <div class="figure-grid">
+            {''.join(figure_cards)}
+        </div>
+        """
+
+    def _generate_html_figures_html(self, html_figures_list: List[Dict]) -> str:
+        """Generate HTML for pre-rendered HTML figure fragments (e.g. Plotly).
+
+        Args:
+            html_figures_list: List of dicts with html, caption, description
+
+        Returns:
+            Figure grid HTML string
+        """
+        if not html_figures_list:
+            return ""
+
+        figure_cards = []
+        for fig_data in html_figures_list:
+            html_content = fig_data.get("html", "")
+            caption = fig_data.get("caption", "")
+            description = fig_data.get("description", "")
+            desc_html = f"<p>{description}</p>" if description else ""
+            figure_cards.append(
+                f"""
+            <div class="figure-card">
+                <div class="figure-html">
+                    {html_content}
+                </div>
+                <div class="figure-caption">
+                    <h4>{caption}</h4>
+                    {desc_html}
+                </div>
+            </div>
+            """
+            )
 
         return f"""
         <div class="figure-grid">
@@ -800,7 +1060,8 @@ class HTMLReportGenerator:
                 cells = "".join(f"<td>{cell}</td>" for cell in row)
                 rows_html += f"<tr>{cells}</tr>"
 
-            tables_html.append(f"""
+            tables_html.append(
+                f"""
             <div class="table-container">
                 <h4 class="table-title">{table['title']}</h4>
                 <table>
@@ -812,7 +1073,8 @@ class HTMLReportGenerator:
                     </tbody>
                 </table>
             </div>
-            """)
+            """
+            )
 
         return "".join(tables_html)
 
@@ -831,7 +1093,9 @@ class HTMLReportGenerator:
         ]
 
         for key, value in self.metadata.items():
-            meta_items.append(f"<tr><td><strong>{key}</strong></td><td>{value}</td></tr>")
+            meta_items.append(
+                f"<tr><td><strong>{key}</strong></td><td>{value}</td></tr>"
+            )
 
         return f"""
         <section class="section" id="metadata">
@@ -868,7 +1132,9 @@ class HTMLReportGenerator:
             description = chart.get("description", "")
             enable_zoom = chart.get("enable_zoom", False)
 
-            desc_html = f'<p class="chart-description">{description}</p>' if description else ""
+            desc_html = (
+                f'<p class="chart-description">{description}</p>' if description else ""
+            )
 
             # Add zoom controls for supported chart types
             zoom_controls = ""
@@ -878,10 +1144,13 @@ class HTMLReportGenerator:
                 <div class="chart-controls">
                     <button class="chart-btn" onclick="resetZoom('{id}')">Reset Zoom</button>
                 </div>
-                """.format(id=chart_id)
+                """.format(
+                    id=chart_id
+                )
                 zoom_info = '<p class="zoom-info">Scroll to zoom, drag to pan</p>'
 
-            chart_cards.append(f"""
+            chart_cards.append(
+                f"""
             <div class="chart-card">
                 <div class="chart-header">
                     <h4 class="chart-title">{title}</h4>
@@ -893,7 +1162,8 @@ class HTMLReportGenerator:
                 {desc_html}
                 {zoom_info}
             </div>
-            """)
+            """
+            )
 
         return f"""
         <div class="chart-grid">
@@ -905,24 +1175,24 @@ class HTMLReportGenerator:
         """Get color palette for charts based on theme."""
         if self.theme == "dark":
             return [
-                "rgba(233, 69, 96, 0.8)",    # Red
-                "rgba(78, 205, 196, 0.8)",   # Teal
+                "rgba(233, 69, 96, 0.8)",  # Red
+                "rgba(78, 205, 196, 0.8)",  # Teal
                 "rgba(255, 209, 102, 0.8)",  # Yellow
                 "rgba(149, 117, 205, 0.8)",  # Purple
                 "rgba(100, 181, 246, 0.8)",  # Blue
                 "rgba(129, 199, 132, 0.8)",  # Green
                 "rgba(255, 138, 101, 0.8)",  # Orange
-                "rgba(240, 98, 146, 0.8)",   # Pink
+                "rgba(240, 98, 146, 0.8)",  # Pink
             ]
         else:
             return [
-                "rgba(66, 153, 225, 0.8)",   # Blue
-                "rgba(72, 187, 120, 0.8)",   # Green
-                "rgba(237, 137, 54, 0.8)",   # Orange
+                "rgba(66, 153, 225, 0.8)",  # Blue
+                "rgba(72, 187, 120, 0.8)",  # Green
+                "rgba(237, 137, 54, 0.8)",  # Orange
                 "rgba(159, 122, 234, 0.8)",  # Purple
                 "rgba(245, 101, 101, 0.8)",  # Red
-                "rgba(56, 178, 172, 0.8)",   # Teal
-                "rgba(236, 201, 75, 0.8)",   # Yellow
+                "rgba(56, 178, 172, 0.8)",  # Teal
+                "rgba(236, 201, 75, 0.8)",  # Yellow
                 "rgba(237, 100, 166, 0.8)",  # Pink
             ]
 
@@ -971,17 +1241,19 @@ class HTMLReportGenerator:
             datasets = []
             for i, ds in enumerate(chart.get("datasets", [])):
                 color = ds.get("color", colors[i % len(colors)])
-                datasets.append({
-                    "label": ds.get("label", f"Series {i+1}"),
-                    "data": ds.get("data", []),
-                    "borderColor": color,
-                    "backgroundColor": color.replace("0.8", "0.2"),
-                    "borderWidth": 2,
-                    "tension": 0.3,
-                    "pointRadius": 4,
-                    "pointHoverRadius": 6,
-                    "fill": False,
-                })
+                datasets.append(
+                    {
+                        "label": ds.get("label", f"Series {i+1}"),
+                        "data": ds.get("data", []),
+                        "borderColor": color,
+                        "backgroundColor": color.replace("0.8", "0.2"),
+                        "borderWidth": 2,
+                        "tension": 0.3,
+                        "pointRadius": 4,
+                        "pointHoverRadius": 6,
+                        "fill": False,
+                    }
+                )
 
             config = {
                 "type": "line",
@@ -1027,13 +1299,15 @@ class HTMLReportGenerator:
             datasets = []
             for i, ds in enumerate(chart.get("datasets", [])):
                 color = ds.get("color", colors[i % len(colors)])
-                datasets.append({
-                    "label": ds.get("label", f"Series {i+1}"),
-                    "data": ds.get("data", []),
-                    "backgroundColor": color,
-                    "borderColor": color.replace("0.8", "1"),
-                    "borderWidth": 1,
-                })
+                datasets.append(
+                    {
+                        "label": ds.get("label", f"Series {i+1}"),
+                        "data": ds.get("data", []),
+                        "backgroundColor": color,
+                        "borderColor": color.replace("0.8", "1"),
+                        "borderWidth": 1,
+                    }
+                )
 
             config = {
                 "type": "bar",
@@ -1069,14 +1343,16 @@ class HTMLReportGenerator:
             datasets = []
             for i, ds in enumerate(chart.get("datasets", [])):
                 color = ds.get("color", colors[i % len(colors)])
-                datasets.append({
-                    "label": ds.get("label", f"Series {i+1}"),
-                    "data": ds.get("data", []),
-                    "backgroundColor": color,
-                    "borderColor": color.replace("0.8", "1"),
-                    "pointRadius": 6,
-                    "pointHoverRadius": 8,
-                })
+                datasets.append(
+                    {
+                        "label": ds.get("label", f"Series {i+1}"),
+                        "data": ds.get("data", []),
+                        "backgroundColor": color,
+                        "borderColor": color.replace("0.8", "1"),
+                        "pointRadius": 6,
+                        "pointHoverRadius": 8,
+                    }
+                )
 
             config = {
                 "type": "scatter",
@@ -1116,18 +1392,22 @@ class HTMLReportGenerator:
                 }
 
         elif chart_type in ("pie", "doughnut"):
-            chart_colors = chart.get("colors") or colors[:len(chart.get("data", []))]
+            chart_colors = chart.get("colors") or colors[: len(chart.get("data", []))]
 
             config = {
                 "type": chart_type,
                 "data": {
                     "labels": chart.get("labels", []),
-                    "datasets": [{
-                        "data": chart.get("data", []),
-                        "backgroundColor": chart_colors,
-                        "borderWidth": 2,
-                        "borderColor": "#fff" if self.theme == "light" else "#16213e",
-                    }],
+                    "datasets": [
+                        {
+                            "data": chart.get("data", []),
+                            "backgroundColor": chart_colors,
+                            "borderWidth": 2,
+                            "borderColor": (
+                                "#fff" if self.theme == "light" else "#16213e"
+                            ),
+                        }
+                    ],
                 },
                 "options": {
                     **common_opts,
@@ -1203,7 +1483,7 @@ class HTMLReportGenerator:
                     const meta = chart.getDatasetMeta(index);
                     meta.hidden = !meta.hidden;
                     chart.update();
-                }"""
+                }""",
             )
 
             scripts += f"""
@@ -1239,7 +1519,10 @@ class HTMLReportGenerator:
         Returns:
             Path to generated HTML file
         """
-        os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
+        os.makedirs(
+            os.path.dirname(output_path) if os.path.dirname(output_path) else ".",
+            exist_ok=True,
+        )
 
         # Organize figures by section
         section_figures: Dict[str, List[Dict]] = {}
@@ -1248,6 +1531,14 @@ class HTMLReportGenerator:
             if section not in section_figures:
                 section_figures[section] = []
             section_figures[section].append(fig)
+
+        # Organize HTML figures by section (e.g. Plotly)
+        section_html_figures: Dict[str, List[Dict]] = {}
+        for fig in self.html_figures:
+            section = fig.get("section", "General")
+            if section not in section_html_figures:
+                section_html_figures[section] = []
+            section_html_figures[section].append(fig)
 
         # Organize tables by section
         section_tables: Dict[str, List[Dict]] = {}
@@ -1266,7 +1557,12 @@ class HTMLReportGenerator:
             section_charts[section].append(chart)
 
         # Get all unique section names
-        all_sections = set(section_figures.keys()) | set(section_tables.keys()) | set(section_charts.keys())
+        all_sections = (
+            set(section_figures.keys())
+            | set(section_tables.keys())
+            | set(section_charts.keys())
+            | set(section_html_figures.keys())
+        )
         for s in self.sections:
             all_sections.add(s["name"])
         section_names = sorted(all_sections)
@@ -1289,6 +1585,9 @@ class HTMLReportGenerator:
                 section_figures.get(section_name, []),
                 section_name,
             )
+            html_figures_html = self._generate_html_figures_html(
+                section_html_figures.get(section_name, [])
+            )
             tables_html = self._generate_tables_html(
                 section_tables.get(section_name, [])
             )
@@ -1296,8 +1595,9 @@ class HTMLReportGenerator:
                 section_charts.get(section_name, [])
             )
 
-            if figures_html or tables_html or charts_html:
-                sections_html.append(f"""
+            if figures_html or html_figures_html or tables_html or charts_html:
+                sections_html.append(
+                    f"""
                 <section class="section" id="{anchor}">
                     <div class="section-header">
                         <h2>{section_name}</h2>
@@ -1305,16 +1605,20 @@ class HTMLReportGenerator:
                     </div>
                     <div class="section-content">
                         {figures_html}
+                        {html_figures_html}
                         {charts_html}
                         {tables_html}
                     </div>
                 </section>
-                """)
+                """
+                )
 
         # Generate meta items for header
         meta_html = ""
         for key, value in list(self.metadata.items())[:4]:  # Show first 4 in header
-            meta_html += f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
+            meta_html += (
+                f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
+            )
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1330,6 +1634,7 @@ class HTMLReportGenerator:
     <style>
         {self._get_css_styles()}
     </style>
+    {('<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>' if self.html_figures else '')}
 </head>
 <body>
     <div class="container">
@@ -1393,6 +1698,20 @@ class HTMLReportGenerator:
                 }}
             }});
         }});
+
+        // Resize Plotly charts on window load and resize
+        if (typeof Plotly !== 'undefined') {{
+            window.addEventListener('load', function() {{
+                document.querySelectorAll('.js-plotly-plot').forEach(function(gd) {{
+                    Plotly.Plots.resize(gd);
+                }});
+            }});
+            window.addEventListener('resize', function() {{
+                document.querySelectorAll('.js-plotly-plot').forEach(function(gd) {{
+                    Plotly.Plots.resize(gd);
+                }});
+            }});
+        }}
     </script>
     {self._get_chartjs_scripts()}
 </body>
@@ -1412,6 +1731,7 @@ class HTMLReportGenerator:
         self.sections = []
         self.metadata = {}
         self.interactive_charts = []
+        self.html_figures = []
         self._chart_id_counter = 0
 
 

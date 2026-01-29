@@ -4,8 +4,9 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from autoperfpy.config import ConfigManager
 from autoperfpy.analyzers import (
@@ -35,6 +36,10 @@ from trackiq.compare import RegressionDetector, RegressionThreshold
 from trackiq.errors import HardwareNotFoundError, DependencyError
 from trackiq.platform import DeviceProfile, get_all_devices
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 # Phase 5: auto/manual run
 from autoperfpy.device_config import (
@@ -62,10 +67,10 @@ def setup_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with a profile
-  autoperfpy run --profile automotive_safety --batch-size 4
+  # Run with a profile (export JSON and/or CSV)
+  autoperfpy run --profile automotive_safety --batch-size 4 --export results.json --export-csv results.csv
   autoperfpy run --profile ci_smoke --duration 10
-  autoperfpy run --profile edge_low_power --collector synthetic
+  autoperfpy run --manual --device nvidia_0 --export-csv run.csv
 
   # List available profiles
   autoperfpy profiles --list
@@ -85,11 +90,10 @@ Examples:
   # Tegrastats analysis
   autoperfpy analyze tegrastats --log tegrastats.log
 
-  # Efficiency analysis
-  autoperfpy analyze efficiency --csv benchmark_data.csv
-
-  # Variability analysis
-  autoperfpy analyze variability --csv latency_data.csv
+  # Efficiency / variability (omit --csv to auto-run a quick benchmark)
+  autoperfpy analyze efficiency
+  autoperfpy analyze efficiency --csv benchmark_data.csv --device cpu_0
+  autoperfpy analyze variability --duration 15
 
   # Benchmarking
   autoperfpy benchmark batching --batch-sizes 1,4,8,16
@@ -98,9 +102,14 @@ Examples:
   # Monitoring
   autoperfpy monitor gpu --duration 300
 
-  # Report generation
+  # Report generation (omit --csv/--json to auto-run a quick benchmark)
+  autoperfpy report html
   autoperfpy report html --csv data.csv --output report.html --title "My Report"
-  autoperfpy report pdf --csv data.csv --output report.pdf
+  autoperfpy report pdf --device nvidia_0 --duration 15
+  autoperfpy report pdf --json results.json --output report.pdf
+
+Options:
+  --output-dir DIR      Put report/export files in DIR (default: output). Used by report and run.
 
 Environment Variables:
   AUTOPERFPY_PROFILE    Default profile name
@@ -111,6 +120,12 @@ Environment Variables:
 
     parser.add_argument("--config", help="Path to configuration file (YAML/JSON)")
     parser.add_argument("--output", help="Output file for results (JSON)")
+    parser.add_argument(
+        "--output-dir",
+        default="output",
+        metavar="DIR",
+        help="Directory for report and export files (default: output). Created if missing.",
+    )
     parser.add_argument(
         "--profile",
         "-p",
@@ -185,6 +200,11 @@ Environment Variables:
         "--export", "-e", metavar="FILE", help="Export results to JSON file"
     )
     run_parser.add_argument(
+        "--export-csv",
+        metavar="FILE",
+        help="Export run samples to CSV (timestamp, workload, batch_size, latency_ms, power_w, throughput). Use with analyze/report.",
+    )
+    run_parser.add_argument(
         "--quiet", "-q", action="store_true", help="Minimal output (summary only)"
     )
     run_parser.add_argument(
@@ -196,16 +216,16 @@ Environment Variables:
         help="Device ID (e.g. nvidia_0, cpu_0) or GPU index (e.g. 0). Manual mode.",
     )
     run_parser.add_argument(
+        "--devices",
+        metavar="IDS",
+        help="Comma-separated device IDs for auto mode (e.g. nvidia_0,cpu_0). Default: all detected.",
+    )
+    run_parser.add_argument(
         "--precision",
         "-P",
         choices=["fp32", "fp16", "int8"],
         default="fp32",
         help="Inference precision (default: fp32)",
-    )
-    run_parser.add_argument(
-        "--devices",
-        metavar="IDS",
-        help="Auto mode: comma-separated device IDs to include (e.g. nvidia_0,cpu_0). Omit to use all.",
     )
     run_parser.add_argument(
         "--precisions",
@@ -266,7 +286,17 @@ Environment Variables:
         "latency", help="Analyze percentile latencies"
     )
     latency_parser.add_argument(
-        "--csv", required=True, help="CSV file with benchmark data"
+        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
+    )
+    latency_parser.add_argument(
+        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
+    )
+    latency_parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=10,
+        help="Benchmark duration (s) when no --csv",
     )
 
     # Analyze logs
@@ -303,13 +333,37 @@ Environment Variables:
     eff_parser = analyze_subparsers.add_parser(
         "efficiency", help="Analyze power efficiency"
     )
-    eff_parser.add_argument("--csv", required=True, help="CSV file with benchmark data")
+    eff_parser.add_argument(
+        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
+    )
+    eff_parser.add_argument(
+        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
+    )
+    eff_parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=10,
+        help="Benchmark duration (s) when no --csv",
+    )
 
     # Analyze variability
     var_parser = analyze_subparsers.add_parser(
         "variability", help="Analyze latency variability"
     )
-    var_parser.add_argument("--csv", required=True, help="CSV file with latency data")
+    var_parser.add_argument(
+        "--csv", help="CSV file with latency data (default: run a quick benchmark)"
+    )
+    var_parser.add_argument(
+        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
+    )
+    var_parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=10,
+        help="Benchmark duration (s) when no --csv",
+    )
     var_parser.add_argument(
         "--column", default="latency_ms", help="Column name for latency values"
     )
@@ -368,7 +422,9 @@ Environment Variables:
     html_parser = report_subparsers.add_parser(
         "html", help="Generate interactive HTML report"
     )
-    html_parser.add_argument("--csv", help="CSV file with benchmark data")
+    html_parser.add_argument(
+        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
+    )
     html_parser.add_argument(
         "--json",
         "-j",
@@ -376,10 +432,32 @@ Environment Variables:
         help="JSON file from autoperfpy run --export (benchmark results)",
     )
     html_parser.add_argument(
+        "--device",
+        "-D",
+        help="Device to use when no --csv/--json (e.g. nvidia_0, cpu_0)",
+    )
+    html_parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=10,
+        help="Benchmark duration (s) when no data file",
+    )
+    html_parser.add_argument(
         "--output",
         "-o",
         default="performance_report.html",
         help="Output HTML file path",
+    )
+    html_parser.add_argument(
+        "--export-json",
+        metavar="FILE",
+        help="Also write report data as JSON (default: <output_basename>_data.json)",
+    )
+    html_parser.add_argument(
+        "--export-csv",
+        metavar="FILE",
+        help="Also write report data as CSV (default: <output_basename>_data.csv)",
     )
     html_parser.add_argument(
         "--title", default="Performance Analysis Report", help="Report title"
@@ -391,9 +469,39 @@ Environment Variables:
 
     # PDF report
     pdf_parser = report_subparsers.add_parser("pdf", help="Generate PDF report")
-    pdf_parser.add_argument("--csv", help="CSV file with benchmark data")
+    pdf_parser.add_argument(
+        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
+    )
+    pdf_parser.add_argument(
+        "--json",
+        "-j",
+        metavar="FILE",
+        help="JSON file from autoperfpy run --export (benchmark results)",
+    )
+    pdf_parser.add_argument(
+        "--device",
+        "-D",
+        help="Device to use when no --csv/--json (e.g. nvidia_0, cpu_0)",
+    )
+    pdf_parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=10,
+        help="Benchmark duration (s) when no data file",
+    )
     pdf_parser.add_argument(
         "--output", "-o", default="performance_report.pdf", help="Output PDF file path"
+    )
+    pdf_parser.add_argument(
+        "--export-json",
+        metavar="FILE",
+        help="Also write report data as JSON (default: <output_basename>_data.json)",
+    )
+    pdf_parser.add_argument(
+        "--export-csv",
+        metavar="FILE",
+        help="Also write report data as CSV (default: <output_basename>_data.csv)",
     )
     pdf_parser.add_argument(
         "--title", default="Performance Analysis Report", help="Report title"
@@ -430,21 +538,141 @@ Environment Variables:
     return parser
 
 
+def _run_default_benchmark(
+    device_id: Optional[str] = None,
+    duration_seconds: int = 10,
+) -> Tuple[dict, Optional[str], Optional[str]]:
+    """Run a short benchmark and return (data_dict, temp_csv_path, temp_json_path)."""
+    device = resolve_device(device_id or "cpu_0")
+    if not device:
+        raise HardwareNotFoundError(
+            "No devices detected. Use --device or install GPU/CPU support."
+        )
+    config = InferenceConfig(
+        precision=PRECISION_FP32,
+        batch_size=1,
+        accelerator=device.device_id,
+        streams=1,
+        warmup_runs=DEFAULT_WARMUP_RUNS,
+        iterations=min(100, max(20, duration_seconds * 10)),
+    )
+    result = run_single_benchmark(
+        device,
+        config,
+        duration_seconds=float(duration_seconds),
+        sample_interval_seconds=0.2,
+        quiet=True,
+    )
+    batch_size = result.get("inference_config", {}).get("batch_size", 1)
+    rows = []
+    for s in result.get("samples", []):
+        ts = s.get("timestamp", 0)
+        m = s.get("metrics", s) if isinstance(s, dict) else {}
+        lat = m.get("latency_ms", 0)
+        pwr = m.get("power_w", 0)
+        throughput = (1000 / lat) if lat else 0
+        rows.append((ts, "default", batch_size, lat, pwr, throughput))
+    path_csv = None
+    path_json = None
+    if rows:
+        fd_csv, path_csv = tempfile.mkstemp(suffix=".csv", prefix="autoperfpy_")
+        try:
+            with os.fdopen(fd_csv, "w", encoding="utf-8") as f:
+                f.write("timestamp,workload,batch_size,latency_ms,power_w,throughput\n")
+                for r in rows:
+                    f.write(",".join(str(x) for x in r) + "\n")
+        except Exception:
+            if path_csv and os.path.exists(path_csv):
+                try:
+                    os.unlink(path_csv)
+                except OSError:
+                    pass
+            path_csv = None
+    fd_json, path_json = tempfile.mkstemp(suffix=".json", prefix="autoperfpy_")
+    try:
+        with os.fdopen(fd_json, "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2)
+    except Exception:
+        if path_json and os.path.exists(path_json):
+            try:
+                os.unlink(path_json)
+            except OSError:
+                pass
+        path_json = None
+    return (result, path_csv, path_json)
+
+
+def _output_path(args, filename: str) -> str:
+    """Return path for an output file inside the output directory (create dir if needed)."""
+    out_dir = getattr(args, "output_dir", None) or "output"
+    os.makedirs(out_dir, exist_ok=True)
+    return os.path.join(out_dir, os.path.basename(filename))
+
+
+def _write_result_to_csv(result: dict, path: str) -> bool:
+    """Write run result samples to a CSV file. Returns True if written."""
+    samples = result.get("samples", [])
+    if not samples:
+        return False
+    batch_size = result.get("inference_config", {}).get("batch_size", 1)
+    rows = []
+    for s in samples:
+        ts = s.get("timestamp", 0)
+        m = s.get("metrics", s) if isinstance(s, dict) else {}
+        lat = m.get("latency_ms", 0)
+        pwr = m.get("power_w", 0)
+        throughput = (1000 / lat) if lat else 0
+        rows.append((ts, "default", batch_size, lat, pwr, throughput))
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("timestamp,workload,batch_size,latency_ms,power_w,throughput\n")
+        for r in rows:
+            f.write(",".join(str(x) for x in r) + "\n")
+    return True
+
+
 def run_analyze_latency(args, config):
     """Run latency analysis."""
-    analyzer = PercentileLatencyAnalyzer(config)
-    result = analyzer.analyze(args.csv)
+    csv_path = getattr(args, "csv", None)
+    cleanup_paths = []
+    if not csv_path:
+        print("No --csv provided; running a quick benchmark to generate data...")
+        try:
+            _, csv_path, json_path = _run_default_benchmark(
+                device_id=getattr(args, "device", None),
+                duration_seconds=getattr(args, "duration", 10),
+            )
+            if json_path:
+                cleanup_paths.append(json_path)
+            if not csv_path:
+                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
+                return None
+            cleanup_paths.append(csv_path)
+        except (HardwareNotFoundError, DependencyError) as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return None
+    try:
+        analyzer = PercentileLatencyAnalyzer(config)
+        result = analyzer.analyze(csv_path)
 
-    print("\n📊 Percentile Latency Analysis")
-    print("=" * 60)
-    for key, metrics in result.metrics.items():
-        print(f"\n{key}:")
-        print(f"  P99: {metrics.get('p99', 0):.2f}ms")
-        print(f"  P95: {metrics.get('p95', 0):.2f}ms")
-        print(f"  P50: {metrics.get('p50', 0):.2f}ms")
-        print(f"  Mean: {metrics.get('mean', 0):.2f}ms ± {metrics.get('std', 0):.2f}ms")
+        print("\n📊 Percentile Latency Analysis")
+        print("=" * 60)
+        for key, metrics in result.metrics.items():
+            print(f"\n{key}:")
+            print(f"  P99: {metrics.get('p99', 0):.2f}ms")
+            print(f"  P95: {metrics.get('p95', 0):.2f}ms")
+            print(f"  P50: {metrics.get('p50', 0):.2f}ms")
+            print(
+                f"  Mean: {metrics.get('mean', 0):.2f}ms ± {metrics.get('std', 0):.2f}ms"
+            )
 
-    return result
+        return result
+    finally:
+        for p in cleanup_paths:
+            try:
+                if p and os.path.exists(p):
+                    os.unlink(p)
+            except OSError:
+                pass
 
 
 def run_analyze_logs(args, config):
@@ -579,45 +807,101 @@ def run_analyze_tegrastats(args, _config):
 
 def run_analyze_efficiency(args, config):
     """Run efficiency analysis."""
-    analyzer = EfficiencyAnalyzer(config)
-    result = analyzer.analyze(args.csv)
+    csv_path = getattr(args, "csv", None)
+    cleanup_paths = []
+    if not csv_path:
+        print("No --csv provided; running a quick benchmark to generate data...")
+        try:
+            _, csv_path, json_path = _run_default_benchmark(
+                device_id=getattr(args, "device", None),
+                duration_seconds=getattr(args, "duration", 10),
+            )
+            if json_path:
+                cleanup_paths.append(json_path)
+            if not csv_path:
+                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
+                return None
+            cleanup_paths.append(csv_path)
+        except (HardwareNotFoundError, DependencyError) as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return None
+    try:
+        analyzer = EfficiencyAnalyzer(config)
+        result = analyzer.analyze(csv_path)
 
-    print("\n⚡ Efficiency Analysis")
-    print("=" * 60)
-    metrics = result.metrics
+        print("\n⚡ Efficiency Analysis")
+        print("=" * 60)
+        metrics = result.metrics
 
-    for workload, data in metrics.items():
-        if isinstance(data, dict):
-            print(f"\n{workload}:")
-            print(f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W")
-            print(f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J")
-            print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
-            print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
+        for workload, data in metrics.items():
+            if isinstance(data, dict):
+                print(f"\n{workload}:")
+                print(
+                    f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W"
+                )
+                print(
+                    f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J"
+                )
+                print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
+                print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
 
-    return result
+        return result
+    finally:
+        for p in cleanup_paths:
+            try:
+                if p and os.path.exists(p):
+                    os.unlink(p)
+            except OSError:
+                pass
 
 
 def run_analyze_variability(args, config):
     """Run variability analysis."""
-    analyzer = VariabilityAnalyzer(config)
-    result = analyzer.analyze(args.csv, latency_column=args.column)
+    csv_path = getattr(args, "csv", None)
+    cleanup_paths = []
+    if not csv_path:
+        print("No --csv provided; running a quick benchmark to generate data...")
+        try:
+            _, csv_path, json_path = _run_default_benchmark(
+                device_id=getattr(args, "device", None),
+                duration_seconds=getattr(args, "duration", 10),
+            )
+            if json_path:
+                cleanup_paths.append(json_path)
+            if not csv_path:
+                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
+                return None
+            cleanup_paths.append(csv_path)
+        except (HardwareNotFoundError, DependencyError) as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return None
+    try:
+        analyzer = VariabilityAnalyzer(config)
+        result = analyzer.analyze(csv_path, latency_column=args.column)
 
-    print("\n📈 Variability Analysis")
-    print("=" * 60)
-    metrics = result.metrics
+        print("\n📈 Variability Analysis")
+        print("=" * 60)
+        metrics = result.metrics
 
-    print(f"\nCoefficient of Variation: {metrics.get('cv_percent', 0):.2f}%")
-    print(f"Jitter (Std Dev): {metrics.get('jitter_ms', 0):.2f}ms")
-    print(f"IQR: {metrics.get('iqr_ms', 0):.2f}ms")
-    print(f"Outliers: {metrics.get('outlier_count', 0)}")
-    print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
+        print(f"\nCoefficient of Variation: {metrics.get('cv_percent', 0):.2f}%")
+        print(f"Jitter (Std Dev): {metrics.get('jitter_ms', 0):.2f}ms")
+        print(f"IQR: {metrics.get('iqr_ms', 0):.2f}ms")
+        print(f"Outliers: {metrics.get('outlier_count', 0)}")
+        print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
 
-    print("\n📊 Percentiles:")
-    print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
-    print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
-    print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
+        print("\n📊 Percentiles:")
+        print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
+        print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
+        print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
 
-    return result
+        return result
+    finally:
+        for p in cleanup_paths:
+            try:
+                if p and os.path.exists(p):
+                    os.unlink(p)
+            except OSError:
+                pass
 
 
 def run_benchmark_batching(args, config):
@@ -696,98 +980,151 @@ def run_monitor_gpu(args, config):
     return summary
 
 
+# Chart building is now in trackiq.reporting.charts
+# Import: from trackiq.reporting.charts import samples_to_dataframe, add_charts_to_html_report
+
+
 def run_report_html(args, config):
     """Generate HTML report."""
     import pandas as pd
 
-    report = HTMLReportGenerator(
-        title=args.title,
-        author=args.author,
-        theme=args.theme,
-    )
+    json_path_to_cleanup = None
+    if not getattr(args, "csv", None) and not getattr(args, "json", None):
+        print("No --csv/--json provided; running a quick benchmark to generate data...")
+        try:
+            _, _, json_path = _run_default_benchmark(
+                device_id=getattr(args, "device", None),
+                duration_seconds=getattr(args, "duration", 10),
+            )
+            if json_path:
+                args.json = json_path
+                json_path_to_cleanup = json_path
+        except (HardwareNotFoundError, DependencyError) as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return None
 
-    viz = PerformanceVisualizer()
-
-    # Add metadata
-    data_source = "Sample Data"
-    if args.csv:
-        data_source = args.csv
-    elif args.json:
-        data_source = args.json
-    report.add_metadata("Data Source", data_source)
-
-    if args.json:
-        # Load benchmark export JSON (from autoperfpy run --export)
-        with open(args.json, encoding="utf-8") as f:
-            data = json.load(f)
-        report.add_metadata("Collector", data.get("collector_name", "-"))
-        if data.get("profile"):
-            report.add_metadata("Profile", data["profile"])
-        summary = data.get("summary", {})
-        # Summary items from export summary (sample_count can be top-level in export)
-        sample_count = (
-            data.get("sample_count")
-            or summary.get("sample_count")
-            or len(data.get("samples", []))
+    try:
+        report = HTMLReportGenerator(
+            title=args.title,
+            author=args.author,
+            theme=args.theme,
         )
-        report.add_summary_item("Samples", sample_count, "", "neutral")
-        lat = summary.get("latency", {})
-        if lat:
-            report.add_summary_item(
-                "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
-            )
-            report.add_summary_item(
-                "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
-            )
-            report.add_summary_item(
-                "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
-            )
-        thr = summary.get("throughput", {})
-        if thr:
-            report.add_summary_item(
-                "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
-            )
-        pwr = summary.get("power", {})
-        if pwr and pwr.get("mean_w") is not None:
-            report.add_summary_item(
-                "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
-            )
-        if data.get("validation"):
-            v = data["validation"]
-            status = "good" if v.get("overall_pass") else "critical"
-            report.add_summary_item(
-                "Run Status", "PASS" if v.get("overall_pass") else "FAIL", "", status
-            )
-        # Latency percentiles figure from samples if available
-        samples = data.get("samples", [])
-        if samples:
-            latencies = []
-            for s in samples:
-                m = (
-                    s.get("metrics", s)
-                    if isinstance(s, dict)
-                    else getattr(s, "metrics", {})
-                )
-                if isinstance(m, dict) and "latency_ms" in m:
-                    latencies.append(m["latency_ms"])
-            if latencies:
-                report.add_section("Latency Analysis", "From benchmark samples")
-                by_run = {
-                    "Run": {
-                        "P50": float(np.percentile(latencies, 50)),
-                        "P95": float(np.percentile(latencies, 95)),
-                        "P99": float(np.percentile(latencies, 99)),
-                    }
-                }
-                fig = viz.plot_latency_percentiles(by_run)
-                report.add_figure(fig, "Latency Percentiles", "Latency Analysis")
-        output_path = report.generate_html(args.output)
-        print(f"\n[OK] HTML report generated: {output_path}")
-        return {"output_path": output_path}
 
-    if args.csv:
-        # Load and analyze data
-        df = pd.read_csv(args.csv)
+        viz = PerformanceVisualizer()
+
+        # Add metadata
+        data_source = "Sample Data"
+        if getattr(args, "csv", None):
+            data_source = args.csv
+        elif getattr(args, "json", None):
+            data_source = args.json
+        report.add_metadata("Data Source", data_source)
+
+        if getattr(args, "json", None):
+            # Load benchmark export JSON (from autoperfpy run --export)
+            with open(args.json, encoding="utf-8") as f:
+                data = json.load(f)
+            report.add_metadata("Collector", data.get("collector_name", "-"))
+            if data.get("profile"):
+                report.add_metadata("Profile", data["profile"])
+            summary = data.get("summary", {})
+            sample_count = (
+                data.get("sample_count")
+                or summary.get("sample_count")
+                or len(data.get("samples", []))
+            )
+            report.add_summary_item("Samples", sample_count, "", "neutral")
+            lat = summary.get("latency", {})
+            if lat:
+                report.add_summary_item(
+                    "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
+                )
+                report.add_summary_item(
+                    "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
+                )
+                report.add_summary_item(
+                    "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
+                )
+            thr = summary.get("throughput", {})
+            if thr:
+                report.add_summary_item(
+                    "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
+                )
+            pwr = summary.get("power", {})
+            if pwr and pwr.get("mean_w") is not None:
+                report.add_summary_item(
+                    "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
+                )
+            if data.get("validation"):
+                v = data["validation"]
+                status = "good" if v.get("overall_pass") else "critical"
+                report.add_summary_item(
+                    "Run Status",
+                    "PASS" if v.get("overall_pass") else "FAIL",
+                    "",
+                    status,
+                )
+            samples = data.get("samples", [])
+            if samples:
+                # Build DataFrame from samples and add UI-matching Plotly charts
+                from trackiq.reporting.charts import (
+                    samples_to_dataframe,
+                    add_charts_to_html_report,
+                )
+
+                _report_df = samples_to_dataframe(samples)
+                if (
+                    "latency_ms" in _report_df.columns
+                    and "throughput_fps" not in _report_df.columns
+                ):
+                    _report_df["throughput_fps"] = 1000.0 / _report_df[
+                        "latency_ms"
+                    ].replace(0, np.nan)
+                # Add UI-matching Plotly sections and charts
+                add_charts_to_html_report(report, _report_df, summary)
+                # Fallback: matplotlib latency percentiles if no Plotly was added
+                if not report.html_figures:
+                    latencies = []
+                    for s in samples:
+                        m = (
+                            s.get("metrics", s)
+                            if isinstance(s, dict)
+                            else getattr(s, "metrics", {})
+                        )
+                        if isinstance(m, dict) and "latency_ms" in m:
+                            latencies.append(m["latency_ms"])
+                    if latencies:
+                        report.add_section("Latency Analysis", "From benchmark samples")
+                        by_run = {
+                            "Run": {
+                                "P50": float(np.percentile(latencies, 50)),
+                                "P95": float(np.percentile(latencies, 95)),
+                                "P99": float(np.percentile(latencies, 99)),
+                            }
+                        }
+                        fig = viz.plot_latency_percentiles(by_run)
+                        report.add_figure(
+                            fig, "Latency Percentiles", "Latency Analysis"
+                        )
+            # Export JSON and CSV alongside report when we have run data (all in output dir)
+            base = os.path.splitext(os.path.basename(args.output))[0]
+            json_out = getattr(args, "export_json", None) or (base + "_data.json")
+            csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
+            json_out = _output_path(args, json_out)
+            csv_out = _output_path(args, csv_out)
+            with open(json_out, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            print(f"[OK] JSON exported to: {json_out}")
+            if _write_result_to_csv(data, csv_out):
+                print(f"[OK] CSV exported to: {csv_out}")
+            output_path = _output_path(args, args.output)
+            output_path = report.generate_html(output_path)
+            print(f"\n[OK] HTML report generated: {output_path}")
+            return {"output_path": output_path}
+
+        if getattr(args, "csv", None):
+            # Load and analyze data
+            df = pd.read_csv(args.csv)
 
         # Add summary items based on available columns
         if "latency_ms" in df.columns:
@@ -803,114 +1140,121 @@ def run_report_html(args, config):
             status = "good" if cv < 10 else "warning" if cv < 20 else "critical"
             report.add_summary_item("CV", f"{cv:.1f}", "%", status)
 
-        # Generate visualizations based on available data
-        if "workload" in df.columns and "latency_ms" in df.columns:
-            report.add_section(
-                "Latency Analysis", "Percentile latency comparisons across workloads"
-            )
+            # Generate visualizations based on available data
+            if "workload" in df.columns and "latency_ms" in df.columns:
+                report.add_section(
+                    "Latency Analysis",
+                    "Percentile latency comparisons across workloads",
+                )
 
-            latencies_by_workload = {}
-            for workload in df["workload"].unique():
-                wdf = df[df["workload"] == workload]["latency_ms"]
-                latencies_by_workload[workload] = {
-                    "P50": wdf.quantile(0.5),
-                    "P95": wdf.quantile(0.95),
-                    "P99": wdf.quantile(0.99),
-                }
-            fig = viz.plot_latency_percentiles(latencies_by_workload)
-            report.add_figure(
-                fig, "Latency Percentiles by Workload", "Latency Analysis"
-            )
-
-            # Distribution comparison
-            data_dict = {
-                w: df[df["workload"] == w]["latency_ms"].tolist()
-                for w in df["workload"].unique()
-            }
-            fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
-            report.add_figure(fig, "Latency Distribution", "Latency Analysis")
-
-        if "batch_size" in df.columns and "latency_ms" in df.columns:
-            report.add_section("Batch Analysis", "Performance vs batch size")
-
-            batch_df = (
-                df.groupby("batch_size")
-                .agg(
-                    {
-                        "latency_ms": "mean",
+                latencies_by_workload = {}
+                for workload in df["workload"].unique():
+                    wdf = df[df["workload"] == workload]["latency_ms"]
+                    latencies_by_workload[workload] = {
+                        "P50": wdf.quantile(0.5),
+                        "P95": wdf.quantile(0.95),
+                        "P99": wdf.quantile(0.99),
                     }
-                )
-                .reset_index()
-            )
-
-            # Calculate throughput if not present
-            if "throughput" not in df.columns:
-                batch_df["throughput"] = (
-                    batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
-                )
-            else:
-                batch_df["throughput"] = (
-                    df.groupby("batch_size")["throughput"].mean().values
+                fig = viz.plot_latency_percentiles(latencies_by_workload)
+                report.add_figure(
+                    fig, "Latency Percentiles by Workload", "Latency Analysis"
                 )
 
-            fig = viz.plot_latency_throughput_tradeoff(
-                batch_df["batch_size"].tolist(),
-                batch_df["latency_ms"].tolist(),
-                batch_df["throughput"].tolist(),
-            )
-            report.add_figure(fig, "Latency vs Throughput Trade-off", "Batch Analysis")
+                data_dict = {
+                    w: df[df["workload"] == w]["latency_ms"].tolist()
+                    for w in df["workload"].unique()
+                }
+                fig = viz.plot_distribution(
+                    data_dict, "Latency Distribution Comparison"
+                )
+                report.add_figure(fig, "Latency Distribution", "Latency Analysis")
 
-        if "power_w" in df.columns:
-            report.add_section(
-                "Power Analysis", "Power consumption and efficiency metrics"
-            )
+            if "batch_size" in df.columns and "latency_ms" in df.columns:
+                report.add_section("Batch Analysis", "Performance vs batch size")
 
-            if "workload" in df.columns:
-                workloads = df["workload"].unique().tolist()
-                power_values = [
-                    df[df["workload"] == w]["power_w"].mean() for w in workloads
-                ]
-                if "latency_ms" in df.columns:
-                    perf_values = [
-                        1000 / df[df["workload"] == w]["latency_ms"].mean()
-                        for w in workloads
-                    ]
-                    fig = viz.plot_power_vs_performance(
-                        workloads, power_values, perf_values
+                batch_df = (
+                    df.groupby("batch_size")
+                    .agg(
+                        {
+                            "latency_ms": "mean",
+                        }
                     )
-                    report.add_figure(fig, "Power vs Performance", "Power Analysis")
+                    .reset_index()
+                )
 
-        # Add data table
-        if len(df) > 0:
-            sample_df = df.head(20)
-            headers = sample_df.columns.tolist()
-            rows = sample_df.values.tolist()
-            # Format numeric values
-            rows = [
-                [f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows
-            ]
-            report.add_table(
-                "Sample Data (First 20 rows)", headers, rows, "Data Overview"
+                if "throughput" not in df.columns:
+                    batch_df["throughput"] = (
+                        batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
+                    )
+                else:
+                    batch_df["throughput"] = (
+                        df.groupby("batch_size")["throughput"].mean().values
+                    )
+
+                fig = viz.plot_latency_throughput_tradeoff(
+                    batch_df["batch_size"].tolist(),
+                    batch_df["latency_ms"].tolist(),
+                    batch_df["throughput"].tolist(),
+                )
+                report.add_figure(
+                    fig, "Latency vs Throughput Trade-off", "Batch Analysis"
+                )
+
+            if "power_w" in df.columns:
+                report.add_section(
+                    "Power Analysis", "Power consumption and efficiency metrics"
+                )
+
+                if "workload" in df.columns:
+                    workloads = df["workload"].unique().tolist()
+                    power_values = [
+                        df[df["workload"] == w]["power_w"].mean() for w in workloads
+                    ]
+                    if "latency_ms" in df.columns:
+                        perf_values = [
+                            1000 / df[df["workload"] == w]["latency_ms"].mean()
+                            for w in workloads
+                        ]
+                        fig = viz.plot_power_vs_performance(
+                            workloads, power_values, perf_values
+                        )
+                        report.add_figure(fig, "Power vs Performance", "Power Analysis")
+
+            if len(df) > 0:
+                sample_df = df.head(20)
+                headers = sample_df.columns.tolist()
+                rows = sample_df.values.tolist()
+                rows = [
+                    [f"{v:.2f}" if isinstance(v, float) else v for v in row]
+                    for row in rows
+                ]
+                report.add_table(
+                    "Sample Data (First 20 rows)", headers, rows, "Data Overview"
+                )
+                report.add_section("Data Overview", "Raw data samples")
+
+        else:
+            report.add_summary_item("Status", "No data file provided", "", "warning")
+            report.add_summary_item(
+                "Note",
+                "Provide --csv or --json for dynamic graphs, or run without options to auto-run a benchmark.",
+                "",
+                "neutral",
             )
-            report.add_section("Data Overview", "Raw data samples")
+            report.add_section(
+                "No Data",
+                "Run a benchmark and pass --csv/--json to generate visualizations.",
+            )
 
-    else:
-        # No data: report only metadata, no static/demo graphs
-        report.add_summary_item("Status", "No data file provided", "", "warning")
-        report.add_summary_item(
-            "Note",
-            "Provide --csv with benchmark data for dynamic graphs",
-            "",
-            "neutral",
-        )
-        report.add_section(
-            "No Data",
-            "Run a benchmark and pass --csv to generate visualizations from current data.",
-        )
-
-    output_path = report.generate_html(args.output)
-    print(f"\n[OK] HTML report generated: {output_path}")
-    return {"output_path": output_path}
+        output_path = report.generate_html(_output_path(args, args.output))
+        print(f"\n[OK] HTML report generated: {output_path}")
+        return {"output_path": output_path}
+    finally:
+        if json_path_to_cleanup and os.path.exists(json_path_to_cleanup):
+            try:
+                os.unlink(json_path_to_cleanup)
+            except OSError:
+                pass
 
 
 def run_ui(args):
@@ -973,64 +1317,142 @@ def run_ui(args):
 
 
 def run_report_pdf(args, config):
-    """Generate PDF report."""
+    """Generate PDF report (same content as HTML, converted to PDF)."""
     import pandas as pd
 
-    report = PDFReportGenerator(
-        title=args.title,
-        author=args.author,
-    )
-
-    viz = PerformanceVisualizer()
-
-    # Add metadata
-    report.add_metadata("Data Source", args.csv if args.csv else "Sample Data")
-
-    if args.csv:
-        df = pd.read_csv(args.csv)
-        report.add_metadata("Total Samples", str(len(df)))
-
-        # Generate visualizations based on available data
-        if "workload" in df.columns and "latency_ms" in df.columns:
-            latencies_by_workload = {}
-            for workload in df["workload"].unique():
-                wdf = df[df["workload"] == workload]["latency_ms"]
-                latencies_by_workload[workload] = {
-                    "P50": wdf.quantile(0.5),
-                    "P95": wdf.quantile(0.95),
-                    "P99": wdf.quantile(0.99),
-                }
-            fig = viz.plot_latency_percentiles(latencies_by_workload)
-            report.add_figure(fig, "Latency Percentiles by Workload")
-
-        if "batch_size" in df.columns and "latency_ms" in df.columns:
-            batch_df = (
-                df.groupby("batch_size").agg({"latency_ms": "mean"}).reset_index()
+    json_path_to_cleanup = None
+    if not getattr(args, "csv", None) and not getattr(args, "json", None):
+        print("No --csv/--json provided; running a quick benchmark to generate data...")
+        try:
+            _, _, json_path = _run_default_benchmark(
+                device_id=getattr(args, "device", None),
+                duration_seconds=getattr(args, "duration", 10),
             )
-            if "throughput" not in df.columns:
-                batch_df["throughput"] = (
-                    batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
-                )
-            else:
-                batch_df["throughput"] = (
-                    df.groupby("batch_size")["throughput"].mean().values
-                )
+            if json_path:
+                args.json = json_path
+                json_path_to_cleanup = json_path
+        except (HardwareNotFoundError, DependencyError) as e:
+            print(f"❌ Error: {e}", file=sys.stderr)
+            return None
 
-            fig = viz.plot_latency_throughput_tradeoff(
-                batch_df["batch_size"].tolist(),
-                batch_df["latency_ms"].tolist(),
-                batch_df["throughput"].tolist(),
-            )
-            report.add_figure(fig, "Latency vs Throughput Trade-off")
-
-    else:
-        report.add_metadata(
-            "Status", "No data file provided. Use --csv for dynamic report content."
+    try:
+        # PDFReportGenerator now wraps HTMLReportGenerator and converts to PDF
+        report = PDFReportGenerator(
+            title=args.title,
+            author=args.author,
         )
 
-    output_path = report.generate_pdf(args.output)
-    print(f"\n[OK] PDF report generated: {output_path}")
-    return {"output_path": output_path}
+        data_source = (
+            getattr(args, "csv", None) or getattr(args, "json", None) or "Sample Data"
+        )
+        report.add_metadata("Data Source", data_source)
+
+        if getattr(args, "json", None):
+            with open(args.json, encoding="utf-8") as f:
+                data = json.load(f)
+            samples = data.get("samples", [])
+            summary = data.get("summary", {})
+            report.add_metadata("Collector", data.get("collector_name", "-"))
+            report.add_metadata("Total Samples", str(len(samples)))
+
+            # Add summary items
+            lat = summary.get("latency", {})
+            if lat:
+                report.add_summary_item(
+                    "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
+                )
+                report.add_summary_item(
+                    "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
+                )
+            thr = summary.get("throughput", {})
+            if thr:
+                report.add_summary_item(
+                    "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
+                )
+            pwr = summary.get("power", {})
+            if pwr and pwr.get("mean_w") is not None:
+                report.add_summary_item(
+                    "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
+                )
+
+            # Add charts from sample data (same as HTML)
+            if samples:
+                report.add_charts_from_data(samples, summary)
+
+            # Export JSON and CSV alongside report
+            base = os.path.splitext(os.path.basename(args.output))[0]
+            json_out = getattr(args, "export_json", None) or (base + "_data.json")
+            csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
+            json_out = _output_path(args, json_out)
+            csv_out = _output_path(args, csv_out)
+            with open(json_out, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            print(f"[OK] JSON exported to: {json_out}")
+            if _write_result_to_csv(data, csv_out):
+                print(f"[OK] CSV exported to: {csv_out}")
+
+            output_path = report.generate_pdf(_output_path(args, args.output))
+            print(f"\n[OK] PDF report generated: {output_path}")
+            return {"output_path": output_path}
+
+        if getattr(args, "csv", None):
+            df = pd.read_csv(args.csv)
+            report.add_metadata("Total Samples", str(len(df)))
+
+            # Build summary from CSV for charts
+            summary = {}
+            if "latency_ms" in df.columns:
+                summary["latency"] = {
+                    "mean_ms": df["latency_ms"].mean(),
+                    "p50_ms": df["latency_ms"].quantile(0.5),
+                    "p95_ms": df["latency_ms"].quantile(0.95),
+                    "p99_ms": df["latency_ms"].quantile(0.99),
+                    "min_ms": df["latency_ms"].min(),
+                    "max_ms": df["latency_ms"].max(),
+                }
+                report.add_summary_item(
+                    "P99 Latency",
+                    f"{summary['latency']['p99_ms']:.2f}",
+                    "ms",
+                    "neutral",
+                )
+            if "throughput" in df.columns:
+                summary["throughput"] = {
+                    "mean_fps": df["throughput"].mean(),
+                    "min_fps": df["throughput"].min(),
+                }
+            if "power_w" in df.columns:
+                summary["power"] = {
+                    "mean_w": df["power_w"].mean(),
+                    "max_w": df["power_w"].max(),
+                }
+
+            # Convert CSV rows to samples format for chart generation
+            samples = []
+            for _, row in df.iterrows():
+                samples.append(
+                    {
+                        "timestamp": row.get("timestamp", 0),
+                        "metrics": row.to_dict(),
+                    }
+                )
+            if samples:
+                report.add_charts_from_data(samples, summary)
+        else:
+            report.add_metadata(
+                "Status",
+                "No data file provided. Use --csv/--json or run without options to auto-run a benchmark.",
+            )
+
+        output_path = report.generate_pdf(_output_path(args, args.output))
+        print(f"\n[OK] PDF report generated: {output_path}")
+        return {"output_path": output_path}
+    finally:
+        if json_path_to_cleanup and os.path.exists(json_path_to_cleanup):
+            try:
+                os.unlink(json_path_to_cleanup)
+            except OSError:
+                pass
 
 
 def _flatten_summary_for_compare(summary: dict) -> dict:
@@ -1343,8 +1765,9 @@ def run_with_profile(args, _config):
     status_emoji = "PASS" if overall_pass else "FAIL"
     print(f"\nOverall Status: [{status_emoji}]")
 
-    # Save export if requested
+    # Save export if requested (into output dir)
     if args.export:
+        export_path = _output_path(args, args.export)
         export_data = export.to_dict()
         export_data["profile"] = profile.name
         export_data["validation"] = {
@@ -1353,9 +1776,20 @@ def run_with_profile(args, _config):
             "power_pass": power_pass,
             "overall_pass": overall_pass,
         }
-        with open(args.export, "w", encoding="utf-8") as f:
+        with open(export_path, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2)
-        print(f"\nResults exported to: {args.export}")
+        print(f"\nResults exported to: {export_path}")
+
+    if getattr(args, "export_csv", None):
+        csv_path = _output_path(args, args.export_csv)
+        export_data = export.to_dict()
+        export_data.setdefault("inference_config", {})["batch_size"] = (
+            args.batch_size or (profile.batch_sizes[0] if profile.batch_sizes else 1)
+        )
+        if _write_result_to_csv(export_data, csv_path):
+            print(f"CSV exported to: {csv_path}")
+        else:
+            print("No samples to export as CSV", file=sys.stderr)
 
     return export
 
@@ -1443,9 +1877,25 @@ def run_auto_benchmarks_cli(args) -> int:
         ),
     )
     if args.export:
-        with open(args.export, "w", encoding="utf-8") as f:
+        export_path = _output_path(args, args.export)
+        with open(export_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
-        print(f"\n[OK] Exported {len(results)} runs to {args.export}")
+        print(f"\n[OK] Exported {len(results)} runs to {export_path}")
+    if getattr(args, "export_csv", None):
+        base = (
+            args.export_csv.rstrip(".csv")
+            if args.export_csv.endswith(".csv")
+            else args.export_csv
+        )
+        for i, r in enumerate(results):
+            if "error" in r:
+                continue
+            label = r.get("run_label", str(i))
+            safe_label = label.replace(" ", "_").replace(",", "_")
+            path = _output_path(args, f"{base}_{safe_label}.csv")
+            if _write_result_to_csv(r, path):
+                if not args.quiet:
+                    print(f"[OK] CSV: {path}")
     for r in results:
         if "error" in r:
             print(f"[FAIL] {r.get('run_label', '?')}: {r['error']}", file=sys.stderr)
@@ -1487,9 +1937,16 @@ def run_manual_single(args):
         quiet=args.quiet,
     )
     if args.export:
-        with open(args.export, "w", encoding="utf-8") as f:
+        export_path = _output_path(args, args.export)
+        with open(export_path, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2)
-        print(f"\n[OK] Exported to {args.export}")
+        print(f"\n[OK] Exported to {export_path}")
+    if getattr(args, "export_csv", None):
+        csv_path = _output_path(args, args.export_csv)
+        if _write_result_to_csv(result, csv_path):
+            print(f"\n[OK] CSV exported to: {csv_path}")
+        else:
+            print("No samples to export as CSV", file=sys.stderr)
     return result
 
 
@@ -1573,14 +2030,15 @@ def main():
         print(f"❌ Error: {e}", file=sys.stderr)
         return 1
 
-    # Save output if requested (report html/pdf already write to args.output; do not overwrite)
+    # Save output if requested (report html/pdf already write to output dir; do not overwrite)
     if args.output and result and getattr(args, "command", None) != "report":
-        with open(args.output, "w", encoding="utf-8") as f:
+        out_path = _output_path(args, args.output)
+        with open(out_path, "w", encoding="utf-8") as f:
             if hasattr(result, "to_dict"):
                 json.dump(result.to_dict(), f, indent=2)
             else:
                 json.dump(result, f, indent=2)
-        print(f"\n[OK] Results saved to {args.output}")
+        print(f"\n[OK] Results saved to {out_path}")
 
     return 0
 
