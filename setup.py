@@ -5,7 +5,9 @@ from pathlib import Path
 
 # Read README for long description
 readme_file = Path(__file__).parent / "README.md"
-long_description = readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
+long_description = (
+    readme_file.read_text(encoding="utf-8") if readme_file.exists() else ""
+)
 
 setup(
     name="autoperfpy",
@@ -34,6 +36,9 @@ setup(
         "pandas>=1.1.0",
         "pyyaml>=5.3.0",
         "requests>=2.25.0",
+        "matplotlib>=3.10.1",
+        "plotly>=6.18.0",
+        "streamlit>=1.20.0",
     ],
     extras_require={
         "dev": [

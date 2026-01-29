@@ -4,6 +4,11 @@ import os
 import tempfile
 from pathlib import Path
 
+# Use non-interactive backend so tests run without Tk (e.g. on Windows without tk/tcl)
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import pytest
 
