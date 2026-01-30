@@ -356,6 +356,7 @@ def run_auto_benchmarks_ui(
     precisions: List[str],
     batch_sizes: List[int],
     max_configs_per_device: int = 6,
+    device_ids_filter: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
     try:
@@ -366,6 +367,7 @@ def run_auto_benchmarks_ui(
             precisions=precisions,
             batch_sizes=batch_sizes,
             max_configs_per_device=max_configs_per_device,
+            device_ids_filter=device_ids_filter,
         )
         if not pairs:
             return []
@@ -784,7 +786,7 @@ def render_multi_run_comparison(runs: List[Dict[str, Any]]):
 
     if len(runs) < 2:
         st.info(
-            "Upload multiple run files or run Automatic benchmark to enable comparison"
+            "Upload multiple run files or run a benchmark (one or more devices) to enable comparison"
         )
         return
 
@@ -943,64 +945,87 @@ def main():
                     except Exception as e:
                         st.error(f"Error loading {uploaded_file.name}: {e}")
         elif data_source == "Run Benchmark":
-            st.subheader("Benchmark mode")
-            benchmark_mode = st.radio(
-                "Mode",
-                options=["Automatic", "Manual"],
-                index=0,
-                help="Automatic: run on all detected devices and configs. Manual: choose device and config.",
-            )
-            if benchmark_mode == "Automatic":
-                detected = get_detected_devices()
-                if detected:
-                    st.markdown("**Detected devices**")
-                    for d in detected:
-                        st.caption(
-                            f"• {d.get('device_id', '?')}: {d.get('device_name', 'Unknown')}"
-                        )
-                else:
-                    st.caption("No devices detected; synthetic will be used.")
-                duration_ui = st.number_input(
-                    "Duration (seconds)",
-                    min_value=1,
-                    max_value=120,
-                    value=10,
-                    key="auto_dur",
+            detected = get_detected_devices()
+            try:
+                from autoperfpy.device_config import (
+                    DEFAULT_BATCH_SIZES,
+                    PRECISIONS,
                 )
-                try:
-                    from autoperfpy.device_config import (
-                        DEFAULT_BATCH_SIZES,
-                        PRECISIONS,
+            except ImportError:
+                PRECISIONS = ["fp32", "fp16", "int8"]
+                DEFAULT_BATCH_SIZES = [1, 4, 8]
+
+            if detected:
+                device_options = [
+                    (
+                        d.get("device_id", "?"),
+                        d.get("device_name") or d.get("device_id", "Unknown"),
                     )
-                except ImportError:
-                    PRECISIONS = ["fp32", "fp16", "int8"]
-                    DEFAULT_BATCH_SIZES = [1, 4, 8]
-                precisions_ui = st.multiselect(
-                    "Precisions",
-                    options=PRECISIONS,
-                    default=PRECISIONS[:2],
-                    key="auto_prec",
+                    for d in detected
+                ]
+                device_labels = [f"{did} ({name})" for did, name in device_options]
+                all_device_ids = [did for did, _ in device_options]
+                selected_labels = st.multiselect(
+                    "Devices (select one or more)",
+                    options=device_labels,
+                    default=device_labels,
+                    key="bench_devices",
+                    help="Select at least one device. Same as CLI: autoperfpy run --device <id>",
                 )
-                batch_sizes_ui = st.multiselect(
-                    "Batch sizes",
-                    options=DEFAULT_BATCH_SIZES + [2, 16],
-                    default=DEFAULT_BATCH_SIZES,
-                    key="auto_bs",
+                selected_device_ids = [
+                    all_device_ids[device_labels.index(label)]
+                    for label in selected_labels
+                ]
+            else:
+                st.caption(
+                    "No devices detected; enter a device ID (e.g. cpu_0, nvidia_0)."
                 )
-                max_cfg = st.number_input(
-                    "Max configs per device",
-                    min_value=1,
-                    max_value=20,
-                    value=6,
-                    key="auto_max",
+                device_ui = st.text_input(
+                    "Device",
+                    value="cpu_0",
+                    key="bench_device_txt",
+                    help="Device ID or GPU index when none detected",
                 )
-                if st.button("Run benchmark (all devices & configs)"):
-                    with st.spinner("Running benchmarks on all devices..."):
+                selected_device_ids = [device_ui.strip()] if device_ui.strip() else []
+
+            duration_ui = st.number_input(
+                "Duration (seconds)",
+                min_value=1,
+                max_value=300,
+                value=10,
+                key="bench_dur",
+            )
+            precisions_ui = st.multiselect(
+                "Precisions",
+                options=PRECISIONS,
+                default=PRECISIONS[:2],
+                key="bench_prec",
+            )
+            batch_sizes_ui = st.multiselect(
+                "Batch sizes",
+                options=DEFAULT_BATCH_SIZES + [2, 16],
+                default=DEFAULT_BATCH_SIZES,
+                key="bench_bs",
+            )
+            max_cfg = st.number_input(
+                "Max configs per device",
+                min_value=1,
+                max_value=20,
+                value=6,
+                key="bench_max",
+            )
+
+            if st.button("Run benchmark"):
+                if not selected_device_ids:
+                    st.warning("Select at least one device.")
+                elif detected:
+                    with st.spinner("Running benchmarks..."):
                         results = run_auto_benchmarks_ui(
                             duration_seconds=duration_ui,
                             precisions=precisions_ui or PRECISIONS[:1],
                             batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
                             max_configs_per_device=max_cfg,
+                            device_ids_filter=selected_device_ids,
                         )
                     if results:
                         if "data_list" not in st.session_state:
@@ -1014,58 +1039,13 @@ def main():
                         else:
                             st.experimental_rerun()
                     else:
-                        st.warning("No results. Try Manual mode or check devices.")
-                if "data_list" in st.session_state and st.session_state["data_list"]:
-                    data_list = st.session_state["data_list"]
+                        st.warning("No results. Check devices and config.")
                 else:
-                    st.info("Click **Run benchmark (all devices & configs)** to start.")
-            else:
-                st.subheader("Manual settings")
-                detected = get_detected_devices()
-                device_options = [
-                    (
-                        d.get("device_id", "?"),
-                        d.get("device_name") or d.get("device_id", "Unknown"),
-                    )
-                    for d in detected
-                ]
-                if device_options:
-                    device_labels = [f"{did} ({name})" for did, name in device_options]
-                    device_idx = st.selectbox(
-                        "Device",
-                        range(len(device_labels)),
-                        format_func=lambda i: device_labels[i],
-                        key="man_device_select",
-                        help="Same as CLI: autoperfpy run --device <id>",
-                    )
-                    device_ui = device_options[device_idx][0]
-                else:
-                    device_ui = st.text_input(
-                        "Device (e.g. nvidia_0, cpu_0, 0)",
-                        value="cpu_0",
-                        help="Device ID or GPU index when none detected",
-                    )
-                try:
-                    from autoperfpy.device_config import PRECISIONS as MANUAL_PRECISIONS
-                except ImportError:
-                    MANUAL_PRECISIONS = ["fp32", "fp16", "int8"]
-                precision_ui = st.selectbox(
-                    "Inference precision",
-                    options=MANUAL_PRECISIONS,
-                    index=0,
-                    help="Precision for inference (fp32, fp16, int8)",
-                )
-                duration_ui = st.number_input(
-                    "Duration (seconds)",
-                    min_value=1,
-                    max_value=300,
-                    value=10,
-                    key="man_dur",
-                )
-                if st.button("Run benchmark"):
                     with st.spinner("Running benchmark..."):
                         run_data = run_benchmark_from_ui(
-                            duration_ui, device_ui, precision_ui
+                            duration_ui,
+                            selected_device_ids[0],
+                            precisions_ui[0] if precisions_ui else PRECISIONS[0],
                         )
                     if run_data:
                         if "data_list" not in st.session_state:
@@ -1076,12 +1056,15 @@ def main():
                             st.rerun()
                         else:
                             st.experimental_rerun()
-                if "data_list" in st.session_state and st.session_state["data_list"]:
-                    data_list = st.session_state["data_list"]
-                else:
-                    st.info(
-                        "Click **Run benchmark** to run a short benchmark and load results."
-                    )
+                    else:
+                        st.warning("No results. Check device ID.")
+
+            if "data_list" in st.session_state and st.session_state["data_list"]:
+                data_list = st.session_state["data_list"]
+            else:
+                st.info(
+                    "Select one or more devices, set options, then click **Run benchmark**."
+                )
         else:
             st.info("Using synthetic demo data")
             data_list = [generate_synthetic_demo_data()]
