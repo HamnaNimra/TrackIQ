@@ -9,16 +9,17 @@ A comprehensive collection of Python scripts and shell utilities for **performan
 
 ---
 
-## Architecture: trackiq (core library) vs autoperfpy (app)
+## Architecture: trackiq_core (core library) vs autoperfpy (app)
 
 | Layer | Package | Contents |
 |-------|---------|----------|
-| **Core library** | `trackiq` | Reusable components: collectors (synthetic, psutil, NVML), config loader, result schemas, comparison/regression logic, platform (GPU) detection, runner, analyzers, reporting, errors. Use `trackiq` in other projects without AutoPerfPy. |
-| **App** | `autoperfpy` | AutoPerfPy-specific: CLI (`autoperfpy run`, `compare`, `analyze`, …), Streamlit UI, TensorRT/automotive benchmarks, DNN pipeline & Tegrastats analyzers, app config and profiles. Imports `trackiq` for generic logic. |
+| **Core library** | `trackiq_core` | Reusable components: collectors (synthetic, psutil, NVML), config loader, result schemas, comparison/regression logic, platform (GPU) detection, runner, analyzers, reporting, errors. Use `trackiq_core` in other projects without AutoPerfPy. |
+| **App** | `autoperfpy` | AutoPerfPy-specific: CLI (`autoperfpy run`, `compare`, `analyze`, …), Streamlit UI, TensorRT/automotive benchmarks, DNN pipeline & Tegrastats analyzers, app config and profiles. Imports `trackiq_core` for generic logic. |
 
-- **Install**: `pip install .` or `pip install -e .` installs both `trackiq` and `autoperfpy`; the CLI entry point is `autoperfpy`.
-- **CLI**: `autoperfpy run` (device/precision), `autoperfpy compare` (uses trackiq comparison), `autoperfpy ui` (Streamlit dashboard).
+- **Install**: `pip install .` or `pip install -e .` installs both `trackiq_core` and `autoperfpy`; the CLI entry point is `autoperfpy`.
+- **CLI**: `autoperfpy run` (device/precision), `autoperfpy compare` (uses trackiq_core comparison), `autoperfpy ui` (Streamlit dashboard).
 - **Streamlit UI**: Run benchmarks from the UI, view platform metadata (device, CPU, GPU, precision), select device and inference config (fp16, fp32, int8). See [Streamlit UI](#streamlit-ui) below.
+- **Outputs**: Reports and exports are written to `output/` by default (sample artifacts live in `output/`).
 
 ---
 
@@ -119,7 +120,7 @@ Some logic exists in both scripts and package (e.g., percentile calculation, GPU
 
 📝 **If you modify percentile logic**, update both:
 1. `scripts/calculate_p99_latency.py::PercentileCalculator.calculate_percentiles()`
-2. `autoperfpy/core/utils.py::LatencyStats.calculate_percentiles()`
+2. `trackiq_core/utils/analysis_utils.py::LatencyStats.calculate_percentiles()`
 ---
 
 ## �🎯 Features
@@ -140,18 +141,18 @@ Some logic exists in both scripts and package (e.g., percentile calculation, GPU
 ### AutoPerfPy Package (Abstracted, Reusable)
 | Component | Location | Purpose | Import |
 |-----------|----------|---------|--------|
-| **Percentile Analyzer** | `autoperfpy/analyzers/latency.py` | OOP-based percentile analysis from CSV | `from autoperfpy import PercentileLatencyAnalyzer` |
+| **Percentile Analyzer** | `trackiq_core/utils/analyzers/latency.py` | OOP-based percentile analysis from CSV | `from autoperfpy import PercentileLatencyAnalyzer` |
 | **DNN Pipeline Analyzer** | `autoperfpy/analyzers/dnn_pipeline.py` | TensorRT/DriveWorks DNN inference analysis | `from autoperfpy import DNNPipelineAnalyzer` |
 | **Tegrastats Analyzer** | `autoperfpy/analyzers/tegrastats.py` | NVIDIA Jetson tegrastats analysis | `from autoperfpy import TegrastatsAnalyzer` |
-| **Efficiency Analyzer** | `autoperfpy/analyzers/efficiency.py` | Power efficiency and Perf/Watt analysis | `from autoperfpy import EfficiencyAnalyzer` |
-| **Variability Analyzer** | `autoperfpy/analyzers/variability.py` | Latency jitter and consistency analysis | `from autoperfpy import VariabilityAnalyzer` |
+| **Efficiency Analyzer** | `trackiq_core/utils/analyzers/efficiency.py` | Power efficiency and Perf/Watt analysis | `from autoperfpy import EfficiencyAnalyzer` |
+| **Variability Analyzer** | `trackiq_core/utils/analyzers/variability.py` | Latency jitter and consistency analysis | `from autoperfpy import VariabilityAnalyzer` |
 | **Batching Benchmark** | `autoperfpy/benchmarks/latency.py` | Batch size impact analysis with optimization hints | `from autoperfpy import BatchingTradeoffBenchmark` |
 | **LLM Benchmark** | `autoperfpy/benchmarks/latency.py` | TTFT & time-per-token measurement | `from autoperfpy import LLMLatencyBenchmark` |
 | **GPU Monitor** | `autoperfpy/monitoring/gpu.py` | Real-time GPU memory monitoring | `from autoperfpy import GPUMemoryMonitor` |
 | **KV Cache Monitor** | `autoperfpy/monitoring/gpu.py` | LLM KV cache estimation & tracking | `from autoperfpy import LLMKVCacheMonitor` |
-| **Performance Visualizer** | `autoperfpy/reporting/visualizer.py` | Create graphs: latency, throughput, power, memory, DNN layers | `from autoperfpy import PerformanceVisualizer` |
-| **PDF Report Generator** | `autoperfpy/reporting/pdf_generator.py` | Consolidate graphs into professional PDF reports | `from autoperfpy import PDFReportGenerator` |
-| **HTML Report Generator** | `autoperfpy/reporting/html_generator.py` | Create interactive HTML reports with navigation | `from autoperfpy import HTMLReportGenerator` |
+| **Performance Visualizer** | `autoperfpy/reports/visualizer.py` | Create graphs: latency, throughput, power, memory, DNN layers | `from autoperfpy import PerformanceVisualizer` |
+| **PDF Report Generator** | `autoperfpy/reports/pdf_generator.py` | Consolidate graphs into professional PDF reports | `from autoperfpy import PDFReportGenerator` |
+| **HTML Report Generator** | `autoperfpy/reports/html_generator.py` | Create interactive HTML reports with navigation | `from autoperfpy import HTMLReportGenerator` |
 | **Configuration System** | `autoperfpy/config/` | YAML/JSON-based config management | `from autoperfpy import ConfigManager` |
 | **CLI Interface** | `autoperfpy/cli.py` | Unified command-line interface | `autoperfpy <command> [options]` |
 
@@ -161,57 +162,41 @@ Some logic exists in both scripts and package (e.g., percentile calculation, GPU
 
 ```
 AutoPerfPy/
-│
-├── 📄 README.md                          # Documentation
-├── 📄 setup.py                           # Package installation
-├── 📄 config.yaml                        # Default configuration
-├── 📄 requirements.txt                   # Python dependencies
-│
-├── 📁 autoperfpy/                        # Main package (NEW!)
-│   ├── __init__.py                       # Package exports
-│   ├── cli.py                            # Command-line interface
-│   │
-│   ├── 📁 config/                        # Configuration system
-│   │   ├── __init__.py
-│   │   ├── defaults.py                   # Default settings
-│   │   └── config.py                     # Config management
-│   │
-│   ├── 📁 core/                          # Core abstractions & utilities
-│   │   ├── __init__.py
-│   │   ├── base.py                       # Base classes
-│   │   └── utils.py                      # Utilities & helpers
-│   │
-│   ├── 📁 analyzers/                     # Analysis modules
-│   │   ├── __init__.py
-│   │   └── latency.py                    # Latency analyzers
-│   │
-│   ├── 📁 benchmarks/                    # Benchmarking modules
-│   │   ├── __init__.py
-│   │   └── latency.py                    # Latency benchmarks
-│   │
-│   └── 📁 monitoring/                    # Monitoring modules
-│       ├── __init__.py
-│       └── gpu.py                        # GPU monitoring
-│
-├── 📁 examples/                          # Example usage scripts
-│   ├── analyze_percentiles.py            # Latency analysis example
-│   ├── benchmark_batching.py             # Batching example
-│   └── monitor_gpu.py                    # GPU monitoring example
-│
-    ├── 📁 scripts/                           # Legacy analysis scripts
-│   ├── automotive_parser_log.py
-│   ├── calculate_p99_latency.py
-│   └── data/
-│       └── automotive_benchmark_data.csv
-│
-├── 📁 benchmarks/                        # Legacy benchmark scripts
-│   ├── llm_latency_benchmark.py
-│   └── batching_tradeoff.py
-│
-└── 📁 tools/                             # Legacy utility scripts
-    ├── process_monitor.py
-    ├── llm_memory_calculator.py
-    └── service_benchmarks.py
+├── README.md
+├── CHANGELOG.md
+├── CONCEPTS.md
+├── config.yaml
+├── pyproject.toml
+├── requirements.txt
+├── setup.py
+├── autoperfpy/                           # App package (CLI, UI, reports)
+│   ├── cli.py
+│   ├── analyzers/
+│   ├── benchmarks/
+│   ├── collectors/
+│   ├── config/
+│   ├── core/
+│   ├── monitoring/
+│   ├── profiles/
+│   ├── reports/
+│   └── ui/
+├── trackiq_core/                         # Core library
+│   ├── collectors/
+│   ├── configs/
+│   ├── inference/
+│   ├── monitoring/
+│   ├── runners/
+│   ├── schemas/
+│   └── utils/
+├── examples/                             # Example usage scripts
+├── scripts/                              # Legacy scripts + data
+├── benchmarks/                           # Legacy benchmark scripts
+├── monitoring/                           # Legacy monitoring scripts
+├── tools/                                # Helper scripts
+├── output/                               # Sample outputs + default report dir
+├── tests/                                # Test suite
+├── docs/                                 # Documentation assets
+└── sample_report.html
 ```
 
 **New Architecture**: The `autoperfpy/` package provides object-oriented abstractions for all functionality, making it easy to:
@@ -219,14 +204,6 @@ AutoPerfPy/
 - Extend with custom analyzers/benchmarks
 - Configure via YAML files
 - Use via command-line interface
-│
-└── 📁 tools/                             # System utilities
-    ├── detect_hung_proc.sh               # Hung process detector
-    ├── tensorrt_build.sh                 # TensorRT build helper
-    ├── process_monitor.py                # Process lifecycle manager
-    ├── llm_memory_calculator.py          # Memory requirement calculator
-    └── service_benchmarks.py             # Service performance testing
-```
 
 ---
 
@@ -252,13 +229,13 @@ pip install -r requirements.txt
 # 3. Make shell scripts executable (optional)
 chmod +x tools/*.sh
 
-# 4. Install package (trackiq + autoperfpy, CLI entry point)
+# 4. Install package (trackiq_core + autoperfpy, CLI entry point)
 pip install .
 # or editable install for development
 pip install -e .
 
 # 5. Verify installation
-python -c "import trackiq, autoperfpy; print('✓ Installed')"
+python3 -c "import trackiq_core, autoperfpy; print('✓ Installed')"
 autoperfpy --help
 ```
 
@@ -274,9 +251,11 @@ autoperfpy --help
 |---------|---------|---------|
 | `numpy` | Latest | Numerical computing & array operations |
 | `pandas` | Latest | Data analysis & CSV processing |
+| `matplotlib` | Latest | Plotting and static charts |
+| `plotly` | Latest | Interactive charts in reports |
+| `streamlit` | Latest | Dashboard UI |
+| `torch` | Latest | Model benchmarking support |
 | `requests` | Latest | HTTP library for API calls |
-| `fastapi` | Latest | Web API framework |
-| `uvicorn` | Latest | ASGI server for FastAPI |
 | `pytest` | Latest | Testing framework |
 
 See [requirements.txt](requirements.txt) for exact versions.
@@ -717,7 +696,7 @@ python examples/generate_performance_report.py --show  # View interactively
 
 ---
 
-#### **PerformanceVisualizer (autoperfpy.reporting)**
+#### **PerformanceVisualizer (autoperfpy.reports)**
 Python class for creating performance graphs programmatically.
 
 **Available Graphs**:
@@ -759,7 +738,7 @@ viz.save_figure(fig1, "graph.png", dpi=300)
 
 ---
 
-#### **PDFReportGenerator (autoperfpy.reporting)**
+#### **PDFReportGenerator (autoperfpy.reports)**
 Consolidate multiple graphs into professional PDF reports.
 
 **Features**:
@@ -794,7 +773,7 @@ pdf_gen.generate_pdf("report.pdf", include_summary=True)
 
 ---
 
-#### **HTMLReportGenerator (autoperfpy.reporting)**
+#### **HTMLReportGenerator (autoperfpy.reports)**
 Generate interactive HTML reports with navigation, theming, and executive summaries.
 
 **Features**:
@@ -802,6 +781,7 @@ Generate interactive HTML reports with navigation, theming, and executive summar
 - ✓ Interactive navigation with smooth scrolling
 - ✓ Executive summary cards with status indicators
 - ✓ Data tables with styling
+- ✓ Multi-run comparison charts and summary table
 - ✓ Section-based organization
 - ✓ Embedded images (base64) or external files
 - ✓ Print-friendly CSS
@@ -863,6 +843,13 @@ report.add_table(
     section="Latency Analysis"
 )
 
+# Add multi-run comparison charts + summary table
+# (collector export dicts from autoperfpy run --export)
+report.add_multi_run_comparison(
+    runs=[baseline_run, current_run],
+    section="Comparative Analysis"
+)
+
 # Generate HTML file
 report.generate_html("performance_report.html")
 ```
@@ -873,31 +860,13 @@ report.generate_html("performance_report.html")
 - Summary cards with color-coded status (good/warning/critical)
 - Embedded graphs organized by section
 - Styled data tables
+- Comparative Analysis section for multi-run comparisons
 - Footer with generation timestamp
 
 ---
 
-**Termination Flow**:
-```
-1. Find processes matching pattern
-2. Check if runtime exceeds threshold
-3. Send SIGTERM (graceful termination)
-4. Wait up to 10 seconds for exit
-5. If still running → Send SIGKILL
-6. Log all actions and results
-```
-
-**Usage**:
-```bash
-# Manual execution
-./tools/detect_hung_proc.sh
-
-# Setup as cron job (every 5 minutes)
-(crontab -l 2>/dev/null; echo "*/5 * * * * /path/to/detect_hung_proc.sh") | crontab -
-
-# May require sudo for permission
-sudo ./tools/detect_hung_proc.sh
-```
+**Sample Outputs**:
+- Example HTML/CSV/JSON report artifacts live under `output/` for reference.
 
 ---
 

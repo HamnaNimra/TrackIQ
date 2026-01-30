@@ -7,9 +7,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
-
-
-# TODO: # Multi-Run Comparison Chart from charts.py is not implemented yet, need to implement it.
 class HTMLReportGenerator:
     """Generate interactive HTML reports from performance analysis."""
 
@@ -64,6 +61,200 @@ class HTMLReportGenerator:
                 "description": description,
             }
         )
+
+    def add_multi_run_comparison(
+        self,
+        runs: List[Dict[str, Any]],
+        run_names: Optional[List[str]] = None,
+        section: str = "Comparative Analysis",
+        description: str = "Side-by-side comparison across multiple runs.",
+        chart_engine: str = "plotly",
+    ) -> None:
+        """Add multi-run comparison charts and summary table to the report.
+
+        Args:
+            runs: List of collector export dictionaries (each with summary data)
+            run_names: Optional list of display names for runs
+            section: Section name to group comparison outputs
+            description: Section description text
+            chart_engine: "plotly" (default) or "chartjs"
+        """
+        if not runs or len(runs) < 2:
+            return
+
+        if run_names is None:
+            run_names = [
+                r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
+                for i, r in enumerate(runs)
+            ]
+        elif len(run_names) != len(runs):
+            padded = list(run_names)
+            for i in range(len(padded), len(runs)):
+                padded.append(f"Run {i+1}")
+            run_names = padded[: len(runs)]
+
+        def _float_or_none(value: Any) -> Optional[float]:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        def _format_cell(value: Any, digits: Optional[int] = None) -> str:
+            if value is None or value == "":
+                return "-"
+            try:
+                num = float(value)
+            except (TypeError, ValueError):
+                return str(value)
+            if digits is None:
+                if num.is_integer():
+                    return str(int(num))
+                return str(num)
+            return f"{num:.{digits}f}"
+
+        latency_p50: List[Optional[float]] = []
+        latency_p95: List[Optional[float]] = []
+        latency_p99: List[Optional[float]] = []
+        throughput_mean: List[Optional[float]] = []
+        comparison_rows: List[List[Any]] = []
+
+        for i, run in enumerate(runs):
+            summary = run.get("summary", {}) or {}
+            pm = run.get("platform_metadata") or {}
+            inf = run.get("inference_config") or {}
+            lat = summary.get("latency", {}) or {}
+            thr = summary.get("throughput", {}) or {}
+            pwr = summary.get("power", {}) or {}
+            temp = summary.get("temperature", {}) or {}
+
+            latency_p50.append(_float_or_none(lat.get("p50_ms")))
+            latency_p95.append(_float_or_none(lat.get("p95_ms")))
+            latency_p99.append(_float_or_none(lat.get("p99_ms")))
+            throughput_mean.append(_float_or_none(thr.get("mean_fps")))
+
+            comparison_rows.append(
+                [
+                    run_names[i],
+                    pm.get("device_name") or inf.get("accelerator") or "",
+                    inf.get("precision") or "",
+                    _format_cell(inf.get("batch_size")),
+                    _format_cell(summary.get("sample_count")),
+                    _format_cell(summary.get("duration_seconds"), 1),
+                    _format_cell(lat.get("p99_ms"), 2),
+                    _format_cell(thr.get("mean_fps"), 2),
+                    _format_cell(pwr.get("mean_w"), 2),
+                    _format_cell(temp.get("max_c"), 1),
+                ]
+            )
+
+        section_added = False
+
+        def _ensure_section() -> None:
+            nonlocal section_added
+            if not section_added:
+                self.add_section(section, description)
+                section_added = True
+
+        def _plotly_to_html(fig) -> str:
+            fig.update_layout(
+                autosize=True,
+                height=380,
+                margin=dict(l=50, r=50, t=50, b=50),
+            )
+            plotly_id = f"plotly_{self._get_next_chart_id()}"
+            return fig.to_html(
+                full_html=False,
+                include_plotlyjs=False,
+                div_id=plotly_id,
+                config={
+                    "responsive": True,
+                    "displayModeBar": True,
+                    "displaylogo": False,
+                    "scrollZoom": True,
+                },
+            )
+
+        chart_engine = chart_engine.lower().strip()
+        used_plotly = False
+        if chart_engine != "chartjs":
+            try:
+                from autoperfpy.reports import charts as shared_charts
+            except ImportError:
+                shared_charts = None
+
+            if shared_charts and shared_charts.is_available():
+                fig = shared_charts.create_latency_comparison_bar(runs, run_names)
+                if fig:
+                    _ensure_section()
+                    self.add_html_figure(
+                        _plotly_to_html(fig),
+                        caption="Latency Percentiles Across Runs",
+                        section=section,
+                        description="P50/P95/P99 latency per run.",
+                    )
+                    used_plotly = True
+                fig = shared_charts.create_throughput_comparison_bar(runs, run_names)
+                if fig:
+                    _ensure_section()
+                    self.add_html_figure(
+                        _plotly_to_html(fig),
+                        caption="Throughput Comparison",
+                        section=section,
+                        description="Mean throughput per run.",
+                    )
+                    used_plotly = True
+
+        if chart_engine == "chartjs" or not used_plotly:
+            has_latency = any(
+                v is not None for v in latency_p50 + latency_p95 + latency_p99
+            )
+            has_thr = any(v is not None for v in throughput_mean)
+            if has_latency:
+                _ensure_section()
+                self.add_interactive_bar_chart(
+                    labels=run_names,
+                    datasets=[
+                        {"label": "P50", "data": latency_p50},
+                        {"label": "P95", "data": latency_p95},
+                        {"label": "P99", "data": latency_p99},
+                    ],
+                    title="Latency Percentiles Across Runs",
+                    section=section,
+                    description="P50/P95/P99 latency by run.",
+                    x_label="Run",
+                    y_label="Latency (ms)",
+                )
+            if has_thr:
+                _ensure_section()
+                self.add_interactive_bar_chart(
+                    labels=run_names,
+                    datasets=[{"label": "Mean Throughput", "data": throughput_mean}],
+                    title="Throughput Comparison",
+                    section=section,
+                    description="Mean throughput per run.",
+                    x_label="Run",
+                    y_label="Throughput (FPS)",
+                )
+
+        if comparison_rows:
+            _ensure_section()
+            self.add_table(
+                title="Summary Comparison",
+                headers=[
+                    "Run",
+                    "Device",
+                    "Precision",
+                    "Batch",
+                    "Samples",
+                    "Duration (s)",
+                    "P99 Latency (ms)",
+                    "Mean Throughput (FPS)",
+                    "Mean Power (W)",
+                    "Max Temp (C)",
+                ],
+                rows=comparison_rows,
+                section=section,
+            )
 
     def add_metadata(self, key: str, value: Any) -> None:
         """Add metadata to report.
