@@ -802,6 +802,7 @@ Generate interactive HTML reports with navigation, theming, and executive summar
 - ✓ Interactive navigation with smooth scrolling
 - ✓ Executive summary cards with status indicators
 - ✓ Data tables with styling
+- ✓ Multi-run comparison charts and summary table
 - ✓ Section-based organization
 - ✓ Embedded images (base64) or external files
 - ✓ Print-friendly CSS
@@ -863,6 +864,13 @@ report.add_table(
     section="Latency Analysis"
 )
 
+# Add multi-run comparison charts + summary table
+# (collector export dicts from autoperfpy run --export)
+report.add_multi_run_comparison(
+    runs=[baseline_run, current_run],
+    section="Comparative Analysis"
+)
+
 # Generate HTML file
 report.generate_html("performance_report.html")
 ```
@@ -873,9 +881,13 @@ report.generate_html("performance_report.html")
 - Summary cards with color-coded status (good/warning/critical)
 - Embedded graphs organized by section
 - Styled data tables
+- Comparative Analysis section for multi-run comparisons
 - Footer with generation timestamp
 
 ---
+
+**Sample Outputs**:
+- Example HTML/CSV/JSON report artifacts live under `output/` for reference.
 
 **Termination Flow**:
 ```

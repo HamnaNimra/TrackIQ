@@ -1,0 +1,93 @@
+{
+  "collector_name": "synthetic",
+  "run_label": "baseline_run",
+  "profile": "demo_profile",
+  "sample_count": 5,
+  "summary": {
+    "sample_count": 5,
+    "duration_seconds": 3.0,
+    "latency": {
+      "mean_ms": 28.6,
+      "min_ms": 24.2,
+      "max_ms": 42.1,
+      "p50_ms": 27.4,
+      "p95_ms": 40.0,
+      "p99_ms": 42.1
+    },
+    "throughput": {
+      "mean_fps": 155.4,
+      "min_fps": 120.5,
+      "max_fps": 180.2
+    },
+    "power": {
+      "mean_w": 18.7,
+      "max_w": 24.3
+    },
+    "temperature": {
+      "mean_c": 56.4,
+      "max_c": 62.2
+    }
+  },
+  "samples": [
+    {
+      "timestamp": 0.0,
+      "metrics": {
+        "latency_ms": 24.2,
+        "throughput_fps": 173.6,
+        "cpu_percent": 32.4,
+        "gpu_percent": 68.1,
+        "power_w": 17.9,
+        "temperature_c": 55.2,
+        "memory_used_mb": 4021
+      }
+    },
+    {
+      "timestamp": 0.6,
+      "metrics": {
+        "latency_ms": 27.4,
+        "throughput_fps": 158.9,
+        "cpu_percent": 35.1,
+        "gpu_percent": 71.5,
+        "power_w": 18.1,
+        "temperature_c": 55.7,
+        "memory_used_mb": 4056
+      }
+    },
+    {
+      "timestamp": 1.2,
+      "metrics": {
+        "latency_ms": 28.9,
+        "throughput_fps": 149.7,
+        "cpu_percent": 36.0,
+        "gpu_percent": 73.2,
+        "power_w": 18.9,
+        "temperature_c": 56.5,
+        "memory_used_mb": 4092
+      }
+    },
+    {
+      "timestamp": 1.8,
+      "metrics": {
+        "latency_ms": 30.3,
+        "throughput_fps": 140.4,
+        "cpu_percent": 38.2,
+        "gpu_percent": 74.0,
+        "power_w": 19.4,
+        "temperature_c": 57.3,
+        "memory_used_mb": 4128
+      }
+    },
+    {
+      "timestamp": 2.4,
+      "metrics": {
+        "latency_ms": 42.1,
+        "throughput_fps": 120.5,
+        "cpu_percent": 41.0,
+        "gpu_percent": 78.6,
+        "power_w": 24.3,
+        "temperature_c": 62.2,
+        "memory_used_mb": 4180
+      }
+    }
+  ]
+}

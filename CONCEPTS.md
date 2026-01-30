@@ -11,6 +11,7 @@ This document explains key performance engineering concepts used throughout Auto
 5. [GPU Memory Management](#gpu-memory-management)
 6. [Regression Detection](#regression-detection)
 7. [Testing & Quality Assurance](#testing--quality-assurance)
+8. [Reporting & Output Artifacts](#reporting--output-artifacts)
 
 ---
 
@@ -292,6 +293,18 @@ if current_memory > threshold:
     or
     reduce_max_sequence_length()
 ```
+
+---
+
+## Reporting & Output Artifacts
+
+AutoPerfPy produces report artifacts in HTML/PDF along with JSON/CSV exports:
+
+- **HTML/PDF reports** summarize latency, throughput, power, and utilization.
+- **Multi-run comparison** uses summary metrics to compare runs side-by-side
+  (latency percentiles and mean throughput, plus a summary table).
+- **Output artifacts** default to the `output/` folder (HTML, JSON, CSV). The
+  repository includes sample outputs under `output/` for reference.
 
 ---
 
