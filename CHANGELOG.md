@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+### Added - Reports and Samples
+
+- **HTML report comparisons**: multi-run latency/throughput comparison charts and a summary table via HTMLReportGenerator.
+- **Sample outputs**: checked-in HTML/CSV/JSON report artifacts under `output/`.
+
+---
+
 ### Added - Performance Regression Detection ⭐
 
 #### New Core Features
