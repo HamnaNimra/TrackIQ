@@ -36,7 +36,7 @@ setup(
         "pandas>=1.1.0",
         "pyyaml>=5.3.0",
         "requests>=2.25.0",
-        "matplotlib>=3.10.1",
+        "matplotlib",
         "plotly",
         "streamlit>=1.20.0",
     ],

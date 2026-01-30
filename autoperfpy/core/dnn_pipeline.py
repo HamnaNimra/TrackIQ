@@ -73,7 +73,7 @@ class MemoryTransfer:
         """Calculate effective bandwidth in GB/s."""
         if self.duration_ms <= 0:
             return 0.0
-        size_gb = self.size_bytes / (1024 ** 3)
+        size_gb = self.size_bytes / (1024**3)
         duration_s = self.duration_ms / 1000
         return size_gb / duration_s
 
@@ -81,7 +81,7 @@ class MemoryTransfer:
         return {
             "transfer_type": self.transfer_type,
             "size_bytes": self.size_bytes,
-            "size_mb": self.size_bytes / (1024 ** 2),
+            "size_mb": self.size_bytes / (1024**2),
             "duration_ms": self.duration_ms,
             "bandwidth_gbps": self.bandwidth_gbps,
             "stream_id": self.stream_id,
@@ -108,19 +108,22 @@ class InferenceRun:
     def dla_time_ms(self) -> float:
         """Total time spent on DLA layers."""
         return sum(
-            l.execution_time_ms for l in self.layers
-            if l.device.startswith("DLA")
+            l.execution_time_ms for l in self.layers if l.device.startswith("DLA")
         )
 
     @property
     def h2d_time_ms(self) -> float:
         """Total host-to-device transfer time."""
-        return sum(t.duration_ms for t in self.memory_transfers if t.transfer_type == "H2D")
+        return sum(
+            t.duration_ms for t in self.memory_transfers if t.transfer_type == "H2D"
+        )
 
     @property
     def d2h_time_ms(self) -> float:
         """Total device-to-host transfer time."""
-        return sum(t.duration_ms for t in self.memory_transfers if t.transfer_type == "D2H")
+        return sum(
+            t.duration_ms for t in self.memory_transfers if t.transfer_type == "D2H"
+        )
 
     @property
     def memory_overhead_ms(self) -> float:
@@ -270,26 +273,29 @@ class DNNPipelineParser:
 
         # Parse layer timings
         for match in cls.LAYER_PATTERN.finditer(content):
-            layers.append(LayerTiming(
-                name=match.group("name"),
-                layer_type=match.group("type"),
-                execution_time_ms=float(match.group("time")),
-                device=match.group("device"),
-            ))
+            layers.append(
+                LayerTiming(
+                    name=match.group("name"),
+                    layer_type=match.group("type"),
+                    execution_time_ms=float(match.group("time")),
+                    device=match.group("device"),
+                )
+            )
 
         # Parse memory transfers
         for match in cls.MEMORY_PATTERN.finditer(content):
-            memory_transfers.append(MemoryTransfer(
-                transfer_type=match.group("type"),
-                size_bytes=int(match.group("size")),
-                duration_ms=float(match.group("time")),
-            ))
+            memory_transfers.append(
+                MemoryTransfer(
+                    transfer_type=match.group("type"),
+                    size_bytes=int(match.group("size")),
+                    duration_ms=float(match.group("time")),
+                )
+            )
 
         # If no total time found, compute from layers + transfers
         if total_time == 0.0:
-            total_time = (
-                sum(l.execution_time_ms for l in layers) +
-                sum(t.duration_ms for t in memory_transfers)
+            total_time = sum(l.execution_time_ms for l in layers) + sum(
+                t.duration_ms for t in memory_transfers
             )
 
         return InferenceRun(
@@ -325,12 +331,18 @@ class DNNPipelineParser:
             with open(filepath, "r") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    layers.append(LayerTiming(
-                        name=row.get("layer_name", row.get("name", "unknown")),
-                        layer_type=row.get("layer_type", row.get("type", "unknown")),
-                        execution_time_ms=float(row.get("time_ms", row.get("time", 0))),
-                        device=row.get("device", "GPU"),
-                    ))
+                    layers.append(
+                        LayerTiming(
+                            name=row.get("layer_name", row.get("name", "unknown")),
+                            layer_type=row.get(
+                                "layer_type", row.get("type", "unknown")
+                            ),
+                            execution_time_ms=float(
+                                row.get("time_ms", row.get("time", 0))
+                            ),
+                            device=row.get("device", "GPU"),
+                        )
+                    )
         except FileNotFoundError:
             raise FileNotFoundError(f"Layer timing file not found: {filepath}")
 
@@ -462,21 +474,24 @@ class DNNPipelineCalculator:
         avg_h2d = np.mean([r.h2d_time_ms for r in runs])
         avg_d2h = np.mean([r.d2h_time_ms for r in runs])
         avg_mem_overhead = np.mean([r.memory_overhead_ms for r in runs])
-        mem_overhead_pct = (avg_mem_overhead / avg_total * 100) if avg_total > 0 else 0.0
+        mem_overhead_pct = (
+            (avg_mem_overhead / avg_total * 100) if avg_total > 0 else 0.0
+        )
 
         # Find slowest layers across all runs
-        layer_times: Dict[str, List[float]] = {}
+        from collections import defaultdict
+
+        layer_times: Dict[str, List[float]] = defaultdict(list)
         for run in runs:
             for layer in run.layers:
                 key = f"{layer.name}:{layer.layer_type}"
-                if key not in layer_times:
-                    layer_times[key] = []
                 layer_times[key].append(layer.execution_time_ms)
 
         # Calculate average time per layer and sort
         layer_avgs = [
-            {"name": k.split(":")[0], "type": k.split(":")[1], "avg_time_ms": np.mean(v)}
-            for k, v in layer_times.items()
+            {"name": name, "type": layer_type, "avg_time_ms": np.mean(times)}
+            for k, times in layer_times.items()
+            for name, layer_type in [k.split(":", 1)]
         ]
         layer_avgs.sort(key=lambda x: x["avg_time_ms"], reverse=True)
         slowest = layer_avgs[:top_n_layers]
@@ -529,21 +544,27 @@ class DNNPipelineCalculator:
             batch_runs = by_batch[batch_size]
             avg_time = sum(r.total_time_ms for r in batch_runs) / len(batch_runs)
             avg_throughput = sum(r.throughput_fps for r in batch_runs) / len(batch_runs)
-            avg_mem_overhead = sum(r.memory_overhead_ms for r in batch_runs) / len(batch_runs)
+            avg_mem_overhead = sum(r.memory_overhead_ms for r in batch_runs) / len(
+                batch_runs
+            )
 
-            batch_metrics.append({
-                "batch_size": batch_size,
-                "avg_latency_ms": avg_time,
-                "avg_throughput_fps": avg_throughput,
-                "avg_memory_overhead_ms": avg_mem_overhead,
-                "latency_per_sample_ms": avg_time / batch_size,
-                "num_runs": len(batch_runs),
-            })
+            batch_metrics.append(
+                {
+                    "batch_size": batch_size,
+                    "avg_latency_ms": avg_time,
+                    "avg_throughput_fps": avg_throughput,
+                    "avg_memory_overhead_ms": avg_mem_overhead,
+                    "latency_per_sample_ms": avg_time / batch_size,
+                    "num_runs": len(batch_runs),
+                }
+            )
 
         # Find optimal batch sizes
         optimal_throughput = max(batch_metrics, key=lambda x: x["avg_throughput_fps"])
         optimal_latency = min(batch_metrics, key=lambda x: x["avg_latency_ms"])
-        optimal_efficiency = min(batch_metrics, key=lambda x: x["latency_per_sample_ms"])
+        optimal_efficiency = min(
+            batch_metrics, key=lambda x: x["latency_per_sample_ms"]
+        )
 
         return {
             "batch_metrics": batch_metrics,
@@ -586,8 +607,12 @@ class DNNPipelineCalculator:
         return {
             "total_gpu_time_ms": total_gpu_time,
             "total_dla_time_ms": total_dla_time,
-            "gpu_percentage": (total_gpu_time / total_compute * 100) if total_compute > 0 else 0,
-            "dla_percentage": (total_dla_time / total_compute * 100) if total_compute > 0 else 0,
+            "gpu_percentage": (
+                (total_gpu_time / total_compute * 100) if total_compute > 0 else 0
+            ),
+            "dla_percentage": (
+                (total_dla_time / total_compute * 100) if total_compute > 0 else 0
+            ),
             "gpu_layer_count": len(gpu_layers),
             "dla_layer_count": len(dla_layers),
             "gpu_layers": list(gpu_layers),

@@ -1,6 +1,6 @@
 """Analyzer module for AutoPerfPy."""
 
-from trackiq.analyzers import (
+from trackiq_core.utils.analyzers import (
     PercentileLatencyAnalyzer,
     LogAnalyzer,
     EfficiencyAnalyzer,

@@ -41,6 +41,8 @@ env/
 
 # Testing
 .pytest_cache/
+.pytest-tmp/
+pytest_tmp/
 .coverage
 htmlcov/
 .tox/
@@ -72,4 +74,15 @@ tmp/
 *.tmp
 .cla*/
 
+# Old facade (deprecated - use trackiq_core directly)
+trackiq/
 
+
+_bench_results.json
+run_results.json
+benchmark_report.html
+docs/IMPROVEMENTS_RECOMMENDATIONS.md
+test_performance_report.html
+interactive_report.html
+.gitignore
+debug_test_report.html

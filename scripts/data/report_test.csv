@@ -1,0 +1,4 @@
+timestamp,workload,batch_size,latency_ms,power_w,throughput
+0,default,1,22.5,65.2,44.4
+1,default,1,23.1,66.0,43.3
+2,default,1,21.8,64.5,45.9

@@ -40,10 +40,10 @@ import subprocess
 import threading
 import time
 from collections import deque
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from trackiq.collectors import CollectorBase, CollectorExport, CollectorSample
+from trackiq_core.hardware.env import command_available
+from trackiq_core.collectors import CollectorBase, CollectorExport
 
 # Import tegrastats parser from core module
 try:
@@ -189,8 +189,7 @@ class TegrastatsCollector(CollectorBase):
         try:
             with open(self.filepath, "r") as f:
                 self._file_lines = [
-                    line.strip() for line in f
-                    if line.strip() and "RAM" in line
+                    line.strip() for line in f if line.strip() and "RAM" in line
                 ]
         except FileNotFoundError:
             raise FileNotFoundError(f"Tegrastats file not found: {self.filepath}")
@@ -261,7 +260,9 @@ class TegrastatsCollector(CollectorBase):
         try:
             snapshot = TegrastatsParser.parse_line(line)
             metrics = self._snapshot_to_metrics(snapshot)
-            metrics["is_warmup"] = self._sample_index < self._cfg.get("warmup_samples", 0)
+            metrics["is_warmup"] = self._sample_index < self._cfg.get(
+                "warmup_samples", 0
+            )
 
             # Store sample
             metadata = {
@@ -288,7 +289,9 @@ class TegrastatsCollector(CollectorBase):
         try:
             snapshot = TegrastatsParser.parse_line(line)
             metrics = self._snapshot_to_metrics(snapshot)
-            metrics["is_warmup"] = self._sample_index < self._cfg.get("warmup_samples", 0)
+            metrics["is_warmup"] = self._sample_index < self._cfg.get(
+                "warmup_samples", 0
+            )
 
             # Store sample
             metadata = {
@@ -325,18 +328,15 @@ class TegrastatsCollector(CollectorBase):
                 for c in snapshot.cpu_cores
             ],
             "cpu_num_cores": snapshot.num_cores,
-
             # GPU metrics
             "gpu_percent": snapshot.gpu.utilization_percent,
             "gpu_frequency_mhz": snapshot.gpu.frequency_mhz,
-
             # Memory metrics
             "memory_used_mb": snapshot.memory.used_mb,
             "memory_total_mb": snapshot.memory.total_mb,
             "memory_percent": snapshot.memory.utilization_percent,
             "memory_available_mb": snapshot.memory.available_mb,
             "emc_frequency_mhz": snapshot.memory.emc_frequency_mhz,
-
             # Thermal metrics
             "temperature_c": snapshot.thermal.max_temp_c,
             "thermal_zones": {
@@ -347,7 +347,6 @@ class TegrastatsCollector(CollectorBase):
                 "tdiode": snapshot.thermal.tdiode_temp_c,
                 "tj": snapshot.thermal.tj_temp_c,
             },
-
             # APE frequency
             "ape_frequency_mhz": snapshot.ape_frequency_mhz,
         }
@@ -412,24 +411,42 @@ class TegrastatsCollector(CollectorBase):
             return {}
 
         warmup_count = self._cfg.get("warmup_samples", 0)
-        steady_samples = self._samples[warmup_count:] if len(self._samples) > warmup_count else self._samples
+        steady_samples = (
+            self._samples[warmup_count:]
+            if len(self._samples) > warmup_count
+            else self._samples
+        )
 
         def safe_mean(key: str) -> Optional[float]:
-            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
+            values = [
+                s.metrics.get(key)
+                for s in steady_samples
+                if s.metrics.get(key) is not None
+            ]
             return sum(values) / len(values) if values else None
 
         def safe_max(key: str) -> Optional[float]:
-            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
+            values = [
+                s.metrics.get(key)
+                for s in steady_samples
+                if s.metrics.get(key) is not None
+            ]
             return max(values) if values else None
 
         def safe_min(key: str) -> Optional[float]:
-            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
+            values = [
+                s.metrics.get(key)
+                for s in steady_samples
+                if s.metrics.get(key) is not None
+            ]
             return min(values) if values else None
 
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (self._end_time - self._start_time) if self._end_time else None,
+            "duration_seconds": (
+                (self._end_time - self._start_time) if self._end_time else None
+            ),
             "mode": self.mode,
             "cpu": {
                 "mean_percent": safe_mean("cpu_percent"),
@@ -446,7 +463,11 @@ class TegrastatsCollector(CollectorBase):
                 "mean_mb": safe_mean("memory_used_mb"),
                 "max_mb": safe_max("memory_used_mb"),
                 "min_mb": safe_min("memory_used_mb"),
-                "total_mb": steady_samples[0].metrics.get("memory_total_mb") if steady_samples else None,
+                "total_mb": (
+                    steady_samples[0].metrics.get("memory_total_mb")
+                    if steady_samples
+                    else None
+                ),
                 "mean_percent": safe_mean("memory_percent"),
             },
             "temperature": {
@@ -472,16 +493,7 @@ class TegrastatsCollector(CollectorBase):
         Returns:
             True if tegrastats command is available
         """
-        try:
-            result = subprocess.run(
-                ["which", "tegrastats"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
+        return command_available("tegrastats", timeout=5)
 
 
 __all__ = ["TegrastatsCollector"]

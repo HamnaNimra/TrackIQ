@@ -1,7 +1,6 @@
 """Tests for AutoPerfPy core module."""
 
 import pytest
-import numpy as np
 import pandas as pd
 import tempfile
 from pathlib import Path
@@ -121,34 +120,34 @@ class TestPerformanceComparator:
 class TestRegressionDetector:
     """Tests for regression detection."""
 
-    def test_save_and_load_baseline(self):
+    def test_save_and_load_baseline(self, tmp_path):
         """Test saving and loading baselines."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            detector = RegressionDetector(baseline_dir=tmpdir)
+        tmpdir = str(tmp_path)
+        detector = RegressionDetector(baseline_dir=tmpdir)
 
-            metrics = {
-                "p99_latency": 50.0,
-                "p95_latency": 40.0,
-                "throughput_imgs_per_sec": 100.0,
-            }
+        metrics = {
+            "p99_latency": 50.0,
+            "p95_latency": 40.0,
+            "throughput_imgs_per_sec": 100.0,
+        }
 
-            detector.save_baseline("main", metrics)
-            loaded = detector.load_baseline("main")
+        detector.save_baseline("main", metrics)
+        loaded = detector.load_baseline("main")
 
-            assert loaded == metrics
+        assert loaded == metrics
 
-    def test_list_baselines(self):
+    def test_list_baselines(self, tmp_path):
         """Test listing available baselines."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            detector = RegressionDetector(baseline_dir=tmpdir)
+        tmpdir = str(tmp_path)
+        detector = RegressionDetector(baseline_dir=tmpdir)
 
-            detector.save_baseline("main", {"p99": 50.0})
-            detector.save_baseline("v1.0", {"p99": 48.0})
+        detector.save_baseline("main", {"p99": 50.0})
+        detector.save_baseline("v1.0", {"p99": 48.0})
 
-            baselines = detector.list_baselines()
-            assert "main" in baselines
-            assert "v1.0" in baselines
-            assert len(baselines) == 2
+        baselines = detector.list_baselines()
+        assert "main" in baselines
+        assert "v1.0" in baselines
+        assert len(baselines) == 2
 
     def test_compare_metrics_latency_regression(self):
         """Test detection of latency regression."""
@@ -176,51 +175,51 @@ class TestRegressionDetector:
 
         assert comparisons["throughput_imgs_per_sec"].is_regression is True
 
-    def test_detect_regressions_full_workflow(self):
+    def test_detect_regressions_full_workflow(self, tmp_path):
         """Test complete regression detection workflow."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            detector = RegressionDetector(baseline_dir=tmpdir)
+        tmpdir = str(tmp_path)
+        detector = RegressionDetector(baseline_dir=tmpdir)
 
-            baseline_metrics = {
-                "p99_latency": 50.0,
-                "p95_latency": 45.0,
-                "throughput": 1000.0,
-            }
-            detector.save_baseline("main", baseline_metrics)
+        baseline_metrics = {
+            "p99_latency": 50.0,
+            "p95_latency": 45.0,
+            "throughput": 1000.0,
+        }
+        detector.save_baseline("main", baseline_metrics)
 
-            current_metrics = {
-                "p99_latency": 56.0,  # 12% increase - regression
-                "p95_latency": 46.0,  # 2% increase - no regression
-                "throughput": 950.0,  # 5% decrease - no regression (at threshold)
-            }
+        current_metrics = {
+            "p99_latency": 56.0,  # 12% increase - regression
+            "p95_latency": 46.0,  # 2% increase - no regression
+            "throughput": 950.0,  # 5% decrease - no regression (at threshold)
+        }
 
-            result = detector.detect_regressions(
-                "main",
-                current_metrics,
-                RegressionThreshold(p99_percent=10.0, throughput_percent=5.0),
-            )
+        result = detector.detect_regressions(
+            "main",
+            current_metrics,
+            RegressionThreshold(p99_percent=10.0, throughput_percent=5.0),
+        )
 
-            assert result["has_regressions"] is True
-            assert "p99_latency" in result["regressions"]
-            assert "p95_latency" not in result["regressions"]
+        assert result["has_regressions"] is True
+        assert "p99_latency" in result["regressions"]
+        assert "p95_latency" not in result["regressions"]
 
-    def test_generate_report(self):
+    def test_generate_report(self, tmp_path):
         """Test report generation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            detector = RegressionDetector(baseline_dir=tmpdir)
+        tmpdir = str(tmp_path)
+        detector = RegressionDetector(baseline_dir=tmpdir)
 
-            baseline_metrics = {"p99_latency": 50.0}
-            detector.save_baseline("main", baseline_metrics)
+        baseline_metrics = {"p99_latency": 50.0}
+        detector.save_baseline("main", baseline_metrics)
 
-            current_metrics = {"p99_latency": 56.0}
-            report = detector.generate_report(
-                "main", current_metrics, RegressionThreshold(p99_percent=10.0)
-            )
+        current_metrics = {"p99_latency": 56.0}
+        report = detector.generate_report(
+            "main", current_metrics, RegressionThreshold(p99_percent=10.0)
+        )
 
-            assert "PERFORMANCE REGRESSION REPORT" in report
-            assert "REGRESSIONS DETECTED" in report
-            assert "p99_latency" in report
-            assert "+12.00%" in report
+        assert "PERFORMANCE REGRESSION REPORT" in report
+        assert "REGRESSIONS DETECTED" in report
+        assert "p99_latency" in report
+        assert "+12.00%" in report
 
 
 class TestRegressionThreshold:

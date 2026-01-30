@@ -68,7 +68,9 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         """
         super().__init__("TegrastatsAnalyzer")
         self.config = config or {}
-        self.throttle_temp_c = self.config.get("throttle_temp_c", self.DEFAULT_THROTTLE_TEMP_C)
+        self.throttle_temp_c = self.config.get(
+            "throttle_temp_c", self.DEFAULT_THROTTLE_TEMP_C
+        )
         self.memory_pressure_percent = self.config.get(
             "memory_pressure_percent", self.DEFAULT_MEMORY_PRESSURE_PERCENT
         )
@@ -220,7 +222,9 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         # Check thermal
         thermal = metrics.get("thermal_throttling", {})
         if thermal.get("throttle_percentage", 0) > 0:
-            issues.append(f"Thermal throttling detected: {thermal['throttle_percentage']:.1f}% of samples")
+            issues.append(
+                f"Thermal throttling detected: {thermal['throttle_percentage']:.1f}% of samples"
+            )
 
         max_temp = metrics.get("thermal", {}).get("max_observed_c", 0)
         if max_temp > 80:
@@ -287,29 +291,28 @@ class TegrastatsAnalyzer(BaseAnalyzer):
             cpu = m.get("cpu", {})
             summary["cpu_utilization_range"]["min"] = min(
                 summary["cpu_utilization_range"]["min"],
-                cpu.get("min_utilization_percent", float("inf"))
+                cpu.get("min_utilization_percent", float("inf")),
             )
             summary["cpu_utilization_range"]["max"] = max(
                 summary["cpu_utilization_range"]["max"],
-                cpu.get("max_utilization_percent", 0)
+                cpu.get("max_utilization_percent", 0),
             )
 
             # GPU range
             gpu = m.get("gpu", {})
             summary["gpu_utilization_range"]["min"] = min(
                 summary["gpu_utilization_range"]["min"],
-                gpu.get("min_utilization_percent", float("inf"))
+                gpu.get("min_utilization_percent", float("inf")),
             )
             summary["gpu_utilization_range"]["max"] = max(
                 summary["gpu_utilization_range"]["max"],
-                gpu.get("max_utilization_percent", 0)
+                gpu.get("max_utilization_percent", 0),
             )
 
             # Thermal max
             thermal = m.get("thermal", {})
             summary["thermal_max_observed_c"] = max(
-                summary["thermal_max_observed_c"],
-                thermal.get("max_observed_c", 0)
+                summary["thermal_max_observed_c"], thermal.get("max_observed_c", 0)
             )
 
             # Issues
@@ -317,12 +320,16 @@ class TegrastatsAnalyzer(BaseAnalyzer):
             summary["throttle_events_total"] += throttle.get("throttle_events", 0)
 
             pressure = m.get("memory_pressure", {})
-            summary["memory_pressure_events_total"] += pressure.get("pressure_events", 0)
+            summary["memory_pressure_events_total"] += pressure.get(
+                "pressure_events", 0
+            )
 
             # Health
             health = m.get("health", {})
             status = health.get("status", "healthy")
-            summary["health_summary"][status] = summary["health_summary"].get(status, 0) + 1
+            summary["health_summary"][status] = (
+                summary["health_summary"].get(status, 0) + 1
+            )
 
         # Handle edge case where no valid data
         if summary["cpu_utilization_range"]["min"] == float("inf"):
@@ -346,26 +353,22 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         Returns:
             Comparison with deltas and improvement indicators
         """
-        def safe_get(d: Dict, *keys, default=0.0):
-            """Safely get nested dictionary value."""
-            for key in keys:
-                if isinstance(d, dict):
-                    d = d.get(key, default)
-                else:
-                    return default
-            return d if d is not None else default
+        from trackiq_core import safe_get as _safe_get
 
-        baseline_cpu = safe_get(baseline_metrics, "cpu", "avg_utilization_percent")
-        current_cpu = safe_get(current_metrics, "cpu", "avg_utilization_percent")
+        def _get(d: Dict, *keys, default=0.0):
+            return _safe_get(d, *keys, default=default)
 
-        baseline_gpu = safe_get(baseline_metrics, "gpu", "avg_utilization_percent")
-        current_gpu = safe_get(current_metrics, "gpu", "avg_utilization_percent")
+        baseline_cpu = _get(baseline_metrics, "cpu", "avg_utilization_percent")
+        current_cpu = _get(current_metrics, "cpu", "avg_utilization_percent")
 
-        baseline_mem = safe_get(baseline_metrics, "memory", "avg_utilization_percent")
-        current_mem = safe_get(current_metrics, "memory", "avg_utilization_percent")
+        baseline_gpu = _get(baseline_metrics, "gpu", "avg_utilization_percent")
+        current_gpu = _get(current_metrics, "gpu", "avg_utilization_percent")
 
-        baseline_temp = safe_get(baseline_metrics, "thermal", "max_observed_c")
-        current_temp = safe_get(current_metrics, "thermal", "max_observed_c")
+        baseline_mem = _get(baseline_metrics, "memory", "avg_utilization_percent")
+        current_mem = _get(current_metrics, "memory", "avg_utilization_percent")
+
+        baseline_temp = _get(baseline_metrics, "thermal", "max_observed_c")
+        current_temp = _get(current_metrics, "thermal", "max_observed_c")
 
         return {
             "cpu_utilization_delta": current_cpu - baseline_cpu,

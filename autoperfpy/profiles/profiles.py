@@ -4,7 +4,7 @@ Predefined performance testing profiles. Uses TrackIQ's Profile and
 registry; registers AutoPerfPy-specific profiles on import.
 """
 
-from trackiq.profiles import (
+from trackiq_core.configs.profiles import (
     Profile,
     CollectorType,
     get_profile,

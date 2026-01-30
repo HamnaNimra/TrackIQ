@@ -8,9 +8,9 @@ This analyzer processes DNN inference profiling data to provide insights into:
 - Memory copy overhead (host ↔ device)
 
 Example usage:
-    analyzer = DNNPipelineAnalyzer()   
+    analyzer = DNNPipelineAnalyzer()
     # Analyze from profiler output
-    result = analyzer.analyze_profiler_output(profiler_text) 
+    result = analyzer.analyze_profiler_output(profiler_text)
     # Analyze from layer timing CSV
     result = analyzer.analyze_layer_csv("layer_times.csv", batch_size=4)
     # Analyze from InferenceRun objects
@@ -18,8 +18,8 @@ Example usage:
     # Get summary
     summary = analyzer.summarize()
     # Compare two engine configurations
-    analyzer.compare_engines(baseline_metrics, optimized_metrics)  
-    
+    analyzer.compare_engines(baseline_metrics, optimized_metrics)
+
 Classes:
 - DNNPipelineAnalyzer: Main analyzer class for DNN pipeline performance.
 - DNNPipelineParser: Parses profiler outputs and CSV files into structured data.
@@ -41,7 +41,6 @@ from ..core.dnn_pipeline import (
     InferenceRun,
     LayerTiming,
     MemoryTransfer,
-    EngineOptimizationMetrics,
 )
 
 
@@ -79,7 +78,9 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         super().__init__("DNNPipelineAnalyzer")
         self.config = config or {}
         self.top_n_layers = self.config.get("top_n_layers", 5)
-        self.memory_overhead_threshold = self.config.get("memory_overhead_threshold", 20.0)
+        self.memory_overhead_threshold = self.config.get(
+            "memory_overhead_threshold", 20.0
+        )
 
     def analyze(self, data: Any) -> AnalysisResult:
         """Perform analysis on DNN pipeline data.
@@ -307,10 +308,17 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         dla_layers = [l for l in run.layers if l.device.startswith("DLA")]
 
         # Find slowest layers
-        sorted_layers = sorted(run.layers, key=lambda l: l.execution_time_ms, reverse=True)
+        sorted_layers = sorted(
+            run.layers, key=lambda l: l.execution_time_ms, reverse=True
+        )
         slowest = [
-            {"name": l.name, "type": l.layer_type, "time_ms": l.execution_time_ms, "device": l.device}
-            for l in sorted_layers[:self.top_n_layers]
+            {
+                "name": l.name,
+                "type": l.layer_type,
+                "time_ms": l.execution_time_ms,
+                "device": l.device,
+            }
+            for l in sorted_layers[: self.top_n_layers]
         ]
 
         metrics = {
@@ -342,7 +350,8 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
                 "total_overhead_ms": run.memory_overhead_ms,
                 "overhead_percentage": (
                     (run.memory_overhead_ms / run.total_time_ms * 100)
-                    if run.total_time_ms > 0 else 0.0
+                    if run.total_time_ms > 0
+                    else 0.0
                 ),
                 "num_transfers": len(run.memory_transfers),
             },
@@ -396,7 +405,9 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             timing = metrics.get("timing", {})
             total_time = timing.get("total_time_ms", timing.get("avg_total_ms", 1))
             if total_time > 0:
-                top_layer_time = slowest[0].get("time_ms", slowest[0].get("avg_time_ms", 0))
+                top_layer_time = slowest[0].get(
+                    "time_ms", slowest[0].get("avg_time_ms", 0)
+                )
                 top_layer_pct = (top_layer_time / total_time) * 100
                 if top_layer_pct > 30:
                     recommendations.append(
@@ -416,7 +427,9 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
                 )
 
         if not recommendations:
-            recommendations.append("No significant optimization opportunities detected.")
+            recommendations.append(
+                "No significant optimization opportunities detected."
+            )
 
         return recommendations
 
@@ -484,7 +497,9 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             summary["avg_dla_percentage"] = sum(dla_percentages) / len(dla_percentages)
 
         if memory_overheads:
-            summary["avg_memory_overhead_percentage"] = sum(memory_overheads) / len(memory_overheads)
+            summary["avg_memory_overhead_percentage"] = sum(memory_overheads) / len(
+                memory_overheads
+            )
 
         return summary
 
@@ -502,43 +517,44 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         Returns:
             Comparison with improvement indicators
         """
-        def safe_get(d: Dict, *keys, default=0.0):
-            for key in keys:
-                if isinstance(d, dict):
-                    d = d.get(key, default)
-                else:
-                    return default
-            return d if d is not None else default
+        from trackiq_core import safe_get
 
-        baseline_time = safe_get(baseline_metrics, "timing", "total_time_ms")
+        baseline_time = safe_get(baseline_metrics, "timing", "total_time_ms", default=0.0)
         if baseline_time == 0:
-            baseline_time = safe_get(baseline_metrics, "timing", "avg_total_ms")
-        optimized_time = safe_get(optimized_metrics, "timing", "total_time_ms")
+            baseline_time = safe_get(baseline_metrics, "timing", "avg_total_ms", default=0.0)
+        optimized_time = safe_get(optimized_metrics, "timing", "total_time_ms", default=0.0)
         if optimized_time == 0:
-            optimized_time = safe_get(optimized_metrics, "timing", "avg_total_ms")
+            optimized_time = safe_get(optimized_metrics, "timing", "avg_total_ms", default=0.0)
 
-        baseline_throughput = safe_get(baseline_metrics, "throughput_fps")
+        baseline_throughput = safe_get(baseline_metrics, "throughput_fps", default=0.0)
         if baseline_throughput == 0:
-            baseline_throughput = safe_get(baseline_metrics, "throughput", "avg_fps")
-        optimized_throughput = safe_get(optimized_metrics, "throughput_fps")
+            baseline_throughput = safe_get(baseline_metrics, "throughput", "avg_fps", default=0.0)
+        optimized_throughput = safe_get(optimized_metrics, "throughput_fps", default=0.0)
         if optimized_throughput == 0:
-            optimized_throughput = safe_get(optimized_metrics, "throughput", "avg_fps")
+            optimized_throughput = safe_get(optimized_metrics, "throughput", "avg_fps", default=0.0)
 
-        baseline_overhead = safe_get(baseline_metrics, "memory_overhead", "overhead_percentage")
-        optimized_overhead = safe_get(optimized_metrics, "memory_overhead", "overhead_percentage")
+        baseline_overhead = safe_get(
+            baseline_metrics, "memory_overhead", "overhead_percentage", default=0.0
+        )
+        optimized_overhead = safe_get(
+            optimized_metrics, "memory_overhead", "overhead_percentage", default=0.0
+        )
 
         # Calculate improvements
         latency_improvement = (
             ((baseline_time - optimized_time) / baseline_time * 100)
-            if baseline_time > 0 else 0.0
+            if baseline_time > 0
+            else 0.0
         )
         throughput_improvement = (
             ((optimized_throughput - baseline_throughput) / baseline_throughput * 100)
-            if baseline_throughput > 0 else 0.0
+            if baseline_throughput > 0
+            else 0.0
         )
         overhead_reduction = (
             ((baseline_overhead - optimized_overhead) / baseline_overhead * 100)
-            if baseline_overhead > 0 else 0.0
+            if baseline_overhead > 0
+            else 0.0
         )
 
         return {

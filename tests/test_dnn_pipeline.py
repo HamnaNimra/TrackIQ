@@ -13,7 +13,6 @@ from autoperfpy.core.dnn_pipeline import (
     EngineOptimizationMetrics,
     DNNPipelineParser,
     DNNPipelineCalculator,
-    DNNPipelineAggregateStats,
 )
 
 

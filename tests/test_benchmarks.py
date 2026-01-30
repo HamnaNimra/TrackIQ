@@ -1,6 +1,5 @@
 """Tests for AutoPerfPy benchmarks module."""
 
-import pytest
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 
 
@@ -149,13 +148,12 @@ class TestBenchmarkIntegration:
     def test_compare_two_benchmark_runs(self):
         """Test comparing results from two benchmark runs."""
         benchmark = BatchingTradeoffBenchmark()
-        
-        results1 = benchmark.run(batch_sizes=[1, 4, 8])
+        benchmark.run(batch_sizes=[1, 4, 8])
         optimal1 = benchmark.get_optimal_batch_size(optimize_for="throughput")
-        
+
         # Reset and run again
         benchmark2 = BatchingTradeoffBenchmark()
-        results2 = benchmark2.run(batch_sizes=[1, 4, 8])
+        benchmark2.run(batch_sizes=[1, 4, 8])
         optimal2 = benchmark2.get_optimal_batch_size(optimize_for="throughput")
         
         # Both should find an optimal batch size

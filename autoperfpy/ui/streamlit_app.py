@@ -23,10 +23,11 @@ Authors:
 
 import json
 import os
+import shutil
 import sys
-from datetime import datetime
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
@@ -36,9 +37,8 @@ if __name__ == "__main__":
 
 try:
     import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
+    from autoperfpy.reports import charts as shared_charts
+
 except ImportError as e:
     st.error(f"Missing required dependency: {e}")
     st.info("Install with: pip install pandas plotly")
@@ -64,7 +64,7 @@ def load_json_data(filepath: str) -> Optional[Dict[str, Any]]:
         Dictionary with collector data or None if loading fails
     """
     try:
-        with open(filepath, "r") as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         st.error(f"Failed to load JSON file: {e}")
@@ -135,28 +135,33 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
         # Throughput (inverse of latency)
         throughput = 1000 / latency
 
-        samples.append({
-            "timestamp": base_time + i * 0.6,
-            "metrics": {
-                "latency_ms": round(latency, 2),
-                "cpu_percent": round(cpu_percent, 1),
-                "gpu_percent": round(gpu_percent, 1),
-                "memory_used_mb": round(memory_used, 0),
-                "memory_total_mb": 16384,
-                "memory_percent": round(memory_used / 16384 * 100, 1),
-                "power_w": round(power, 1),
-                "temperature_c": round(temp, 1),
-                "throughput_fps": round(throughput, 1),
-                "is_warmup": is_warmup,
-            },
-            "metadata": {"sample_index": i},
-        })
+        samples.append(
+            {
+                "timestamp": base_time + i * 0.6,
+                "metrics": {
+                    "latency_ms": round(latency, 2),
+                    "cpu_percent": round(cpu_percent, 1),
+                    "gpu_percent": round(gpu_percent, 1),
+                    "memory_used_mb": round(memory_used, 0),
+                    "memory_total_mb": 16384,
+                    "memory_percent": round(memory_used / 16384 * 100, 1),
+                    "power_w": round(power, 1),
+                    "temperature_c": round(temp, 1),
+                    "throughput_fps": round(throughput, 1),
+                    "is_warmup": is_warmup,
+                },
+                "metadata": {"sample_index": i},
+            }
+        )
 
     # Calculate summary
     steady_samples = samples[warmup_samples:]
     latencies = [s["metrics"]["latency_ms"] for s in steady_samples]
 
-    def percentile(data, p):
+    def _percentile_nearest(data, p):
+        """Nearest-index percentile for demo summary (preserves existing behavior)."""
+        if not data:
+            return 0.0
         sorted_data = sorted(data)
         idx = int(p / 100 * (len(sorted_data) - 1))
         return sorted_data[idx]
@@ -175,34 +180,70 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
                 "mean_ms": round(sum(latencies) / len(latencies), 2),
                 "min_ms": round(min(latencies), 2),
                 "max_ms": round(max(latencies), 2),
-                "p50_ms": round(percentile(latencies, 50), 2),
-                "p95_ms": round(percentile(latencies, 95), 2),
-                "p99_ms": round(percentile(latencies, 99), 2),
+                "p50_ms": round(_percentile_nearest(latencies, 50), 2),
+                "p95_ms": round(_percentile_nearest(latencies, 95), 2),
+                "p99_ms": round(_percentile_nearest(latencies, 99), 2),
             },
             "cpu": {
-                "mean_percent": round(sum(s["metrics"]["cpu_percent"] for s in steady_samples) / len(steady_samples), 1),
-                "max_percent": round(max(s["metrics"]["cpu_percent"] for s in steady_samples), 1),
+                "mean_percent": round(
+                    sum(s["metrics"]["cpu_percent"] for s in steady_samples)
+                    / len(steady_samples),
+                    1,
+                ),
+                "max_percent": round(
+                    max(s["metrics"]["cpu_percent"] for s in steady_samples), 1
+                ),
             },
             "gpu": {
-                "mean_percent": round(sum(s["metrics"]["gpu_percent"] for s in steady_samples) / len(steady_samples), 1),
-                "max_percent": round(max(s["metrics"]["gpu_percent"] for s in steady_samples), 1),
+                "mean_percent": round(
+                    sum(s["metrics"]["gpu_percent"] for s in steady_samples)
+                    / len(steady_samples),
+                    1,
+                ),
+                "max_percent": round(
+                    max(s["metrics"]["gpu_percent"] for s in steady_samples), 1
+                ),
             },
             "memory": {
-                "mean_mb": round(sum(s["metrics"]["memory_used_mb"] for s in steady_samples) / len(steady_samples), 0),
-                "max_mb": round(max(s["metrics"]["memory_used_mb"] for s in steady_samples), 0),
-                "min_mb": round(min(s["metrics"]["memory_used_mb"] for s in steady_samples), 0),
+                "mean_mb": round(
+                    sum(s["metrics"]["memory_used_mb"] for s in steady_samples)
+                    / len(steady_samples),
+                    0,
+                ),
+                "max_mb": round(
+                    max(s["metrics"]["memory_used_mb"] for s in steady_samples), 0
+                ),
+                "min_mb": round(
+                    min(s["metrics"]["memory_used_mb"] for s in steady_samples), 0
+                ),
             },
             "power": {
-                "mean_w": round(sum(s["metrics"]["power_w"] for s in steady_samples) / len(steady_samples), 1),
+                "mean_w": round(
+                    sum(s["metrics"]["power_w"] for s in steady_samples)
+                    / len(steady_samples),
+                    1,
+                ),
                 "max_w": round(max(s["metrics"]["power_w"] for s in steady_samples), 1),
             },
             "temperature": {
-                "mean_c": round(sum(s["metrics"]["temperature_c"] for s in steady_samples) / len(steady_samples), 1),
-                "max_c": round(max(s["metrics"]["temperature_c"] for s in steady_samples), 1),
+                "mean_c": round(
+                    sum(s["metrics"]["temperature_c"] for s in steady_samples)
+                    / len(steady_samples),
+                    1,
+                ),
+                "max_c": round(
+                    max(s["metrics"]["temperature_c"] for s in steady_samples), 1
+                ),
             },
             "throughput": {
-                "mean_fps": round(sum(s["metrics"]["throughput_fps"] for s in steady_samples) / len(steady_samples), 1),
-                "min_fps": round(min(s["metrics"]["throughput_fps"] for s in steady_samples), 1),
+                "mean_fps": round(
+                    sum(s["metrics"]["throughput_fps"] for s in steady_samples)
+                    / len(steady_samples),
+                    1,
+                ),
+                "min_fps": round(
+                    min(s["metrics"]["throughput_fps"] for s in steady_samples), 1
+                ),
             },
         },
         "config": {
@@ -216,47 +257,292 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
 def samples_to_dataframe(samples: List[Dict]) -> pd.DataFrame:
     """Convert samples list to pandas DataFrame.
 
+    Uses shared implementation from trackiq.reporting.charts.
+
     Args:
         samples: List of sample dictionaries
 
     Returns:
         DataFrame with flattened metrics
     """
-    rows = []
-    for sample in samples:
-        row = {"timestamp": sample["timestamp"]}
-        row.update(sample.get("metrics", {}))
-        if "metadata" in sample:
-            row.update({f"meta_{k}": v for k, v in sample["metadata"].items()})
-        rows.append(row)
-
-    df = pd.DataFrame(rows)
-
-    # Convert timestamp to datetime
+    df = shared_charts.samples_to_dataframe(samples)
+    # Add datetime column for UI display
     if "timestamp" in df.columns:
         df["datetime"] = pd.to_datetime(df["timestamp"], unit="s")
-        df["elapsed_seconds"] = df["timestamp"] - df["timestamp"].min()
-
     return df
 
 
-def safe_get(d: Dict, *keys, default=None):
-    """Safely get nested dictionary value.
+def get_platform_metadata() -> Dict[str, Any]:
+    """Get device name, CPU, GPU, SoC, power mode for display."""
+    meta = {
+        "device_name": "Unknown",
+        "cpu": "Unknown",
+        "gpu": "Unknown",
+        "soc": "N/A",
+        "power_mode": "N/A",
+    }
+    try:
+        import platform as plat
+
+        meta["cpu"] = plat.processor() or plat.machine() or "Unknown"
+    except Exception:
+        pass
+    try:
+        from trackiq.platform import query_nvidia_smi, get_memory_metrics
+
+        name_out = query_nvidia_smi(["name"], timeout=2)
+        if name_out:
+            meta["gpu"] = name_out.strip()
+            meta["device_name"] = name_out.strip()
+        mem = get_memory_metrics(timeout=2)
+        if mem:
+            meta["power_mode"] = f"GPU mem: {mem.get('gpu_memory_percent', 0):.0f}%"
+    except Exception:
+        pass
+    return meta
+
+
+def get_detected_devices() -> List[Dict[str, Any]]:
+    """Get all detected devices for UI (Phase 5)."""
+    try:
+        from trackiq_core.hardware import get_all_devices
+
+        devices = get_all_devices()
+        return [d.to_dict() for d in devices]
+    except Exception:
+        return []
+
+
+def result_to_csv_path(result: Dict[str, Any]) -> Optional[str]:
+    """Convert run result dict to a temp CSV file path for analyzers. Returns path or None."""
+    content = result_to_csv_content(result)
+    if not content:
+        return None
+    fd, path = tempfile.mkstemp(suffix=".csv", prefix="autoperfpy_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+    except Exception:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return None
+
+
+def result_to_csv_content(result: Dict[str, Any]) -> Optional[str]:
+    """Convert run result dict to CSV string (same format as CLI --export-csv). Returns None if no samples."""
+    samples = result.get("samples", [])
+    if not samples:
+        return None
+    batch_size = result.get("inference_config", {}).get("batch_size", 1)
+    rows = []
+    for s in samples:
+        ts = s.get("timestamp", 0)
+        m = s.get("metrics", s) if isinstance(s, dict) else {}
+        lat = m.get("latency_ms", 0)
+        pwr = m.get("power_w", 0)
+        throughput = (1000 / lat) if lat else 0
+        rows.append((ts, "default", batch_size, lat, pwr, throughput))
+    lines = ["timestamp,workload,batch_size,latency_ms,power_w,throughput"]
+    for r in rows:
+        lines.append(",".join(str(x) for x in r))
+    return "\n".join(lines)
+
+
+def run_auto_benchmarks_ui(
+    duration_seconds: int,
+    precisions: List[str],
+    batch_sizes: List[int],
+    max_configs_per_device: int = 6,
+) -> List[Dict[str, Any]]:
+    """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
+    try:
+        from autoperfpy.device_config import get_devices_and_configs_auto
+        from autoperfpy.auto_runner import run_auto_benchmarks
+
+        pairs = get_devices_and_configs_auto(
+            precisions=precisions,
+            batch_sizes=batch_sizes,
+            max_configs_per_device=max_configs_per_device,
+        )
+        if not pairs:
+            return []
+        return run_auto_benchmarks(
+            pairs,
+            duration_seconds=float(duration_seconds),
+            sample_interval_seconds=0.2,
+            quiet=True,
+        )
+    except Exception:
+        return []
+
+
+def run_benchmark_from_ui(
+    duration_seconds: int, device: str, precision: str
+) -> Optional[Dict[str, Any]]:
+    """Run benchmark from UI (Phase 5 manual: uses detected device + inference config)."""
+    try:
+        from autoperfpy.device_config import (
+            DEFAULT_ITERATIONS,
+            DEFAULT_WARMUP_RUNS,
+            InferenceConfig,
+            PRECISION_FP32,
+            resolve_device,
+        )
+        from autoperfpy.auto_runner import run_single_benchmark
+    except ImportError:
+        return _run_synthetic_fallback_ui(duration_seconds, device, precision)
+    target = resolve_device(device or "cpu_0")
+    if not target:
+        return _run_synthetic_fallback_ui(duration_seconds, device, precision)
+    config = InferenceConfig(
+        precision=precision or PRECISION_FP32,
+        batch_size=1,
+        accelerator=target.device_id,
+        streams=1,
+        warmup_runs=DEFAULT_WARMUP_RUNS,
+        iterations=DEFAULT_ITERATIONS,
+    )
+    result = run_single_benchmark(
+        target,
+        config,
+        duration_seconds=float(duration_seconds),
+        sample_interval_seconds=0.2,
+        quiet=True,
+    )
+    return result
+
+
+def _run_synthetic_fallback_ui(
+    duration_seconds: int, device: str, precision: str
+) -> Optional[Dict[str, Any]]:
+    """Fallback: run synthetic benchmark from UI when Phase 5 runner unavailable."""
+    try:
+        from autoperfpy.device_config import DEFAULT_WARMUP_RUNS
+        from trackiq.collectors import SyntheticCollector
+        from trackiq.runner import BenchmarkRunner
+    except ImportError:
+        return None
+    config = {"warmup_samples": DEFAULT_WARMUP_RUNS, "seed": 42}
+    collector = SyntheticCollector(config=config)
+    runner = BenchmarkRunner(
+        collector,
+        duration_seconds=float(duration_seconds),
+        sample_interval_seconds=0.2,
+        quiet=True,
+    )
+    export = runner.run()
+    data = export.to_dict()
+    data["platform_metadata"] = get_platform_metadata()
+    data["inference_config"] = {"device": device, "precision": precision}
+    data["run_label"] = f"{device}_{precision}_bs1"
+    return data
+
+
+def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -> tuple:
+    """Generate HTML report directly without using CLI subprocess.
+
+    The HTML report includes a 'Print / Save as PDF' button that users can
+    click to save the report as PDF using their browser's print dialog.
 
     Args:
-        d: Dictionary to search
-        *keys: Keys to traverse
-        default: Default value if key not found
+        data: Collector export data with samples and summary
+        report_type: Report format (only "HTML" supported; use browser print for PDF)
 
     Returns:
-        Value at nested key or default
+        Tuple of (report_bytes, filename) or (None, None) on failure
     """
-    for key in keys:
-        if isinstance(d, dict):
-            d = d.get(key, default)
-        else:
-            return default
-    return d if d is not None else default
+    from autoperfpy.reports import HTMLReportGenerator
+    from autoperfpy.reports import charts as shared_charts
+
+    samples = data.get("samples", [])
+    summary = data.get("summary", {})
+
+    if not samples:
+        return None, None
+
+    # Build DataFrame from samples
+    df = shared_charts.samples_to_dataframe(samples)
+    shared_charts.ensure_throughput_column(df)
+
+    # Compute summary from DataFrame if empty (e.g., from CSV upload)
+    if not summary or not summary.get("latency"):
+        summary = shared_charts.compute_summary_from_dataframe(df)
+
+    # Create report generator
+    report = HTMLReportGenerator(
+        title="Performance Analysis Report",
+        author="AutoPerfPy",
+        theme="light",
+    )
+
+    # Add metadata
+    report.add_metadata("Collector", data.get("collector_name", "Unknown"))
+    if data.get("profile"):
+        report.add_metadata("Profile", data["profile"])
+    if data.get("run_label"):
+        report.add_metadata("Run Label", data["run_label"])
+
+    # Add device info if available
+    device_info = data.get("device_info", {})
+    if device_info and device_info.get("device_name"):
+        report.add_metadata("Device", device_info["device_name"])
+
+    # Add summary items
+    sample_count = summary.get("sample_count") or len(samples)
+    report.add_summary_item("Samples", sample_count, "", "neutral")
+
+    lat = summary.get("latency", {})
+    if lat:
+        report.add_summary_item(
+            "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
+        )
+        report.add_summary_item(
+            "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
+        )
+        report.add_summary_item(
+            "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
+        )
+
+    thr = summary.get("throughput", {})
+    if thr:
+        report.add_summary_item(
+            "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
+        )
+
+    pwr = summary.get("power", {})
+    if pwr and pwr.get("mean_w") is not None:
+        report.add_summary_item(
+            "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
+        )
+
+    # Add GPU/CPU utilization if available
+    gpu = summary.get("gpu", {})
+    if gpu and gpu.get("mean_percent") is not None:
+        report.add_summary_item(
+            "Avg GPU", f"{gpu.get('mean_percent', 0):.1f}", "%", "neutral"
+        )
+
+    cpu = summary.get("cpu", {})
+    if cpu and cpu.get("mean_percent") is not None:
+        report.add_summary_item(
+            "Avg CPU", f"{cpu.get('mean_percent', 0):.1f}", "%", "neutral"
+        )
+
+    # Add all Plotly charts (same as UI)
+    shared_charts.add_charts_to_html_report(report, df, summary)
+
+    # Generate report to temp file
+    out_dir = tempfile.mkdtemp(prefix="autoperfpy_report_")
+    try:
+        report_path = Path(out_dir) / "performance_report.html"
+        report.generate_html(str(report_path))
+        report_bytes = report_path.read_bytes()
+        return report_bytes, "performance_report.html"
+    finally:
+        shutil.rmtree(out_dir, ignore_errors=True)
 
 
 def render_summary_metrics(data: Dict[str, Any]):
@@ -313,41 +599,16 @@ def render_latency_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
     col1, col2 = st.columns(2)
 
     with col1:
-        # Latency timeline
-        fig = px.line(
-            df,
-            x="elapsed_seconds",
-            y="latency_ms",
-            color="is_warmup" if "is_warmup" in df.columns else None,
-            title="Latency Over Time",
-            labels={"elapsed_seconds": "Time (seconds)", "latency_ms": "Latency (ms)"},
-        )
-        fig.update_layout(showlegend=True if "is_warmup" in df.columns else False)
-        st.plotly_chart(fig, use_container_width=True)
+        # Latency timeline (from shared charts)
+        fig = shared_charts.create_latency_timeline(df)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     with col2:
-        # Latency distribution
-        fig = px.histogram(
-            df[~df.get("is_warmup", False)] if "is_warmup" in df.columns else df,
-            x="latency_ms",
-            nbins=50,
-            title="Latency Distribution (excluding warmup)",
-            labels={"latency_ms": "Latency (ms)", "count": "Frequency"},
-        )
-
-        # Add percentile lines
-        latency = summary.get("latency", {})
-        for pct, color in [("p50_ms", "green"), ("p95_ms", "orange"), ("p99_ms", "red")]:
-            val = latency.get(pct)
-            if val:
-                fig.add_vline(
-                    x=val,
-                    line_dash="dash",
-                    line_color=color,
-                    annotation_text=f"{pct.replace('_ms', '')}: {val:.1f}ms",
-                )
-
-        st.plotly_chart(fig, use_container_width=True)
+        # Latency distribution (from shared charts)
+        fig = shared_charts.create_latency_histogram(df, summary)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     # Percentile breakdown
     latency = summary.get("latency", {})
@@ -381,65 +642,16 @@ def render_utilization_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
     col1, col2 = st.columns(2)
 
     with col1:
-        # Utilization timeline
-        fig = go.Figure()
-
-        if has_cpu:
-            fig.add_trace(go.Scatter(
-                x=df["elapsed_seconds"],
-                y=df["cpu_percent"],
-                mode="lines",
-                name="CPU",
-                line=dict(color="blue"),
-            ))
-
-        if has_gpu:
-            fig.add_trace(go.Scatter(
-                x=df["elapsed_seconds"],
-                y=df["gpu_percent"],
-                mode="lines",
-                name="GPU",
-                line=dict(color="green"),
-            ))
-
-        fig.update_layout(
-            title="CPU/GPU Utilization Over Time",
-            xaxis_title="Time (seconds)",
-            yaxis_title="Utilization (%)",
-            yaxis=dict(range=[0, 105]),
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Utilization timeline (from shared charts)
+        fig = shared_charts.create_utilization_timeline(df)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     with col2:
-        # Utilization summary bar chart
-        cpu_data = summary.get("cpu", {})
-        gpu_data = summary.get("gpu", {})
-
-        categories = []
-        means = []
-        maxes = []
-
-        if cpu_data:
-            categories.append("CPU")
-            means.append(cpu_data.get("mean_percent", 0))
-            maxes.append(cpu_data.get("max_percent", 0))
-
-        if gpu_data:
-            categories.append("GPU")
-            means.append(gpu_data.get("mean_percent", 0))
-            maxes.append(gpu_data.get("max_percent", 0))
-
-        fig = go.Figure(data=[
-            go.Bar(name="Mean", x=categories, y=means, marker_color="steelblue"),
-            go.Bar(name="Max", x=categories, y=maxes, marker_color="darkblue"),
-        ])
-        fig.update_layout(
-            title="Utilization Summary",
-            barmode="group",
-            yaxis_title="Utilization (%)",
-            yaxis=dict(range=[0, 105]),
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Utilization summary bar chart (from shared charts)
+        fig = shared_charts.create_utilization_summary_bar(summary)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
 
 def render_power_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
@@ -461,38 +673,18 @@ def render_power_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
     col1, col2 = st.columns(2)
 
     with col1:
-        if has_power:
-            fig = px.line(
-                df,
-                x="elapsed_seconds",
-                y="power_w",
-                title="Power Consumption Over Time",
-                labels={"elapsed_seconds": "Time (seconds)", "power_w": "Power (W)"},
-            )
-            fig.update_traces(line_color="orange")
-            st.plotly_chart(fig, use_container_width=True)
+        # Power timeline (from shared charts)
+        fig = shared_charts.create_power_timeline(df)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
         else:
             st.info("No power data available")
 
     with col2:
-        if has_temp:
-            fig = px.line(
-                df,
-                x="elapsed_seconds",
-                y="temperature_c",
-                title="Temperature Over Time",
-                labels={"elapsed_seconds": "Time (seconds)", "temperature_c": "Temperature (C)"},
-            )
-            fig.update_traces(line_color="red")
-
-            # Add thermal threshold line
-            fig.add_hline(
-                y=85,
-                line_dash="dash",
-                line_color="darkred",
-                annotation_text="Throttle Threshold",
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        # Temperature timeline (from shared charts)
+        fig = shared_charts.create_temperature_timeline(df)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
         else:
             st.info("No temperature data available")
 
@@ -529,56 +721,21 @@ def render_memory_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
     col1, col2 = st.columns(2)
 
     with col1:
-        fig = px.line(
-            df,
-            x="elapsed_seconds",
-            y="memory_used_mb",
-            title="Memory Usage Over Time",
-            labels={"elapsed_seconds": "Time (seconds)", "memory_used_mb": "Memory Used (MB)"},
-        )
-        fig.update_traces(line_color="purple")
-
-        # Add total memory line if available
-        if "memory_total_mb" in df.columns:
-            total_mem = df["memory_total_mb"].iloc[0]
-            fig.add_hline(
-                y=total_mem,
-                line_dash="dash",
-                line_color="gray",
-                annotation_text=f"Total: {total_mem} MB",
-            )
-
-        st.plotly_chart(fig, use_container_width=True)
+        # Memory timeline (from shared charts)
+        fig = shared_charts.create_memory_timeline(df)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     with col2:
-        memory = summary.get("memory", {})
-        if memory:
-            # Memory usage gauge
-            mean_mb = memory.get("mean_mb", 0)
-            max_mb = memory.get("max_mb", 0)
-            total_mb = df["memory_total_mb"].iloc[0] if "memory_total_mb" in df.columns else 16384
-
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number+delta",
-                value=mean_mb,
-                delta={"reference": max_mb, "relative": False, "valueformat": ".0f"},
-                title={"text": "Mean Memory Usage (MB)"},
-                gauge={
-                    "axis": {"range": [0, total_mb]},
-                    "bar": {"color": "purple"},
-                    "steps": [
-                        {"range": [0, total_mb * 0.7], "color": "lightgray"},
-                        {"range": [total_mb * 0.7, total_mb * 0.9], "color": "lightyellow"},
-                        {"range": [total_mb * 0.9, total_mb], "color": "lightcoral"},
-                    ],
-                    "threshold": {
-                        "line": {"color": "red", "width": 4},
-                        "thickness": 0.75,
-                        "value": max_mb,
-                    },
-                },
-            ))
-            st.plotly_chart(fig, use_container_width=True)
+        # Memory gauge (from shared charts)
+        total_mb = (
+            float(df["memory_total_mb"].iloc[0])
+            if "memory_total_mb" in df.columns and len(df) > 0
+            else None
+        )
+        fig = shared_charts.create_memory_gauge(summary, total_mb)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
 
 def render_throughput_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
@@ -597,30 +754,10 @@ def render_throughput_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
     col1, col2 = st.columns(2)
 
     with col1:
-        # Filter out warmup if available
-        plot_df = df[~df.get("is_warmup", False)] if "is_warmup" in df.columns else df
-
-        fig = px.line(
-            plot_df,
-            x="elapsed_seconds",
-            y="throughput_fps",
-            title="Throughput Over Time (excluding warmup)",
-            labels={"elapsed_seconds": "Time (seconds)", "throughput_fps": "Throughput (FPS)"},
-        )
-        fig.update_traces(line_color="teal")
-
-        # Add mean line
-        throughput = summary.get("throughput", {})
-        mean_fps = throughput.get("mean_fps")
-        if mean_fps:
-            fig.add_hline(
-                y=mean_fps,
-                line_dash="dash",
-                line_color="darkgreen",
-                annotation_text=f"Mean: {mean_fps:.1f} FPS",
-            )
-
-        st.plotly_chart(fig, use_container_width=True)
+        # Throughput timeline (from shared charts)
+        fig = shared_charts.create_throughput_timeline(df, summary)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     with col2:
         # Throughput statistics
@@ -638,7 +775,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
 
 
 def render_multi_run_comparison(runs: List[Dict[str, Any]]):
-    """Render multi-run comparison view.
+    """Render multi-run comparison view with platform_metadata and inference_config (Phase 5).
 
     Args:
         runs: List of collector export data dictionaries
@@ -646,78 +783,74 @@ def render_multi_run_comparison(runs: List[Dict[str, Any]]):
     st.subheader("Multi-Run Comparison")
 
     if len(runs) < 2:
-        st.info("Upload multiple run files to enable comparison")
+        st.info(
+            "Upload multiple run files or run Automatic benchmark to enable comparison"
+        )
         return
 
-    # Extract summaries
-    run_names = [r.get("collector_name", f"Run {i+1}") for i, r in enumerate(runs)]
+    # Run labels: run_label > collector_name > Run N
+    run_names = [
+        r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
+        for i, r in enumerate(runs)
+    ]
 
     # Latency comparison
     col1, col2 = st.columns(2)
 
     with col1:
-        latency_data = []
-        for i, run in enumerate(runs):
-            latency = run.get("summary", {}).get("latency", {})
-            for pct in ["p50_ms", "p95_ms", "p99_ms"]:
-                val = latency.get(pct)
-                if val is not None:
-                    latency_data.append({
-                        "Run": run_names[i],
-                        "Percentile": pct.replace("_ms", "").upper(),
-                        "Latency (ms)": val,
-                    })
-
-        if latency_data:
-            df = pd.DataFrame(latency_data)
-            fig = px.bar(
-                df,
-                x="Run",
-                y="Latency (ms)",
-                color="Percentile",
-                barmode="group",
-                title="Latency Comparison Across Runs",
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        # Latency comparison bar chart (from shared charts)
+        fig = shared_charts.create_latency_comparison_bar(runs, run_names)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
     with col2:
-        throughput_data = []
-        for i, run in enumerate(runs):
-            throughput = run.get("summary", {}).get("throughput", {})
-            mean_fps = throughput.get("mean_fps")
-            if mean_fps is not None:
-                throughput_data.append({
-                    "Run": run_names[i],
-                    "Throughput (FPS)": mean_fps,
-                })
+        # Throughput comparison bar chart (from shared charts)
+        fig = shared_charts.create_throughput_comparison_bar(runs, run_names)
+        if fig:
+            st.plotly_chart(fig, width="stretch")
 
-        if throughput_data:
-            df = pd.DataFrame(throughput_data)
-            fig = px.bar(
-                df,
-                x="Run",
-                y="Throughput (FPS)",
-                title="Throughput Comparison Across Runs",
-                color="Run",
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-    # Comparison table
+    # Comparison table with platform_metadata and inference_config (use None for missing numerics so Arrow can serialize)
     st.markdown("**Summary Comparison**")
     comparison_data = []
     for i, run in enumerate(runs):
         summary = run.get("summary", {})
-        comparison_data.append({
-            "Run": run_names[i],
-            "Samples": summary.get("sample_count", "N/A"),
-            "Duration (s)": round(summary.get("duration_seconds", 0), 1),
-            "P99 Latency (ms)": summary.get("latency", {}).get("p99_ms", "N/A"),
-            "Mean Throughput (FPS)": summary.get("throughput", {}).get("mean_fps", "N/A"),
-            "Mean Power (W)": summary.get("power", {}).get("mean_w", "N/A"),
-            "Max Temp (C)": summary.get("temperature", {}).get("max_c", "N/A"),
-        })
+        pm = run.get("platform_metadata") or {}
+        inf = run.get("inference_config") or {}
+        lat = summary.get("latency", {})
+        thr = summary.get("throughput", {})
+        pwr = summary.get("power", {})
+        temp = summary.get("temperature", {})
+        comparison_data.append(
+            {
+                "Run": run_names[i],
+                "Device": pm.get("device_name") or inf.get("accelerator") or "",
+                "Precision": inf.get("precision") or "",
+                "Batch": inf.get("batch_size"),
+                "Samples": summary.get("sample_count"),
+                "Duration (s)": (
+                    round(summary.get("duration_seconds", 0), 1)
+                    if summary.get("duration_seconds") is not None
+                    else None
+                ),
+                "P99 Latency (ms)": lat.get("p99_ms") if lat else None,
+                "Mean Throughput (FPS)": thr.get("mean_fps") if thr else None,
+                "Mean Power (W)": pwr.get("mean_w") if pwr else None,
+                "Max Temp (C)": temp.get("max_c") if temp else None,
+            }
+        )
 
-    st.dataframe(pd.DataFrame(comparison_data), use_container_width=True)
+    st.dataframe(pd.DataFrame(comparison_data), width="stretch")
+
+    # Per-run metadata expanders (side-by-side)
+    st.markdown("**Run metadata**")
+    n = len(runs)
+    cols = st.columns(min(n, 4))
+    for i, run in enumerate(runs):
+        with cols[i % len(cols)]:
+            with st.expander(run_names[i], expanded=False):
+                pm = run.get("platform_metadata") or {}
+                inf = run.get("inference_config") or {}
+                st.json({"platform_metadata": pm, "inference_config": inf})
 
 
 def render_raw_data_view(df: pd.DataFrame):
@@ -730,9 +863,20 @@ def render_raw_data_view(df: pd.DataFrame):
 
     # Column selector
     all_cols = df.columns.tolist()
-    default_cols = [c for c in ["elapsed_seconds", "latency_ms", "cpu_percent", "gpu_percent",
-                                 "memory_used_mb", "power_w", "temperature_c", "throughput_fps"]
-                    if c in all_cols]
+    default_cols = [
+        c
+        for c in [
+            "elapsed_seconds",
+            "latency_ms",
+            "cpu_percent",
+            "gpu_percent",
+            "memory_used_mb",
+            "power_w",
+            "temperature_c",
+            "throughput_fps",
+        ]
+        if c in all_cols
+    ]
 
     selected_cols = st.multiselect(
         "Select columns to display",
@@ -741,7 +885,7 @@ def render_raw_data_view(df: pd.DataFrame):
     )
 
     if selected_cols:
-        st.dataframe(df[selected_cols], use_container_width=True, height=400)
+        st.dataframe(df[selected_cols], width="stretch", height=400)
 
     # Download button
     csv = df.to_csv(index=False)
@@ -765,7 +909,7 @@ def main():
 
         data_source = st.radio(
             "Select data source",
-            options=["Upload File", "Demo Data"],
+            options=["Upload File", "Demo Data", "Run Benchmark"],
             index=1,  # Default to demo
         )
 
@@ -789,16 +933,299 @@ def main():
                         elif uploaded_file.name.endswith(".csv"):
                             df = pd.read_csv(uploaded_file)
                             # Convert CSV to collector-like format
-                            data_list.append({
-                                "collector_name": uploaded_file.name,
-                                "samples": df.to_dict("records"),
-                                "summary": {},
-                            })
+                            data_list.append(
+                                {
+                                    "collector_name": uploaded_file.name,
+                                    "samples": df.to_dict("records"),
+                                    "summary": {},
+                                }
+                            )
                     except Exception as e:
                         st.error(f"Error loading {uploaded_file.name}: {e}")
+        elif data_source == "Run Benchmark":
+            st.subheader("Benchmark mode")
+            benchmark_mode = st.radio(
+                "Mode",
+                options=["Automatic", "Manual"],
+                index=0,
+                help="Automatic: run on all detected devices and configs. Manual: choose device and config.",
+            )
+            if benchmark_mode == "Automatic":
+                detected = get_detected_devices()
+                if detected:
+                    st.markdown("**Detected devices**")
+                    for d in detected:
+                        st.caption(
+                            f"• {d.get('device_id', '?')}: {d.get('device_name', 'Unknown')}"
+                        )
+                else:
+                    st.caption("No devices detected; synthetic will be used.")
+                duration_ui = st.number_input(
+                    "Duration (seconds)",
+                    min_value=1,
+                    max_value=120,
+                    value=10,
+                    key="auto_dur",
+                )
+                try:
+                    from autoperfpy.device_config import (
+                        DEFAULT_BATCH_SIZES,
+                        PRECISIONS,
+                    )
+                except ImportError:
+                    PRECISIONS = ["fp32", "fp16", "int8"]
+                    DEFAULT_BATCH_SIZES = [1, 4, 8]
+                precisions_ui = st.multiselect(
+                    "Precisions",
+                    options=PRECISIONS,
+                    default=PRECISIONS[:2],
+                    key="auto_prec",
+                )
+                batch_sizes_ui = st.multiselect(
+                    "Batch sizes",
+                    options=DEFAULT_BATCH_SIZES + [2, 16],
+                    default=DEFAULT_BATCH_SIZES,
+                    key="auto_bs",
+                )
+                max_cfg = st.number_input(
+                    "Max configs per device",
+                    min_value=1,
+                    max_value=20,
+                    value=6,
+                    key="auto_max",
+                )
+                if st.button("Run benchmark (all devices & configs)"):
+                    with st.spinner("Running benchmarks on all devices..."):
+                        results = run_auto_benchmarks_ui(
+                            duration_seconds=duration_ui,
+                            precisions=precisions_ui or PRECISIONS[:1],
+                            batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
+                            max_configs_per_device=max_cfg,
+                        )
+                    if results:
+                        if "data_list" not in st.session_state:
+                            st.session_state["data_list"] = []
+                        st.session_state["data_list"] = results
+                        st.success(
+                            f"Completed {len(results)} runs. Results loaded below."
+                        )
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                    else:
+                        st.warning("No results. Try Manual mode or check devices.")
+                if "data_list" in st.session_state and st.session_state["data_list"]:
+                    data_list = st.session_state["data_list"]
+                else:
+                    st.info("Click **Run benchmark (all devices & configs)** to start.")
+            else:
+                st.subheader("Manual settings")
+                detected = get_detected_devices()
+                device_options = [
+                    (
+                        d.get("device_id", "?"),
+                        d.get("device_name") or d.get("device_id", "Unknown"),
+                    )
+                    for d in detected
+                ]
+                if device_options:
+                    device_labels = [f"{did} ({name})" for did, name in device_options]
+                    device_idx = st.selectbox(
+                        "Device",
+                        range(len(device_labels)),
+                        format_func=lambda i: device_labels[i],
+                        key="man_device_select",
+                        help="Same as CLI: autoperfpy run --device <id>",
+                    )
+                    device_ui = device_options[device_idx][0]
+                else:
+                    device_ui = st.text_input(
+                        "Device (e.g. nvidia_0, cpu_0, 0)",
+                        value="cpu_0",
+                        help="Device ID or GPU index when none detected",
+                    )
+                try:
+                    from autoperfpy.device_config import PRECISIONS as MANUAL_PRECISIONS
+                except ImportError:
+                    MANUAL_PRECISIONS = ["fp32", "fp16", "int8"]
+                precision_ui = st.selectbox(
+                    "Inference precision",
+                    options=MANUAL_PRECISIONS,
+                    index=0,
+                    help="Precision for inference (fp32, fp16, int8)",
+                )
+                duration_ui = st.number_input(
+                    "Duration (seconds)",
+                    min_value=1,
+                    max_value=300,
+                    value=10,
+                    key="man_dur",
+                )
+                if st.button("Run benchmark"):
+                    with st.spinner("Running benchmark..."):
+                        run_data = run_benchmark_from_ui(
+                            duration_ui, device_ui, precision_ui
+                        )
+                    if run_data:
+                        if "data_list" not in st.session_state:
+                            st.session_state["data_list"] = []
+                        st.session_state["data_list"] = [run_data]
+                        st.success("Benchmark complete. Results loaded below.")
+                        if hasattr(st, "rerun"):
+                            st.rerun()
+                        else:
+                            st.experimental_rerun()
+                if "data_list" in st.session_state and st.session_state["data_list"]:
+                    data_list = st.session_state["data_list"]
+                else:
+                    st.info(
+                        "Click **Run benchmark** to run a short benchmark and load results."
+                    )
         else:
             st.info("Using synthetic demo data")
             data_list = [generate_synthetic_demo_data()]
+
+        st.divider()
+
+        # Reports & Analyze (same options as CLI)
+        st.header("Reports & Analyze")
+        report_analyze_source = st.radio(
+            "Data for report/analysis",
+            options=["Use current data above", "Run quick benchmark"],
+            key="report_data_src",
+            help="Same as CLI: omit --csv/--json to auto-run a benchmark",
+        )
+        ra_device_id = "cpu_0"
+        ra_duration = 10
+        if report_analyze_source == "Run quick benchmark":
+            detected_ra = get_detected_devices()
+            if detected_ra:
+                ra_options = [
+                    (
+                        d.get("device_id", "?"),
+                        d.get("device_name") or d.get("device_id", "?"),
+                    )
+                    for d in detected_ra
+                ]
+                ra_labels = [f"{did} ({name})" for did, name in ra_options]
+                ra_idx = st.selectbox(
+                    "Device",
+                    range(len(ra_labels)),
+                    format_func=lambda i: ra_labels[i],
+                    key="ra_device",
+                )
+                ra_device_id = ra_options[ra_idx][0]
+            else:
+                ra_device_id = st.text_input(
+                    "Device (e.g. cpu_0, nvidia_0)", value="cpu_0", key="ra_device_txt"
+                )
+            ra_duration = st.number_input(
+                "Duration (seconds)", min_value=5, max_value=120, value=10, key="ra_dur"
+            )
+
+        col_rep, col_an = st.columns(2)
+        with col_rep:
+            st.subheader("Generate report")
+            st.caption(
+                "Download as HTML. Use the 'Print / Save as PDF' button in the report for PDF."
+            )
+            if st.button("Generate HTML Report"):
+                data_for_report = None
+                if report_analyze_source == "Use current data above" and data_list:
+                    data_for_report = data_list[0]
+                elif report_analyze_source == "Run quick benchmark":
+                    with st.spinner("Running quick benchmark..."):
+                        data_for_report = run_benchmark_from_ui(
+                            ra_duration, ra_device_id, "fp32"
+                        )
+                if data_for_report:
+                    try:
+                        report_bytes, report_basename = _generate_report_directly(
+                            data_for_report, "HTML"
+                        )
+                        if report_bytes:
+                            st.success("Report generated! Download below.")
+                            st.info(
+                                "Tip: Open the HTML file and click 'Print / Save as PDF' button to create a PDF."
+                            )
+                            st.download_button(
+                                "Download HTML Report",
+                                data=report_bytes,
+                                file_name=report_basename,
+                                mime="text/html",
+                                key="dl_report",
+                            )
+                        else:
+                            st.error("Report generation failed")
+                    except Exception as e:
+                        st.error(f"Report generation failed: {e}")
+                else:
+                    st.warning("No data. Run a benchmark or upload a file first.")
+
+        with col_an:
+            st.subheader("Run analysis")
+            analyze_type = st.selectbox(
+                "Type",
+                ["latency", "efficiency", "variability", "Run all"],
+                key="analyze_type",
+                help="Same as CLI: autoperfpy analyze <type>. 'Run all' runs latency, efficiency, and variability.",
+            )
+            if st.button("Run analysis"):
+                data_for_analyze = None
+                if report_analyze_source == "Use current data above" and data_list:
+                    data_for_analyze = data_list[0]
+                elif report_analyze_source == "Run quick benchmark":
+                    with st.spinner("Running quick benchmark..."):
+                        data_for_analyze = run_benchmark_from_ui(
+                            ra_duration, ra_device_id, "fp32"
+                        )
+                if data_for_analyze:
+                    csv_path = result_to_csv_path(data_for_analyze)
+                    if csv_path:
+                        try:
+                            from autoperfpy.analyzers import (
+                                PercentileLatencyAnalyzer,
+                                EfficiencyAnalyzer,
+                                VariabilityAnalyzer,
+                            )
+                            from autoperfpy.config import ConfigManager
+
+                            config = ConfigManager.load_or_default(None)
+                            types_to_run = (
+                                ["latency", "efficiency", "variability"]
+                                if analyze_type == "Run all"
+                                else [analyze_type]
+                            )
+                            for atype in types_to_run:
+                                if atype == "latency":
+                                    analyzer = PercentileLatencyAnalyzer(config)
+                                    result = analyzer.analyze(csv_path)
+                                elif atype == "efficiency":
+                                    analyzer = EfficiencyAnalyzer(config)
+                                    result = analyzer.analyze(csv_path)
+                                else:
+                                    analyzer = VariabilityAnalyzer(config)
+                                    result = analyzer.analyze(
+                                        csv_path, latency_col="latency_ms"
+                                    )
+                                with st.expander(
+                                    f"**{atype.capitalize()}**", expanded=True
+                                ):
+                                    st.json(
+                                        result.metrics
+                                        if hasattr(result, "metrics")
+                                        else {}
+                                    )
+                        finally:
+                            try:
+                                os.unlink(csv_path)
+                            except OSError:
+                                pass
+                    else:
+                        st.warning("No samples in data to analyze.")
+                else:
+                    st.warning("No data. Run a benchmark or upload a file first.")
 
         st.divider()
 
@@ -806,12 +1233,28 @@ def main():
         st.header("View Options")
         show_warmup = st.checkbox("Include warmup samples", value=False)
         show_raw_data = st.checkbox("Show raw data table", value=False)
+        if data_list and result_to_csv_content(data_list[0]):
+            csv_content = result_to_csv_content(data_list[0])
+            st.download_button(
+                "Download run as CSV",
+                data=csv_content or "",
+                file_name="run.csv",
+                mime="text/csv",
+                help="Same format as CLI --export-csv; use with autoperfpy analyze/report --csv",
+                key="dl_run_csv",
+            )
 
     # Main content
     if not data_list:
-        st.info("Please upload a data file or select Demo Data to get started")
+        if data_source == "Run Benchmark":
+            st.info(
+                "Configure benchmark settings in the sidebar and click **Run benchmark** to start."
+            )
+        else:
+            st.info("Please upload a data file or select Demo Data to get started")
 
-        st.markdown("""
+        st.markdown(
+            """
         ### Supported Data Formats
 
         **JSON (Collector Export)**
@@ -830,13 +1273,14 @@ def main():
 
         ### Getting Started
 
-        1. Run a collector to generate data:
+        1. Run a benchmark from the UI (sidebar → Run Benchmark) or CLI:
            ```bash
            autoperfpy run --profile ci_smoke --export results.json
            ```
 
-        2. Upload the results file to visualize
-        """)
+        2. Upload the results file or use Demo Data to visualize
+        """
+        )
         return
 
     # Use first dataset as primary
@@ -861,8 +1305,42 @@ def main():
     # Display collector info
     st.markdown(f"**Collector:** {data.get('collector_name', 'Unknown')}")
     if summary.get("duration_seconds"):
-        st.markdown(f"**Duration:** {summary['duration_seconds']:.1f} seconds | "
-                    f"**Samples:** {summary.get('sample_count', len(samples))}")
+        st.markdown(
+            f"**Duration:** {summary['duration_seconds']:.1f} seconds | "
+            f"**Samples:** {summary.get('sample_count', len(samples))}"
+        )
+
+    # Platform metadata (device name, CPU, GPU, SoC, power mode) and inference_config
+    platform_meta = data.get("platform_metadata") or {}
+    inference_cfg = data.get("inference_config") or {}
+    run_label = data.get("run_label", "")
+    if platform_meta or inference_cfg or run_label:
+        with st.expander("Platform & run metadata", expanded=True):
+            if run_label:
+                st.markdown(f"**Run:** `{run_label}`")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown("**Device**")
+                st.text(
+                    platform_meta.get("device_name")
+                    or inference_cfg.get("accelerator")
+                    or "N/A"
+                )
+                st.markdown("**GPU**")
+                st.text(
+                    platform_meta.get("gpu_model") or platform_meta.get("gpu", "N/A")
+                )
+            with c2:
+                st.markdown("**CPU**")
+                st.text(
+                    platform_meta.get("cpu_model") or platform_meta.get("cpu", "N/A")
+                )
+                st.markdown("**Precision**")
+                st.text(inference_cfg.get("precision") or "N/A")
+            with c3:
+                st.markdown("**SoC / Power**")
+                st.text(platform_meta.get("soc", "N/A"))
+                st.text(platform_meta.get("power_mode", "N/A"))
 
     st.divider()
 
@@ -872,13 +1350,15 @@ def main():
     st.divider()
 
     # Tabs for different analyses
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Latency",
-        "Utilization",
-        "Power & Thermal",
-        "Memory",
-        "Throughput",
-    ])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Latency",
+            "Utilization",
+            "Power & Thermal",
+            "Memory",
+            "Throughput",
+        ]
+    )
 
     with tab1:
         render_latency_analysis(display_df, summary)

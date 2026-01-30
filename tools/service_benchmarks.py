@@ -18,27 +18,47 @@ import sys
 import logging
 from pathlib import Path
 
+try:
+    from trackiq_core.hardware.env import nvidia_smi_available, NVIDIA_SMI_PATHS
+except ImportError:
+    nvidia_smi_available = None
+    NVIDIA_SMI_PATHS = [
+        "/usr/bin/nvidia-smi",
+        "/usr/local/bin/nvidia-smi",
+        "/opt/nvidia/bin/nvidia-smi",
+    ]
+
 # Configure logging to file (systemd will capture this)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("/var/log/gpu_benchmark.log"), logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.FileHandler("/var/log/gpu_benchmark.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
 )
 
 logger = logging.getLogger(__name__)
 
 
 def check_gpu_available() -> bool:
-    """Check if NVIDIA GPU and drivers are available"""
-    nvidia_smi_paths = ["/usr/bin/nvidia-smi", "/usr/local/bin/nvidia-smi", "/opt/nvidia/bin/nvidia-smi"]
-
-    for path in nvidia_smi_paths:
+    """Check if NVIDIA GPU and drivers are available."""
+    if nvidia_smi_available is not None:
+        if nvidia_smi_available():
+            for path in NVIDIA_SMI_PATHS:
+                if os.path.exists(path):
+                    logger.info(f"Found nvidia-smi at: {path}")
+                    break
+            return True
+        logger.error("nvidia-smi not found in any common location")
+        logger.error(f"Searched: {NVIDIA_SMI_PATHS}")
+        return False
+    for path in NVIDIA_SMI_PATHS:
         if os.path.exists(path):
             logger.info(f"Found nvidia-smi at: {path}")
             return True
-
     logger.error("nvidia-smi not found in any common location")
-    logger.error(f"Searched: {nvidia_smi_paths}")
+    logger.error(f"Searched: {NVIDIA_SMI_PATHS}")
     return False
 
 
@@ -58,7 +78,9 @@ def run_benchmark() -> bool:
 
     try:
         # Run nvidia-smi with explicit path and timeout
-        result = subprocess.run([nvidia_smi_path], capture_output=True, timeout=10, check=False)
+        result = subprocess.run(
+            [nvidia_smi_path], capture_output=True, timeout=10, check=False
+        )
 
         if result.returncode != 0:
             logger.error(f"nvidia-smi failed with return code {result.returncode}")

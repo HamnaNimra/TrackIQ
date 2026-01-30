@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - trackiq core library and refactor
+
+- **trackiq** reusable library: `platform/`, `collectors/`, `runner/`, `config/`, `results/`, `compare/`, `errors.py`, analyzers, reporting, profiles registry. Generic logic lives in trackiq; autoperfpy keeps CLI, Streamlit UI, TensorRT/automotive benchmarks, DNN/Tegrastats.
+- **CLI `autoperfpy compare`**: Uses trackiq comparison module. `--baseline`, `--current`, `--save-baseline`, `--latency-pct`, `--throughput-pct`, `--p99-pct`.
+- **CLI `autoperfpy run`**: `--device`, `--precision` (fp16, fp32, int8). Explicit errors when hardware/deps missing (no synthetic fallback for nvml/psutil/tegrastats).
+- **Streamlit UI**: Run benchmarks from UI (sidebar → Run Benchmark); device and inference config (fp16, fp32, int8); platform metadata for each run (device name, CPU, GPU, SoC, power mode).
+- **Reports**: HTML/PDF reports with no CSV now show a “no data” notice only (no static/demo graphs).
+- **Packaging**: `pyproject.toml` added; `pip install .` and `pip install -e .` install trackiq + autoperfpy with `autoperfpy` CLI entry point.
+- **Docs**: README explains trackiq vs autoperfpy, installation, CLI, Streamlit UI. CONCEPTS.md adds architecture diagram, collectors, runner, results schema, comparison logic.
+- **Tests**: trackiq unit tests (collectors, config, compare); integration test (benchmark → JSON → HTML → Streamlit loads).
+
+---
+
 ### Added - Performance Regression Detection ⭐
 
 #### New Core Features
