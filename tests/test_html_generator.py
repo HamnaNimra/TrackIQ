@@ -12,7 +12,7 @@ import pytest
 from autoperfpy.reporting import HTMLReportGenerator, PerformanceVisualizer
 
 try:
-    from autoperf_app.reports import charts as shared_charts
+    from autoperfpy.reports import charts as shared_charts
 
     CHARTS_AVAILABLE = shared_charts.is_available()
 except ImportError:

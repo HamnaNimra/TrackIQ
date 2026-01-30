@@ -1,6 +1,6 @@
 """Debug script to check what columns are in the data."""
 
-from autoperf_app.reports import charts as shared_charts
+from autoperfpy.reports import charts as shared_charts
 
 # Simulate the generate_synthetic_demo_data function from the UI
 import random

@@ -12,11 +12,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from trackiq_core.collectors import SyntheticCollector
-from autoperf_app.runners import BenchmarkRunner
-from autoperf_app.reports import HTMLReportGenerator, PerformanceVisualizer
+from autoperfpy.runners import BenchmarkRunner
+from autoperfpy.reports import HTMLReportGenerator, PerformanceVisualizer
 
 try:
-    from autoperf_app.reports import charts as shared_charts
+    from autoperfpy.reports import charts as shared_charts
 
     CHARTS_AVAILABLE = shared_charts.is_available()
 except ImportError:

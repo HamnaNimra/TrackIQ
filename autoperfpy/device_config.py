@@ -1,101 +1,26 @@
-"""Device and inference config for AutoPerfPy Phase 5.
+"""Device and inference config for AutoPerfPy.
 
-Inference config: precision, batch_size, accelerator, streams, warmup_runs, iterations.
-Enumerates configs for all detected devices. No remote execution or networking.
+Re-exports generic inference config from trackiq_core and adds
+automotive-specific device resolution.
 """
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from trackiq_core.hardware.devices import DeviceProfile, get_all_devices
 
-# Supported precisions
-PRECISION_FP32 = "fp32"
-PRECISION_FP16 = "fp16"
-PRECISION_INT8 = "int8"
-PRECISIONS = [PRECISION_FP32, PRECISION_FP16, PRECISION_INT8]
-
-# Default batch sizes and steps for auto enumeration
-DEFAULT_BATCH_SIZES = [1, 4, 8]
-DEFAULT_WARMUP_RUNS = 5
-DEFAULT_ITERATIONS = 100
-DEFAULT_STREAMS = 1
-
-
-@dataclass
-class InferenceConfig:
-    """Inference run configuration.
-
-    Attributes:
-        precision: fp32, fp16, or int8
-        batch_size: Batch size
-        accelerator: Device id (e.g. nvidia_0, cpu_0)
-        streams: Number of streams (default 1)
-        warmup_runs: Warmup iterations before timed run
-        iterations: Timed iterations
-    """
-
-    precision: str = PRECISION_FP32
-    batch_size: int = 1
-    accelerator: str = "cpu_0"
-    streams: int = 1
-    warmup_runs: int = DEFAULT_WARMUP_RUNS
-    iterations: int = DEFAULT_ITERATIONS
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Export for JSON and UI."""
-        return {
-            "precision": self.precision,
-            "batch_size": self.batch_size,
-            "accelerator": self.accelerator,
-            "streams": self.streams,
-            "warmup_runs": self.warmup_runs,
-            "iterations": self.iterations,
-        }
-
-
-def enumerate_inference_configs(
-    devices: List[DeviceProfile],
-    precisions: Optional[List[str]] = None,
-    batch_sizes: Optional[List[int]] = None,
-    streams: int = 1,
-    warmup_runs: int = DEFAULT_WARMUP_RUNS,
-    iterations: int = DEFAULT_ITERATIONS,
-    max_configs_per_device: Optional[int] = 6,
-) -> List[Tuple[DeviceProfile, InferenceConfig]]:
-    """Enumerate (device, inference_config) for all devices and selected options.
-
-    If max_configs_per_device is set, limits combinations per device (e.g. 6 = 3 precisions x 2 batch sizes).
-    """
-    precisions = precisions or PRECISIONS
-    batch_sizes = batch_sizes or DEFAULT_BATCH_SIZES
-    result: List[Tuple[DeviceProfile, InferenceConfig]] = []
-    for device in devices:
-        count = 0
-        for prec in precisions:
-            for bs in batch_sizes:
-                if (
-                    max_configs_per_device is not None
-                    and count >= max_configs_per_device
-                ):
-                    break
-                result.append(
-                    (
-                        device,
-                        InferenceConfig(
-                            precision=prec,
-                            batch_size=bs,
-                            accelerator=device.device_id,
-                            streams=streams,
-                            warmup_runs=warmup_runs,
-                            iterations=iterations,
-                        ),
-                    )
-                )
-                count += 1
-            if max_configs_per_device is not None and count >= max_configs_per_device:
-                break
-    return result
+# Re-export from trackiq_core
+from trackiq_core.inference import (
+    InferenceConfig,
+    enumerate_inference_configs,
+    PRECISION_FP32,
+    PRECISION_FP16,
+    PRECISION_INT8,
+    PRECISIONS,
+    DEFAULT_BATCH_SIZES,
+    DEFAULT_WARMUP_RUNS,
+    DEFAULT_ITERATIONS,
+    DEFAULT_STREAMS,
+)
 
 
 def resolve_device(
@@ -144,6 +69,19 @@ def get_devices_and_configs_auto(
 
     When device_ids_filter is set, only devices whose device_id is in the list
     are included (e.g. ["nvidia_0", "cpu_0"]).
+
+    Args:
+        include_nvidia: Include NVIDIA GPUs
+        include_intel: Include Intel GPUs
+        include_cpu: Include CPUs
+        include_tegrastats: Include Jetson/DRIVE devices
+        device_ids_filter: Optional list of device IDs to include
+        precisions: List of precisions to test
+        batch_sizes: List of batch sizes to test
+        max_configs_per_device: Maximum configs per device
+
+    Returns:
+        List of (DeviceProfile, InferenceConfig) tuples
     """
     devices = get_all_devices(
         include_nvidia=include_nvidia,
@@ -160,3 +98,21 @@ def get_devices_and_configs_auto(
         batch_sizes=batch_sizes,
         max_configs_per_device=max_configs_per_device,
     )
+
+
+__all__ = [
+    # Re-exports from trackiq_core
+    "InferenceConfig",
+    "enumerate_inference_configs",
+    "PRECISION_FP32",
+    "PRECISION_FP16",
+    "PRECISION_INT8",
+    "PRECISIONS",
+    "DEFAULT_BATCH_SIZES",
+    "DEFAULT_WARMUP_RUNS",
+    "DEFAULT_ITERATIONS",
+    "DEFAULT_STREAMS",
+    # AutoPerfPy-specific
+    "resolve_device",
+    "get_devices_and_configs_auto",
+]

@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
 try:
     import pandas as pd
-    from autoperf_app.reports import charts as shared_charts
+    from autoperfpy.reports import charts as shared_charts
 
 except ImportError as e:
     st.error(f"Missing required dependency: {e}")
@@ -454,8 +454,8 @@ def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -
     Returns:
         Tuple of (report_bytes, filename) or (None, None) on failure
     """
-    from autoperf_app.reports import HTMLReportGenerator
-    from autoperf_app.reports import charts as shared_charts
+    from autoperfpy.reports import HTMLReportGenerator
+    from autoperfpy.reports import charts as shared_charts
 
     samples = data.get("samples", [])
     summary = data.get("summary", {})

@@ -1,6 +1,6 @@
 """Reporting and visualization module for AutoPerfPy."""
 
-from autoperf_app.reports import (
+from autoperfpy.reports import (
     PerformanceVisualizer,
     PDFReportGenerator,
     HTMLReportGenerator,

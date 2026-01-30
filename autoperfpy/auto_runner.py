@@ -1,40 +1,31 @@
-"""Auto benchmark runner for AutoPerfPy Phase 5.
+"""Auto benchmark runner for AutoPerfPy.
 
 Runs benchmarks sequentially for each (device, inference_config). Uses a
 collector factory (device_type -> collector instance) so adding new hardware
 is a single registration. Same runner for automatic and manual modes. No remote
 execution. Automotive-focused: wires TegrastatsCollector for Jetson/DRIVE;
-trackiq provides generic device detection only.
+trackiq_core provides generic device detection and runner infrastructure.
 """
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from trackiq_core.hardware.devices import (
     DeviceProfile,
-    get_platform_metadata_for_device,
     DEVICE_TYPE_NVIDIA_GPU,
     DEVICE_TYPE_CPU,
     DEVICE_TYPE_INTEL_GPU,
     DEVICE_TYPE_NVIDIA_JETSON,
     DEVICE_TYPE_NVIDIA_DRIVE,
 )
-from autoperf_app.runners import BenchmarkRunner
+from trackiq_core.runners import (
+    BenchmarkRunner,
+    run_single_benchmark as _run_single_benchmark_generic,
+    run_auto_benchmarks as _run_auto_benchmarks_generic,
+    base_collector_config,
+    make_run_label,
+)
 from trackiq_core.collectors import SyntheticCollector
-
-from .device_config import InferenceConfig
-
-
-def _make_run_label(device: DeviceProfile, config: InferenceConfig) -> str:
-    """Generate a short label for this run (e.g. nvidia_0_fp16_bs4)."""
-    return f"{device.device_id}_{config.precision}_bs{config.batch_size}"
-
-
-def _base_config(config: InferenceConfig) -> Dict[str, Any]:
-    """Base collector config from inference config."""
-    return {
-        "warmup_samples": config.warmup_runs,
-        "batch_sizes": [config.batch_size],
-    }
+from trackiq_core.inference import InferenceConfig
 
 
 def _collector_nvidia_gpu(
@@ -42,19 +33,24 @@ def _collector_nvidia_gpu(
 ) -> Optional[Any]:
     """Build NVML collector for discrete NVIDIA GPU."""
     try:
-        from trackiq.collectors import NVMLCollector
+        from trackiq_core.collectors import NVMLCollector
 
-        return NVMLCollector(device_index=device.index, config=_base_config(config))
+        return NVMLCollector(
+            device_index=device.index, config=base_collector_config(config)
+        )
     except (ImportError, Exception):
         return None
 
 
-def _collector_psutil(device: DeviceProfile, config: InferenceConfig) -> Optional[Any]:
+def _collector_psutil(
+    device: DeviceProfile, config: InferenceConfig  # noqa: ARG001
+) -> Optional[Any]:
     """Build Psutil collector for CPU or Intel GPU."""
+    del device  # unused, but kept for consistent factory signature
     try:
         from trackiq_core.collectors import PsutilCollector
 
-        return PsutilCollector(config=_base_config(config))
+        return PsutilCollector(config=base_collector_config(config))
     except (ImportError, Exception):
         return None
 
@@ -66,13 +62,14 @@ def _collector_tegrastats(
     try:
         from autoperfpy.collectors import TegrastatsCollector
 
-        cfg = _base_config(config)
+        cfg = base_collector_config(config)
         return TegrastatsCollector(mode="live", config=cfg)
     except (ImportError, Exception):
         return None
 
 
-# Registry: device_type -> (device, config) -> collector or None. Add new hardware here.
+# Registry: device_type -> (device, config) -> collector or None.
+# Add new automotive hardware here.
 COLLECTOR_FACTORY: Dict[
     str, Callable[[DeviceProfile, InferenceConfig], Optional[Any]]
 ] = {
@@ -84,14 +81,16 @@ COLLECTOR_FACTORY: Dict[
 }
 
 
-def _collector_for_device(device: DeviceProfile, config: InferenceConfig) -> Any:
+def _collector_for_device(
+    device: DeviceProfile, config: InferenceConfig
+) -> Any:
     """Build collector for the given device via registry; fallback Synthetic."""
     builder = COLLECTOR_FACTORY.get(device.device_type)
     if builder:
         collector = builder(device, config)
         if collector is not None:
             return collector
-    return SyntheticCollector(config=_base_config(config))
+    return SyntheticCollector(config=base_collector_config(config))
 
 
 def run_single_benchmark(
@@ -101,20 +100,29 @@ def run_single_benchmark(
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
 ) -> Dict[str, Any]:
-    """Run one benchmark for (device, config) and return result dict with metadata and run_label."""
-    collector = _collector_for_device(device, config)
-    runner = BenchmarkRunner(
-        collector,
+    """Run one benchmark for (device, config) and return result dict.
+
+    Uses the automotive collector factory to select appropriate collector
+    for the device type (including Tegrastats for Jetson/DRIVE).
+
+    Args:
+        device: Device profile to benchmark
+        config: Inference configuration
+        duration_seconds: Benchmark duration
+        sample_interval_seconds: Interval between samples
+        quiet: If True, suppress progress output
+
+    Returns:
+        Dictionary with benchmark results, metadata, and run_label
+    """
+    return _run_single_benchmark_generic(
+        device=device,
+        config=config,
+        collector_factory=_collector_for_device,
         duration_seconds=duration_seconds,
         sample_interval_seconds=sample_interval_seconds,
         quiet=quiet,
     )
-    export = runner.run()
-    result = export.to_dict()
-    result["platform_metadata"] = get_platform_metadata_for_device(device)
-    result["inference_config"] = config.to_dict()
-    result["run_label"] = _make_run_label(device, config)
-    return result
 
 
 def run_auto_benchmarks(
@@ -124,30 +132,36 @@ def run_auto_benchmarks(
     quiet: bool = True,
     progress_callback: Optional[Callable[..., None]] = None,
 ) -> List[Dict[str, Any]]:
-    """Run benchmarks sequentially for each (device, config). Same runner for auto/manual."""
-    results: List[Dict[str, Any]] = []
-    total = len(device_config_pairs)
-    for i, (device, config) in enumerate(device_config_pairs):
-        if progress_callback:
-            progress_callback(i + 1, total, device, config)
-        try:
-            res = run_single_benchmark(
-                device,
-                config,
-                duration_seconds=duration_seconds,
-                sample_interval_seconds=sample_interval_seconds,
-                quiet=quiet,
-            )
-            results.append(res)
-        except Exception as e:
-            results.append(
-                {
-                    "run_label": _make_run_label(device, config),
-                    "platform_metadata": get_platform_metadata_for_device(device),
-                    "inference_config": config.to_dict(),
-                    "error": str(e),
-                    "samples": [],
-                    "summary": {},
-                }
-            )
-    return results
+    """Run benchmarks sequentially for each (device, config).
+
+    Uses the automotive collector factory to select appropriate collector
+    for each device type (including Tegrastats for Jetson/DRIVE).
+
+    Args:
+        device_config_pairs: List of (device, config) tuples to benchmark
+        duration_seconds: Duration for each benchmark
+        sample_interval_seconds: Interval between samples
+        quiet: If True, suppress progress output
+        progress_callback: Optional callback(i, total, device, config) for progress
+
+    Returns:
+        List of result dictionaries, one per (device, config) pair
+    """
+    return _run_auto_benchmarks_generic(
+        device_config_pairs=device_config_pairs,
+        collector_factory=_collector_for_device,
+        duration_seconds=duration_seconds,
+        sample_interval_seconds=sample_interval_seconds,
+        quiet=quiet,
+        progress_callback=progress_callback,
+    )
+
+
+__all__ = [
+    "BenchmarkRunner",
+    "run_single_benchmark",
+    "run_auto_benchmarks",
+    "COLLECTOR_FACTORY",
+    "make_run_label",
+    "base_collector_config",
+]

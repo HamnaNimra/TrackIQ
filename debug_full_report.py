@@ -1,6 +1,6 @@
 """Generate a full test HTML report to verify chart rendering."""
 
-from autoperf_app.reports import HTMLReportGenerator, charts as shared_charts
+from autoperfpy.reports import HTMLReportGenerator, charts as shared_charts
 import random
 import time
 

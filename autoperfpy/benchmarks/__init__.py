@@ -1,6 +1,9 @@
-"""Benchmarking module for AutoPerfPy."""
+"""Benchmarking module for AutoPerfPy.
 
-from .latency import BatchingTradeoffBenchmark, LLMLatencyBenchmark
+Re-exports generic benchmarks from trackiq_core.
+"""
+
+from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 
 __all__ = [
     "BatchingTradeoffBenchmark",

@@ -1065,7 +1065,7 @@ def run_report_html(args, config):
             samples = data.get("samples", [])
             if samples:
                 # Build DataFrame from samples and add UI-matching Plotly charts
-                from autoperf_app.reports.charts import (
+                from autoperfpy.reports.charts import (
                     samples_to_dataframe,
                     add_charts_to_html_report,
                 )
@@ -1394,7 +1394,7 @@ def run_report_pdf(args, config):
             return {"output_path": output_path}
 
         if getattr(args, "csv", None):
-            from autoperf_app.reports.charts import (
+            from autoperfpy.reports.charts import (
                 ensure_throughput_column,
                 compute_summary_from_dataframe,
             )
