@@ -1,21 +1,11 @@
-"""Configuration management system for AutoPerfPy."""
+"""Configuration management system for AutoPerfPy.
 
-# TODO: Config/ConfigManager duplicate trackiq.config logic (get, update, to_dict,
-# load_yaml, load_json, save_*). Differ in defaults (DEFAULT_CONFIG) and update
-# semantics for nested dicts. Consider sharing a base or delegating to trackiq
-# with app-specific overrides.
+Extends trackiq_core.configs.Config with automotive-specific defaults and property accessors.
+"""
 
-import os
 from typing import Any, Dict, Optional
-from dataclasses import asdict
 
-from trackiq_core.configs.config_io import (
-    ensure_parent_dir,
-    load_json_file,
-    load_yaml_file,
-    save_json_file,
-    save_yaml_file,
-)
+from trackiq_core.configs.config import Config as TrackIQConfig
 
 from .defaults import (
     DEFAULT_CONFIG,
@@ -27,64 +17,23 @@ from .defaults import (
 )
 
 
-class Config:
-    """Unified configuration container for AutoPerfPy."""
+class Config(TrackIQConfig):
+    """Unified configuration container for AutoPerfPy.
+
+    Extends trackiq_core.configs.Config with automotive-specific defaults
+    and property accessors for typed config sections.
+    """
 
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
-        """Initialize configuration.
+        """Initialize configuration with automotive defaults.
 
         Args:
             config_dict: Optional dictionary to override defaults
         """
-        self.config = DEFAULT_CONFIG.copy()
+        # Initialize with automotive defaults
+        super().__init__(DEFAULT_CONFIG.copy())
         if config_dict:
             self.update(config_dict)
-
-    def update(self, config_dict: Dict[str, Any]) -> None:
-        """Update configuration with provided values.
-
-        Args:
-            config_dict: Dictionary with configuration overrides
-        """
-        for key, value in config_dict.items():
-            if key in self.config:
-                if isinstance(self.config[key], dict):
-                    self.config[key].update(value)
-                else:
-                    self.config[key] = value
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get configuration value by key.
-
-        Args:
-            key: Configuration key (e.g., 'benchmark.batch_sizes')
-            default: Default value if key not found
-
-        Returns:
-            Configuration value
-        """
-        keys = key.split(".")
-        value = self.config
-        for k in keys:
-            if isinstance(value, dict):
-                value = value.get(k)
-            else:
-                return default
-        return value if value is not None else default
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert configuration to dictionary.
-
-        Returns:
-            Configuration as dictionary
-        """
-        result = {}
-        for key, value in self.config.items():
-            if hasattr(value, "__dataclass_fields__"):
-                result[key] = asdict(value)
-            else:
-                result[key] = value
-        return result
 
     @property
     def benchmark(self) -> BenchmarkConfig:
@@ -113,7 +62,11 @@ class Config:
 
 
 class ConfigManager:
-    """Manages loading and saving configuration files."""
+    """Manages loading and saving configuration files.
+
+    Wraps trackiq_core.configs.ConfigManager to return AutoPerfPy Config instances
+    with automotive defaults.
+    """
 
     @staticmethod
     def load_yaml(filepath: str) -> Config:
@@ -123,8 +76,10 @@ class ConfigManager:
             filepath: Path to YAML configuration file
 
         Returns:
-            Config object
+            Config object with automotive defaults
         """
+        from trackiq_core.configs.config_io import load_yaml_file
+
         config_dict = load_yaml_file(filepath)
         return Config(config_dict or {})
 
@@ -136,8 +91,10 @@ class ConfigManager:
             filepath: Path to JSON configuration file
 
         Returns:
-            Config object
+            Config object with automotive defaults
         """
+        from trackiq_core.configs.config_io import load_json_file
+
         config_dict = load_json_file(filepath)
         return Config(config_dict or {})
 
@@ -149,8 +106,9 @@ class ConfigManager:
             config: Config object to save
             filepath: Output YAML file path
         """
-        ensure_parent_dir(filepath)
-        save_yaml_file(filepath, config.to_dict())
+        from trackiq_core.configs.config import ConfigManager as TrackIQConfigManager
+
+        TrackIQConfigManager.save_yaml(config, filepath)
 
     @staticmethod
     def save_json(config: Config, filepath: str) -> None:
@@ -160,19 +118,22 @@ class ConfigManager:
             config: Config object to save
             filepath: Output JSON file path
         """
-        ensure_parent_dir(filepath)
-        save_json_file(filepath, config.to_dict())
+        from trackiq_core.configs.config import ConfigManager as TrackIQConfigManager
+
+        TrackIQConfigManager.save_json(config, filepath)
 
     @staticmethod
     def load_or_default(filepath: Optional[str] = None) -> Config:
-        """Load configuration from file or return defaults.
+        """Load configuration from file or return automotive defaults.
 
         Args:
             filepath: Optional path to configuration file
 
         Returns:
-            Config object (loaded from file or defaults)
+            Config object (loaded from file or automotive defaults)
         """
+        import os
+
         if filepath and os.path.exists(filepath):
             if filepath.endswith(".yaml") or filepath.endswith(".yml"):
                 return ConfigManager.load_yaml(filepath)

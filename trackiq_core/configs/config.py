@@ -1,9 +1,5 @@
 """Configuration management system for TrackIQ."""
 
-# TODO: autoperfpy.config duplicates Config/ConfigManager (get, update, to_dict,
-# load_yaml, load_json, etc.) with app-specific defaults and update semantics.
-# Consider extracting a shared base or allowing app config to extend this.
-
 import os
 from typing import Any, Dict, Optional
 from dataclasses import asdict
