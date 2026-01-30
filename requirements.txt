@@ -23,20 +23,20 @@ python-dateutil
 pytokens
 plotly
 PyYAML
-pytest==7.5.2
+pytest
 requests
 ruff
 setuptools
-six==1.17.0
-streamlit==1.20.0
-sympy==1.13.1
+six
+streamlit
+sympy
 torch
 torchaudio
 torchvision
-typing_extensions==4.15.0
-tzdata==2025.3
-urllib3==2.6.3
-uv==0.9.27
+typing_extensions
+tzdata
+urllib3
+uv
 
 # Optional: PDF report generation (install one for best results)
 # playwright  # Best quality - pip install playwright && playwright install chromium
