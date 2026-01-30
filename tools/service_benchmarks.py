@@ -19,7 +19,7 @@ import logging
 from pathlib import Path
 
 try:
-    from trackiq_core.env import nvidia_smi_available, NVIDIA_SMI_PATHS
+    from trackiq_core.hardware.env import nvidia_smi_available, NVIDIA_SMI_PATHS
 except ImportError:
     nvidia_smi_available = None
     NVIDIA_SMI_PATHS = [

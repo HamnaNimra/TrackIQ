@@ -4,11 +4,11 @@ import time
 
 import pytest
 
-from trackiq.collectors import (
+from trackiq_core.collectors import (
     CollectorExport,
     SyntheticCollector,
 )
-from trackiq.platform import get_memory_metrics, get_performance_metrics
+from trackiq_core.hardware import get_memory_metrics, get_performance_metrics
 
 
 class TestSyntheticCollector:

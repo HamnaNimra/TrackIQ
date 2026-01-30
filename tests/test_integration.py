@@ -11,12 +11,12 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from trackiq.collectors import SyntheticCollector
-from trackiq.runner import BenchmarkRunner
-from trackiq.reporting import HTMLReportGenerator, PerformanceVisualizer
+from trackiq_core.collectors import SyntheticCollector
+from autoperf_app.runners import BenchmarkRunner
+from autoperf_app.reports import HTMLReportGenerator, PerformanceVisualizer
 
 try:
-    from trackiq.reporting import charts as shared_charts
+    from autoperf_app.reports import charts as shared_charts
 
     CHARTS_AVAILABLE = shared_charts.is_available()
 except ImportError:

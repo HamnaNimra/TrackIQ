@@ -9,7 +9,7 @@ trackiq provides generic device detection only.
 
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from trackiq.platform.devices import (
+from trackiq_core.hardware.devices import (
     DeviceProfile,
     get_platform_metadata_for_device,
     DEVICE_TYPE_NVIDIA_GPU,
@@ -18,8 +18,8 @@ from trackiq.platform.devices import (
     DEVICE_TYPE_NVIDIA_JETSON,
     DEVICE_TYPE_NVIDIA_DRIVE,
 )
-from trackiq.runner import BenchmarkRunner
-from trackiq.collectors import SyntheticCollector
+from autoperf_app.runners import BenchmarkRunner
+from trackiq_core.collectors import SyntheticCollector
 
 from .device_config import InferenceConfig
 
@@ -52,7 +52,7 @@ def _collector_nvidia_gpu(
 def _collector_psutil(device: DeviceProfile, config: InferenceConfig) -> Optional[Any]:
     """Build Psutil collector for CPU or Intel GPU."""
     try:
-        from trackiq.collectors import PsutilCollector
+        from trackiq_core.collectors import PsutilCollector
 
         return PsutilCollector(config=_base_config(config))
     except (ImportError, Exception):

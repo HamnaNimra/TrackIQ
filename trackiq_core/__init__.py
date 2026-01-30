@@ -4,10 +4,10 @@ Provides: dict_utils (safe_get), stats (percentile, stats_from_values),
 env (command_available, nvidia_smi_available), config_io (load/save YAML/JSON).
 """
 
-from trackiq_core.dict_utils import safe_get
-from trackiq_core.stats import percentile, stats_from_values
-from trackiq_core.env import command_available, nvidia_smi_available
-from trackiq_core.config_io import (
+from trackiq_core.utils.dict_utils import safe_get
+from trackiq_core.utils.stats import percentile, stats_from_values
+from trackiq_core.hardware.env import command_available, nvidia_smi_available
+from trackiq_core.configs.config_io import (
     load_yaml_file,
     load_json_file,
     save_yaml_file,

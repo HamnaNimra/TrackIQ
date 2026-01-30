@@ -53,9 +53,10 @@ test = [
 
 [project.scripts]
 autoperfpy = "autoperfpy.cli:main"
+autoperf = "autoperf_app.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["trackiq*", "autoperfpy*", "trackiq_core*"]
+include = ["trackiq_core*", "autoperf_app*", "autoperfpy*"]
 
 [tool.setuptools.package-dir]
 "" = "."

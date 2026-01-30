@@ -1,9 +1,8 @@
-"""Configuration management system for AutoPerfPy."""
+"""Configuration management system for TrackIQ."""
 
-# TODO: Config/ConfigManager duplicate trackiq.config logic (get, update, to_dict,
-# load_yaml, load_json, save_*). Differ in defaults (DEFAULT_CONFIG) and update
-# semantics for nested dicts. Consider sharing a base or delegating to trackiq
-# with app-specific overrides.
+# TODO: autoperfpy.config duplicates Config/ConfigManager (get, update, to_dict,
+# load_yaml, load_json, etc.) with app-specific defaults and update semantics.
+# Consider extracting a shared base or allowing app config to extend this.
 
 import os
 from typing import Any, Dict, Optional
@@ -17,28 +16,17 @@ from trackiq_core.configs.config_io import (
     save_yaml_file,
 )
 
-from .defaults import (
-    DEFAULT_CONFIG,
-    BenchmarkConfig,
-    LLMConfig,
-    MonitoringConfig,
-    AnalysisConfig,
-    ProcessMonitorConfig,
-)
-
 
 class Config:
-    """Unified configuration container for AutoPerfPy."""
+    """Unified configuration container for TrackIQ."""
 
     def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
         """Initialize configuration.
 
         Args:
-            config_dict: Optional dictionary to override defaults
+            config_dict: Optional dictionary to use as base (shallow copy)
         """
-        self.config = DEFAULT_CONFIG.copy()
-        if config_dict:
-            self.update(config_dict)
+        self.config = (config_dict or {}).copy()
 
     def update(self, config_dict: Dict[str, Any]) -> None:
         """Update configuration with provided values.
@@ -48,10 +36,12 @@ class Config:
         """
         for key, value in config_dict.items():
             if key in self.config:
-                if isinstance(self.config[key], dict):
-                    self.config[key].update(value)
+                if isinstance(self.config[key], dict) and isinstance(value, dict):
+                    self.config[key] = {**self.config[key], **value}
                 else:
                     self.config[key] = value
+            else:
+                self.config[key] = value
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value by key.
@@ -85,31 +75,6 @@ class Config:
             else:
                 result[key] = value
         return result
-
-    @property
-    def benchmark(self) -> BenchmarkConfig:
-        """Get benchmark configuration."""
-        return self.config.get("benchmark")
-
-    @property
-    def llm(self) -> LLMConfig:
-        """Get LLM configuration."""
-        return self.config.get("llm")
-
-    @property
-    def monitoring(self) -> MonitoringConfig:
-        """Get monitoring configuration."""
-        return self.config.get("monitoring")
-
-    @property
-    def analysis(self) -> AnalysisConfig:
-        """Get analysis configuration."""
-        return self.config.get("analysis")
-
-    @property
-    def process(self) -> ProcessMonitorConfig:
-        """Get process monitor configuration."""
-        return self.config.get("process")
 
 
 class ConfigManager:
@@ -164,18 +129,29 @@ class ConfigManager:
         save_json_file(filepath, config.to_dict())
 
     @staticmethod
-    def load_or_default(filepath: Optional[str] = None) -> Config:
+    def load_or_default(
+        filepath: Optional[str] = None,
+        default_config: Optional[Dict[str, Any]] = None,
+    ) -> Config:
         """Load configuration from file or return defaults.
 
         Args:
             filepath: Optional path to configuration file
+            default_config: Optional default config dict if file not found
 
         Returns:
             Config object (loaded from file or defaults)
         """
         if filepath and os.path.exists(filepath):
             if filepath.endswith(".yaml") or filepath.endswith(".yml"):
-                return ConfigManager.load_yaml(filepath)
+                loaded = ConfigManager.load_yaml(filepath)
             elif filepath.endswith(".json"):
-                return ConfigManager.load_json(filepath)
-        return Config()
+                loaded = ConfigManager.load_json(filepath)
+            else:
+                return Config(default_config or {})
+            if default_config:
+                base = Config(default_config)
+                base.update(loaded.config)
+                return base
+            return loaded
+        return Config(default_config or {})

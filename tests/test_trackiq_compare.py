@@ -2,7 +2,7 @@
 
 import pytest
 
-from trackiq.compare import (
+from trackiq_core.utils.compare import (
     RegressionDetector,
     RegressionThreshold,
 )

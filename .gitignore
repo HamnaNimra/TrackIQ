@@ -74,6 +74,9 @@ tmp/
 *.tmp
 .cla*/
 
+# Old facade (deprecated - use trackiq_core directly)
+trackiq/
+
 
 _bench_results.json
 run_results.json

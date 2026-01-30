@@ -1,0 +1,53 @@
+"""Hardware detection and platform utilities."""
+
+from .env import (
+    command_available,
+    nvidia_smi_available,
+    find_nvidia_smi_path,
+    NVIDIA_SMI_PATHS,
+)
+from .gpu import (
+    query_nvidia_smi,
+    parse_gpu_metrics,
+    get_memory_metrics,
+    get_performance_metrics,
+    DEFAULT_NVIDIA_SMI_TIMEOUT,
+)
+from .devices import (
+    DeviceProfile,
+    get_all_devices,
+    detect_nvidia_gpus,
+    detect_cpu,
+    detect_intel_gpus,
+    detect_tegrastats_platforms,
+    get_platform_metadata_for_device,
+    DEVICE_TYPE_NVIDIA_GPU,
+    DEVICE_TYPE_INTEL_GPU,
+    DEVICE_TYPE_CPU,
+    DEVICE_TYPE_NVIDIA_JETSON,
+    DEVICE_TYPE_NVIDIA_DRIVE,
+)
+
+__all__ = [
+    "command_available",
+    "nvidia_smi_available",
+    "find_nvidia_smi_path",
+    "NVIDIA_SMI_PATHS",
+    "query_nvidia_smi",
+    "parse_gpu_metrics",
+    "get_memory_metrics",
+    "get_performance_metrics",
+    "DEFAULT_NVIDIA_SMI_TIMEOUT",
+    "DeviceProfile",
+    "get_all_devices",
+    "detect_nvidia_gpus",
+    "detect_cpu",
+    "detect_intel_gpus",
+    "detect_tegrastats_platforms",
+    "get_platform_metadata_for_device",
+    "DEVICE_TYPE_NVIDIA_GPU",
+    "DEVICE_TYPE_INTEL_GPU",
+    "DEVICE_TYPE_CPU",
+    "DEVICE_TYPE_NVIDIA_JETSON",
+    "DEVICE_TYPE_NVIDIA_DRIVE",
+]

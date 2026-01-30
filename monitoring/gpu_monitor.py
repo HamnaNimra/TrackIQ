@@ -24,7 +24,7 @@ from typing import Optional, Dict
 # Prefer trackiq.platform (or autoperfpy.monitoring re-export); fallback when unavailable.
 sys.path.insert(0, str(__file__).rsplit("/", 2)[0])
 try:
-    from trackiq.platform import get_performance_metrics
+    from trackiq_core.hardware import get_performance_metrics
 
     _USE_SHARED_UTILS = True
 except ImportError:

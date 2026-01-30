@@ -1,6 +1,6 @@
 """Unit tests for trackiq config loader."""
 
-from trackiq.config import Config, ConfigManager
+from trackiq_core.configs import Config, ConfigManager
 
 
 class TestConfig:

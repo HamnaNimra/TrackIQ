@@ -7,7 +7,7 @@ Enumerates configs for all detected devices. No remote execution or networking.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from trackiq.platform.devices import DeviceProfile, get_all_devices
+from trackiq_core.hardware.devices import DeviceProfile, get_all_devices
 
 # Supported precisions
 PRECISION_FP32 = "fp32"

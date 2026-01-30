@@ -32,9 +32,9 @@ from autoperfpy.profiles import (
     CollectorType,
     ProfileValidationError,
 )
-from trackiq.compare import RegressionDetector, RegressionThreshold
-from trackiq.errors import HardwareNotFoundError, DependencyError
-from trackiq.platform import DeviceProfile, get_all_devices
+from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
+from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
+from trackiq_core.hardware import DeviceProfile, get_all_devices
 import numpy as np
 import matplotlib
 
@@ -980,7 +980,6 @@ def run_monitor_gpu(args, config):
 
 
 # Chart building is now in trackiq.reporting.charts
-# Import: from trackiq.reporting.charts import samples_to_dataframe, add_charts_to_html_report
 
 
 def run_report_html(args, config):
@@ -1066,7 +1065,7 @@ def run_report_html(args, config):
             samples = data.get("samples", [])
             if samples:
                 # Build DataFrame from samples and add UI-matching Plotly charts
-                from trackiq.reporting.charts import (
+                from autoperf_app.reports.charts import (
                     samples_to_dataframe,
                     add_charts_to_html_report,
                 )
@@ -1395,7 +1394,7 @@ def run_report_pdf(args, config):
             return {"output_path": output_path}
 
         if getattr(args, "csv", None):
-            from trackiq.reporting.charts import (
+            from autoperf_app.reports.charts import (
                 ensure_throughput_column,
                 compute_summary_from_dataframe,
             )
@@ -1616,7 +1615,7 @@ def run_with_profile(args, _config):
             raise DependencyError(
                 "NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py"
             ) from e
-        from trackiq.platform import get_memory_metrics
+            from trackiq_core.hardware import get_memory_metrics
 
         if get_memory_metrics() is None:
             raise HardwareNotFoundError(

@@ -1,6 +1,6 @@
 """Collectors module for AutoPerfPy."""
 
-from trackiq.collectors import (
+from trackiq_core.collectors import (
     CollectorBase,
     CollectorSample,
     CollectorExport,

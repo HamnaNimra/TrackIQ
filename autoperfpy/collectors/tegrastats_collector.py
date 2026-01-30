@@ -42,8 +42,8 @@ import time
 from collections import deque
 from typing import Any, Dict, List, Optional
 
-from trackiq_core.env import command_available
-from trackiq.collectors import CollectorBase, CollectorExport
+from trackiq_core.hardware.env import command_available
+from trackiq_core.collectors import CollectorBase, CollectorExport
 
 # Import tegrastats parser from core module
 try:

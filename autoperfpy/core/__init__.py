@@ -1,6 +1,6 @@
 """Core module for AutoPerfPy."""
 
-from trackiq.core import (
+from trackiq_core.utils import (
     BaseAnalyzer,
     BaseBenchmark,
     BaseMonitor,

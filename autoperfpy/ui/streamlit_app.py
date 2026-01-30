@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
 try:
     import pandas as pd
-    from trackiq.reporting import charts as shared_charts
+    from autoperf_app.reports import charts as shared_charts
 
 except ImportError as e:
     st.error(f"Missing required dependency: {e}")
@@ -305,7 +305,7 @@ def get_platform_metadata() -> Dict[str, Any]:
 def get_detected_devices() -> List[Dict[str, Any]]:
     """Get all detected devices for UI (Phase 5)."""
     try:
-        from trackiq.platform import get_all_devices
+        from trackiq_core.hardware import get_all_devices
 
         devices = get_all_devices()
         return [d.to_dict() for d in devices]
@@ -454,8 +454,8 @@ def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -
     Returns:
         Tuple of (report_bytes, filename) or (None, None) on failure
     """
-    from trackiq.reporting import HTMLReportGenerator
-    from trackiq.reporting import charts as shared_charts
+    from autoperf_app.reports import HTMLReportGenerator
+    from autoperf_app.reports import charts as shared_charts
 
     samples = data.get("samples", [])
     summary = data.get("summary", {})
