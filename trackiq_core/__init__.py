@@ -50,6 +50,9 @@ from trackiq_core.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 # Benchmarks
 from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 
+# Distributed validation
+from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+
 __all__ = [
     # Utils
     "safe_get",
@@ -86,4 +89,7 @@ __all__ = [
     # Benchmarks
     "BatchingTradeoffBenchmark",
     "LLMLatencyBenchmark",
+    # Distributed validation
+    "DistributedValidator",
+    "DistributedValidationConfig",
 ]

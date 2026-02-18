@@ -398,6 +398,29 @@ Environment Variables:
         "--runs", type=int, default=10, help="Number of benchmark runs"
     )
 
+    # Distributed validation
+    distributed_parser = bench_subparsers.add_parser(
+        "distributed", help="Validate distributed training correctness"
+    )
+    distributed_parser.add_argument(
+        "--steps", type=int, default=100, help="Number of training steps"
+    )
+    distributed_parser.add_argument(
+        "--processes", type=int, default=2, help="Number of processes for distributed training"
+    )
+    distributed_parser.add_argument(
+        "--tolerance", type=float, default=0.01, help="Loss comparison tolerance"
+    )
+    distributed_parser.add_argument(
+        "--baseline", help="Baseline name for regression detection"
+    )
+    distributed_parser.add_argument(
+        "--save-baseline", help="Save results as new baseline with this name"
+    )
+    distributed_parser.add_argument(
+        "--output", "-o", help="Output file for results (JSON)"
+    )
+
     # Monitor commands
     monitor_parser = subparsers.add_parser("monitor", help="Monitor system metrics")
     monitor_subparsers = monitor_parser.add_subparsers(dest="monitor_type")
@@ -949,6 +972,62 @@ def run_benchmark_llm(args, config):
     return results
 
 
+def run_benchmark_distributed(args, config):
+    """Run distributed training validation."""
+    from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+
+    validator = DistributedValidator()
+
+    # Create config from args
+    val_config = DistributedValidationConfig(
+        num_steps=getattr(args, "steps", 100),
+        loss_tolerance=getattr(args, "tolerance", 0.01),
+        num_processes=getattr(args, "processes", 2),
+        regression_threshold=5.0  # Default
+    )
+
+    print("
+🔄 Distributed Training Validation"    print("=" * 60)
+    print(f"Steps: {val_config.num_steps}")
+    print(f"Processes: {val_config.num_processes}")
+    print(f"Tolerance: {val_config.loss_tolerance}")
+
+    # Run validation
+    results = validator.run_validation(val_config)
+
+    # Handle baseline operations
+    if getattr(args, "save_baseline", None):
+        validator.save_baseline(args.save_baseline, results)
+        print(f"\n[OK] Saved baseline: {args.save_baseline}")
+
+    regression_results = None
+    if getattr(args, "baseline", None):
+        try:
+            regression_results = validator.detect_regression(args.baseline, results)
+            has_regression = regression_results.get("has_regressions", False)
+            print(f"\n[{'FAIL' if has_regression else 'OK'}] Regression check against '{args.baseline}'")
+        except Exception as e:
+            print(f"\n[ERROR] Regression check failed: {e}")
+
+    # Print summary
+    summary = results["summary"]
+    print("
+Results:"    print(f"  Total Steps: {summary['total_steps']}")
+    print(f"  Passed: {summary['passed_steps']}")
+    print(f"  Failed: {summary['failed_steps']}")
+    print(f"  Pass Rate: {summary['pass_rate']:.2%}")
+    print(f"  Overall: {'PASS' if summary['overall_pass'] else 'FAIL'}")
+
+    # Save output if requested
+    if getattr(args, "output", None):
+        output_path = _output_path(args, args.output)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print(f"\n[OK] Results saved to: {output_path}")
+
+    return results
+
+
 def run_monitor_gpu(args, config):
     """Run GPU monitoring."""
     monitor = GPUMemoryMonitor(config)
@@ -1026,103 +1105,169 @@ def run_report_html(args, config):
             # Load benchmark export JSON (from autoperfpy run --export)
             with open(args.json, encoding="utf-8") as f:
                 data = json.load(f)
-            report.add_metadata("Collector", data.get("collector_name", "-"))
-            if data.get("profile"):
-                report.add_metadata("Profile", data["profile"])
-            summary = data.get("summary", {})
-            sample_count = (
-                data.get("sample_count")
-                or summary.get("sample_count")
-                or len(data.get("samples", []))
-            )
-            report.add_summary_item("Samples", sample_count, "", "neutral")
-            lat = summary.get("latency", {})
-            if lat:
+
+            # Check if this is distributed validation data
+            if "comparisons" in data and "summary" in data and "config" in data:
+                # Handle distributed validation results
+                report.add_metadata("Validation Type", "Distributed Training")
+                config_data = data["config"]
+                report.add_metadata("Training Steps", str(config_data.get("num_steps", 0)))
+                report.add_metadata("Processes", str(config_data.get("num_processes", 1)))
+                report.add_metadata("Loss Tolerance", str(config_data.get("loss_tolerance", 0.01)))
+
+                summary = data["summary"]
+                report.add_summary_item("Total Steps", summary["total_steps"], "", "neutral")
+                report.add_summary_item("Passed Steps", summary["passed_steps"], "", "good" if summary["passed_steps"] > 0 else "neutral")
+                report.add_summary_item("Failed Steps", summary["failed_steps"], "", "critical" if summary["failed_steps"] > 0 else "neutral")
+                report.add_summary_item("Pass Rate", f"{summary['pass_rate']:.1%}", "", "good" if summary["overall_pass"] else "critical")
+                status = "good" if summary["overall_pass"] else "critical"
                 report.add_summary_item(
-                    "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
-                )
-                report.add_summary_item(
-                    "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
-                )
-                report.add_summary_item(
-                    "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
-                )
-            thr = summary.get("throughput", {})
-            if thr:
-                report.add_summary_item(
-                    "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
-                )
-            pwr = summary.get("power", {})
-            if pwr and pwr.get("mean_w") is not None:
-                report.add_summary_item(
-                    "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
-                )
-            if data.get("validation"):
-                v = data["validation"]
-                status = "good" if v.get("overall_pass") else "critical"
-                report.add_summary_item(
-                    "Run Status",
-                    "PASS" if v.get("overall_pass") else "FAIL",
+                    "Overall Status",
+                    "PASS" if summary["overall_pass"] else "FAIL",
                     "",
                     status,
                 )
-            samples = data.get("samples", [])
-            if samples:
-                # Build DataFrame from samples and add UI-matching Plotly charts
-                from autoperfpy.reports.charts import (
-                    samples_to_dataframe,
-                    add_charts_to_html_report,
-                )
 
-                _report_df = samples_to_dataframe(samples)
-                if (
-                    "latency_ms" in _report_df.columns
-                    and "throughput_fps" not in _report_df.columns
-                ):
-                    _report_df["throughput_fps"] = 1000.0 / _report_df[
-                        "latency_ms"
-                    ].replace(0, np.nan)
-                # Add UI-matching Plotly sections and charts
-                add_charts_to_html_report(report, _report_df, summary)
-                # Fallback: matplotlib latency percentiles if no Plotly was added
-                if not report.html_figures:
-                    latencies = []
-                    for s in samples:
-                        m = (
-                            s.get("metrics", s)
-                            if isinstance(s, dict)
-                            else getattr(s, "metrics", {})
-                        )
-                        if isinstance(m, dict) and "latency_ms" in m:
-                            latencies.append(m["latency_ms"])
-                    if latencies:
-                        report.add_section("Latency Analysis", "From benchmark samples")
-                        by_run = {
-                            "Run": {
-                                "P50": float(np.percentile(latencies, 50)),
-                                "P95": float(np.percentile(latencies, 95)),
-                                "P99": float(np.percentile(latencies, 99)),
+                # Add section for step-by-step comparison
+                report.add_section("Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses")
+                comparisons = data["comparisons"]
+                table_data = []
+                for comp in comparisons:
+                    step = comp["step"]
+                    single_loss = comp["single_process_loss"]
+                    multi_loss = comp["multi_process_loss"]
+                    delta = comp["absolute_delta"]
+                    rel_delta = comp["relative_delta"]
+                    passed = comp["passed"]
+                    status_icon = "✅" if passed else "❌"
+                    table_data.append([
+                        str(step),
+                        f"{single_loss:.6f}",
+                        f"{multi_loss:.6f}",
+                        f"{delta:.6f}",
+                        f"{rel_delta:.4f}",
+                        status_icon
+                    ])
+
+                headers = ["Step", "Single Loss", "Multi Loss", "Abs Delta", "Rel Delta", "Status"]
+                report.add_table("Loss Comparison", headers, table_data, "Step-by-Step Loss Comparison")
+
+                # Add charts if available
+                if len(comparisons) > 1:
+                    import matplotlib.pyplot as plt
+                    steps = [c["step"] for c in comparisons]
+                    single_losses = [c["single_process_loss"] for c in comparisons]
+                    multi_losses = [c["multi_process_loss"] for c in comparisons]
+
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    ax.plot(steps, single_losses, label="Single Process", marker='o')
+                    ax.plot(steps, multi_losses, label="Multi Process", marker='s')
+                    ax.set_xlabel("Training Step")
+                    ax.set_ylabel("Loss")
+                    ax.set_title("Loss Comparison: Single vs Multi Process")
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    report.add_figure(fig, "Loss Comparison Chart", "Step-by-Step Loss Comparison")
+
+            else:
+                # Handle regular benchmark results
+                report.add_metadata("Collector", data.get("collector_name", "-"))
+                if data.get("profile"):
+                    report.add_metadata("Profile", data["profile"])
+                summary = data.get("summary", {})
+                sample_count = (
+                    data.get("sample_count")
+                    or summary.get("sample_count")
+                    or len(data.get("samples", []))
+                )
+                report.add_summary_item("Samples", sample_count, "", "neutral")
+                lat = summary.get("latency", {})
+                if lat:
+                    report.add_summary_item(
+                        "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
+                    )
+                    report.add_summary_item(
+                        "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
+                    )
+                    report.add_summary_item(
+                        "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
+                    )
+                thr = summary.get("throughput", {})
+                if thr:
+                    report.add_summary_item(
+                        "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
+                    )
+                pwr = summary.get("power", {})
+                if pwr and pwr.get("mean_w") is not None:
+                    report.add_summary_item(
+                        "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
+                    )
+                if data.get("validation"):
+                    v = data["validation"]
+                    status = "good" if v.get("overall_pass") else "critical"
+                    report.add_summary_item(
+                        "Run Status",
+                        "PASS" if v.get("overall_pass") else "FAIL",
+                        "",
+                        status,
+                    )
+                samples = data.get("samples", [])
+                if samples:
+                    # Build DataFrame from samples and add UI-matching Plotly charts
+                    from autoperfpy.reports.charts import (
+                        samples_to_dataframe,
+                        add_charts_to_html_report,
+                    )
+
+                    _report_df = samples_to_dataframe(samples)
+                    if (
+                        "latency_ms" in _report_df.columns
+                        and "throughput_fps" not in _report_df.columns
+                    ):
+                        _report_df["throughput_fps"] = 1000.0 / _report_df[
+                            "latency_ms"
+                        ].replace(0, np.nan)
+                    # Add UI-matching Plotly sections and charts
+                    add_charts_to_html_report(report, _report_df, summary)
+                    # Fallback: matplotlib latency percentiles if no Plotly was added
+                    if not report.html_figures:
+                        latencies = []
+                        for s in samples:
+                            m = (
+                                s.get("metrics", s)
+                                if isinstance(s, dict)
+                                else getattr(s, "metrics", {})
+                            )
+                            if isinstance(m, dict) and "latency_ms" in m:
+                                latencies.append(m["latency_ms"])
+                        if latencies:
+                            report.add_section("Latency Analysis", "From benchmark samples")
+                            by_run = {
+                                "Run": {
+                                    "P50": float(np.percentile(latencies, 50)),
+                                    "P95": float(np.percentile(latencies, 95)),
+                                    "P99": float(np.percentile(latencies, 99)),
+                                }
                             }
-                        }
-                        fig = viz.plot_latency_percentiles(by_run)
-                        report.add_figure(
-                            fig, "Latency Percentiles", "Latency Analysis"
-                        )
-            # Export JSON and CSV alongside report when we have run data (all in output dir)
-            base = os.path.splitext(os.path.basename(args.output))[0]
-            json_out = getattr(args, "export_json", None) or (base + "_data.json")
-            csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
-            json_out = _output_path(args, json_out)
-            csv_out = _output_path(args, csv_out)
-            with open(json_out, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            print(f"[OK] JSON exported to: {json_out}")
-            if _write_result_to_csv(data, csv_out):
-                print(f"[OK] CSV exported to: {csv_out}")
-            output_path = _output_path(args, args.output)
-            output_path = report.generate_html(output_path)
-            print(f"\n[OK] HTML report generated: {output_path}")
-            return {"output_path": output_path}
+                            fig = viz.plot_latency_percentiles(by_run)
+                            report.add_figure(
+                                fig, "Latency Percentiles", "Latency Analysis"
+                            )
+                # Export JSON and CSV alongside report when we have run data (all in output dir)
+                base = os.path.splitext(os.path.basename(args.output))[0]
+                json_out = getattr(args, "export_json", None) or (base + "_data.json")
+                csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
+                json_out = _output_path(args, json_out)
+                csv_out = _output_path(args, csv_out)
+                with open(json_out, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                print(f"[OK] JSON exported to: {json_out}")
+                if _write_result_to_csv(data, csv_out):
+                    print(f"[OK] CSV exported to: {csv_out}")
+                output_path = _output_path(args, args.output)
+                output_path = report.generate_html(output_path)
+                print(f"\n[OK] HTML report generated: {output_path}")
+                return {"output_path": output_path}
 
         if getattr(args, "csv", None):
             # Load and analyze data
@@ -1936,6 +2081,8 @@ def main():
                 result = run_benchmark_batching(args, config)
             elif args.bench_type == "llm":
                 result = run_benchmark_llm(args, config)
+            elif args.bench_type == "distributed":
+                result = run_benchmark_distributed(args, config)
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
