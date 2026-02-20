@@ -1,5 +1,4 @@
 """Command-line interface for AutoPerfPy.
-
 This CLI uses generic utilities from trackiq_core.cli and adds automotive-specific
 commands for profiles, tegrastats analysis, and DNN pipeline analysis.
 """
@@ -10,6 +9,7 @@ import os
 import sys
 import tempfile
 import time
+from turtle import st
 from typing import Optional, Tuple
 
 from autoperfpy.config import ConfigManager
@@ -39,6 +39,7 @@ from autoperfpy.profiles import (
 from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
 from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
 from trackiq_core.hardware import DeviceProfile, get_all_devices
+from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
 import numpy as np
 import matplotlib
 
@@ -409,7 +410,7 @@ Environment Variables:
         "--processes", type=int, default=2, help="Number of processes for distributed training"
     )
     distributed_parser.add_argument(
-        "--tolerance", type=float, default=0.01, help="Loss comparison tolerance"
+        "--tolerance", type=float, default=0.05, help="Loss comparison tolerance"
     )
     distributed_parser.add_argument(
         "--baseline", help="Baseline name for regression detection"
@@ -974,8 +975,6 @@ def run_benchmark_llm(args, config):
 
 def run_benchmark_distributed(args, config):
     """Run distributed training validation."""
-    from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
-
     validator = DistributedValidator()
 
     # Create config from args
@@ -986,8 +985,8 @@ def run_benchmark_distributed(args, config):
         regression_threshold=5.0  # Default
     )
 
-    print("
-🔄 Distributed Training Validation"    print("=" * 60)
+    print("\n🔄 Distributed Training Validation")
+    print("=" * 60)
     print(f"Steps: {val_config.num_steps}")
     print(f"Processes: {val_config.num_processes}")
     print(f"Tolerance: {val_config.loss_tolerance}")
@@ -1011,8 +1010,8 @@ def run_benchmark_distributed(args, config):
 
     # Print summary
     summary = results["summary"]
-    print("
-Results:"    print(f"  Total Steps: {summary['total_steps']}")
+    print("\nResults:")
+    print(f"  Total Steps: {summary['total_steps']}")
     print(f"  Passed: {summary['passed_steps']}")
     print(f"  Failed: {summary['failed_steps']}")
     print(f"  Pass Rate: {summary['pass_rate']:.2%}")

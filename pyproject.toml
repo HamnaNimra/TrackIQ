@@ -33,6 +33,7 @@ dependencies = [
     "matplotlib",
     "plotly",
     "streamlit>=1.20.0",
+    "torch",
 ]
 
 [project.urls]

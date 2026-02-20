@@ -32,7 +32,7 @@ class DistributedValidationConfig:
     num_layers: int = 2
     input_size: int = 10
     output_size: int = 1
-    loss_tolerance: float = 0.01  # Relative tolerance for loss comparison
+    loss_tolerance: float = 0.01  # Relative tolerance for loss comparison (1%)
     num_processes: int = 2
     regression_threshold: float = 5.0  # Percent threshold for regression detection
 
@@ -59,6 +59,9 @@ class SimpleMLP(nn.Module):
 
 def create_synthetic_dataset(num_samples: int = 1000, input_size: int = 10, output_size: int = 1) -> TensorDataset:
     """Create synthetic regression dataset."""
+    # Ensure deterministic dataset creation
+    torch.manual_seed(42)
+    
     X = torch.randn(num_samples, input_size)
     # Simple linear relationship with noise
     W = torch.randn(input_size, output_size)
@@ -68,12 +71,14 @@ def create_synthetic_dataset(num_samples: int = 1000, input_size: int = 10, outp
 
 def train_single_process(config: DistributedValidationConfig) -> List[float]:
     """Run training in single process mode."""
+    torch.manual_seed(42)  # Ensure deterministic training
+    
     model = SimpleMLP(config.input_size, config.hidden_size, config.output_size, config.num_layers)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
 
     dataset = create_synthetic_dataset()
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
 
     losses = []
     step = 0
@@ -106,7 +111,7 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
     # Set device (CPU for Gloo)
-    torch.manual_seed(42 + rank)  # Different seed per process
+    torch.manual_seed(42)  # Same seed for all processes to ensure deterministic training
 
     model = SimpleMLP(config.input_size, config.hidden_size, config.output_size, config.num_layers)
 
@@ -117,7 +122,7 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
 
     dataset = create_synthetic_dataset()
     # Use regular sampler for simplicity
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
 
     local_losses = []
     step = 0
@@ -240,6 +245,7 @@ class DistributedValidator:
                 "output_size": config.output_size,
                 "loss_tolerance": config.loss_tolerance,
                 "num_processes": config.num_processes,
+                "regression_threshold": config.regression_threshold,
             },
             "single_process_losses": single_losses,
             "multi_process_losses": multi_losses,
