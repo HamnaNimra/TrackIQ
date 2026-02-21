@@ -83,3 +83,4 @@ interactive_report.html
 .gitignore
 debug_test_report.html
 .trackiq/
+output/
