@@ -1,4 +1,4 @@
-# MiniCluster: Local Distributed Training Validation Tool
+﻿# MiniCluster: Local Distributed Training Validation Tool
 
 **MiniCluster** simulates a distributed AI training cluster locally using PyTorch's distributed training framework with the CPU-only Gloo backend. It validates distributed training workloads the same way a production cluster validation engineer would: **correctness first, performance second, fault tolerance third**.
 
@@ -65,7 +65,7 @@ python -m minicluster run \
 ```
 Starting distributed training run...
 
-✓ Run complete!
+[OK] Run complete!
   Total time: 42.15s
   Final loss: 0.082345
   Avg throughput: 152.3 samples/sec
@@ -104,7 +104,7 @@ Steps compared:     100
   Failed:           0
 
 --------------------------------------------------------------------------------
-RESULT: ✓ PASSED: All 100 steps passed correctness check within 1.00% tolerance
+RESULT: âœ“ PASSED: All 100 steps passed correctness check within 1.00% tolerance
 --------------------------------------------------------------------------------
 
 ================================================================================
@@ -140,15 +140,15 @@ Detection rate:       100.0%
 --------------------------------------------------------------------------------
 Fault Detection Results:
 
-SLOW_WORKER: ✓ DETECTED
+SLOW_WORKER: âœ“ DETECTED
   Affected rank: 0
   Reason: Detected via throughput deviation
 
-GRADIENT_SYNC_ANOMALY: ✓ DETECTED
+GRADIENT_SYNC_ANOMALY: âœ“ DETECTED
   Affected rank: 0
   Reason: Detected via loss divergence
 
-WORKER_TIMEOUT: ✓ DETECTED
+WORKER_TIMEOUT: âœ“ DETECTED
   Affected rank: 0
   Reason: Detected via step mismatch
 
@@ -181,14 +181,14 @@ python -m minicluster baseline save \
 
 **Output:**
 ```
-✓ Baseline 'stable_v1' saved successfully
+âœ“ Baseline 'stable_v1' saved successfully
 ```
 
 Baselines are stored as JSON files in `.minicluster/baselines/`:
 ```
 .minicluster/baselines/
-├── stable_v1.json
-└── staging_v2.json
+â”œâ”€â”€ stable_v1.json
+â””â”€â”€ staging_v2.json
 ```
 
 ### 5. Compare Against Baseline
@@ -216,10 +216,10 @@ Throughput threshold:        5.0%
 --------------------------------------------------------------------------------
 Metric Comparisons:
 --------------------------------------------------------------------------------
-average_loss                     0.082000 → 0.085200 (+4.15%)      ✓
-final_loss                       0.045000 → 0.046800 (+4.00%)      ✓
-average_throughput_samples_per_sec 152.500000 → 149.800000 (-1.77%) ✓
-total_allreduce_time_ms       25300.000000 → 26850.000000 (+6.30%) ✗ REGRESS
+average_loss                     0.082000 â†’ 0.085200 (+4.15%)      âœ“
+final_loss                       0.045000 â†’ 0.046800 (+4.00%)      âœ“
+average_throughput_samples_per_sec 152.500000 â†’ 149.800000 (-1.77%) âœ“
+total_allreduce_time_ms       25300.000000 â†’ 26850.000000 (+6.30%) âœ— REGRESS
 
 ================================================================================
 ```
@@ -243,21 +243,21 @@ python dashboard.py --tool minicluster --result minicluster_power.json
 
 ```
 minicluster/
-├── deps.py                          # Centralized trackiq_core imports
-├── cli.py                           # Command-line interface (argparse)
-├── __init__.py                      # Package exports
-├── runner/
-│   ├── __init__.py
-│   └── distributed_runner.py        # Training harness using torch.distributed
-├── validators/
-│   ├── __init__.py
-│   ├── correctness_validator.py     # Single vs multi-process comparison
-│   └── fault_injector.py            # Fault injection and detection testing
-└── tests/
-    ├── __init__.py
-    ├── test_distributed_runner.py   # Runner tests
-    ├── test_correctness_validator.py # Validator tests
-    └── test_fault_injector.py       # Fault injector tests
+â”œâ”€â”€ deps.py                          # Centralized trackiq_core imports
+â”œâ”€â”€ cli.py                           # Command-line interface (argparse)
+â”œâ”€â”€ __init__.py                      # Package exports
+â”œâ”€â”€ runner/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â””â”€â”€ distributed_runner.py        # Training harness using torch.distributed
+â”œâ”€â”€ validators/
+â”‚   â”œâ”€â”€ __init__.py
+â”‚   â”œâ”€â”€ correctness_validator.py     # Single vs multi-process comparison
+â”‚   â””â”€â”€ fault_injector.py            # Fault injection and detection testing
+â””â”€â”€ tests/
+    â”œâ”€â”€ __init__.py
+    â”œâ”€â”€ test_distributed_runner.py   # Runner tests
+    â”œâ”€â”€ test_correctness_validator.py # Validator tests
+    â””â”€â”€ test_fault_injector.py       # Fault injector tests
 ```
 
 ### Component Responsibilities
@@ -276,9 +276,9 @@ This tool directly mirrors the workflow of a production cluster validation engin
 |---|---|---|
 | `distributed_runner.py` | Running benchmark workloads on ROCm cluster | Does training complete without crashes? Are loss curves smooth? |
 | `correctness_validator.py` | Comparing single-node vs multi-node reference runs | Do gradients sync correctly across nodes? |
-| `fault_injector.py` → slow worker | Injecting network latency on one node | Can monitoring detect stragglers? |
-| `fault_injector.py` → gradient anomaly | Memory bit-flip simulation or gradient clipping test | Does the framework catch divergent training? |
-| `fault_injector.py` → worker timeout | Killing a process mid-training | Can orchestration recover? Are checkpoints valid? |
+| `fault_injector.py` â†’ slow worker | Injecting network latency on one node | Can monitoring detect stragglers? |
+| `fault_injector.py` â†’ gradient anomaly | Memory bit-flip simulation or gradient clipping test | Does the framework catch divergent training? |
+| `fault_injector.py` â†’ worker timeout | Killing a process mid-training | Can orchestration recover? Are checkpoints valid? |
 | `baseline save` | Recording golden run metrics | Do we have a reference point for regression tracking? |
 | `baseline compare` | CI/CD regression detection | Did this cluster change break convergence? |
 
@@ -306,16 +306,16 @@ pytest minicluster/tests/test_correctness_validator.py::TestCorrectnessValidator
 ```
 
 **Test Coverage**:
-- ✓ Single-process training completes with correct metrics
-- ✓ Multi-process training (via single-worker wrapper) completes
-- ✓ Correctness validator passes for identical runs
-- ✓ Correctness validator fails when loss diverges beyond tolerance
-- ✓ Fault injector detects slow worker via throughput
-- ✓ Fault injector detects gradient anomaly via loss divergence
-- ✓ Fault injector detects timeout via step mismatch
-- ✓ Baseline save/load round-trips correctly
-- ✓ Baseline comparison flags regressions
-- ✓ CLI subcommands execute without errors
+- âœ“ Single-process training completes with correct metrics
+- âœ“ Multi-process training (via single-worker wrapper) completes
+- âœ“ Correctness validator passes for identical runs
+- âœ“ Correctness validator fails when loss diverges beyond tolerance
+- âœ“ Fault injector detects slow worker via throughput
+- âœ“ Fault injector detects gradient anomaly via loss divergence
+- âœ“ Fault injector detects timeout via step mismatch
+- âœ“ Baseline save/load round-trips correctly
+- âœ“ Baseline comparison flags regressions
+- âœ“ CLI subcommands execute without errors
 
 ## Technical Details
 
@@ -387,7 +387,7 @@ minicluster baseline save --metrics stable.json --name main_branch
 minicluster run --workers 2 --steps 100 --output feature.json
 minicluster baseline compare --metrics feature.json --name main_branch \
   --latency-threshold 5.0 --throughput-threshold 5.0
-echo "✓ No regressions detected"
+echo "âœ“ No regressions detected"
 ```
 
 ### Local Development
@@ -462,3 +462,5 @@ Same as TrackIQ repository (see `LICENSE` in repo root).
 - [PyTorch Distributed](https://pytorch.org/docs/stable/distributed.html)
 - [TrackIQ UI Usage](../trackiq_core/ui/USAGE.md)
 - [TrackIQ Root README](../README.md)
+
+

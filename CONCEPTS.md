@@ -1,6 +1,6 @@
-# 📚 Core Concepts Guide
+﻿# Core Concepts Guide
 
-This document explains key performance engineering concepts used throughout AutoPerfPy.
+This document explains key performance engineering concepts used across the TrackIQ repository, including autoperfpy and trackiq_core workflows.
 
 ## Table of Contents
 0. [Architecture: trackiq vs autoperfpy](#architecture-trackiq-vs-autoperfpy)
@@ -18,20 +18,20 @@ This document explains key performance engineering concepts used throughout Auto
 ## Architecture: trackiq vs autoperfpy
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  autoperfpy (app layer)                                          │
-│  CLI • Streamlit UI • TensorRT/automotive benchmarks • profiles  │
-│  DNN pipeline • Tegrastats analyzers                             │
-└───────────────────────────────┬─────────────────────────────────┘
-                                │ imports
-┌───────────────────────────────▼─────────────────────────────────┐
-│  trackiq (core library)                                          │
-│  platform/   collectors/   runner/   config/   results/   compare/│
-│  errors.py   analyzers/   reporting/   profiles (registry)      │
-└─────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  autoperfpy (app layer)                                          â”‚
+â”‚  CLI â€¢ Streamlit UI â€¢ TensorRT/automotive benchmarks â€¢ profiles  â”‚
+â”‚  DNN pipeline â€¢ Tegrastats analyzers                             â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                                â”‚ imports
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  trackiq (core library)                                          â”‚
+â”‚  platform/   collectors/   runner/   config/   results/   compare/â”‚
+â”‚  errors.py   analyzers/   reporting/   profiles (registry)      â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
-- **Collectors**: Plugins that gather metrics (synthetic, psutil, NVML, Tegrastats in app). Each implements `start()`, `sample(timestamp)`, `stop()`, `export()` → `CollectorExport`.
+- **Collectors**: Plugins that gather metrics (synthetic, psutil, NVML, Tegrastats in app). Each implements `start()`, `sample(timestamp)`, `stop()`, `export()` â†’ `CollectorExport`.
 - **Runner**: `BenchmarkRunner` runs a collector for a fixed duration and sample interval, returns `CollectorExport` (samples + summary).
 - **Results schema**: `CollectorExport` (collector_name, start_time, end_time, samples, summary, config); `AnalysisResult` (name, timestamp, metrics). Summary is nested (e.g. `latency.p99_ms`, `throughput.mean_fps`).
 - **Comparison logic**: `trackiq.compare` provides `RegressionDetector`, `RegressionThreshold`, `MetricComparison`. Save baselines, compare current run to baseline, detect regressions by threshold (e.g. latency +5%, throughput -5%). Used by `autoperfpy compare`.
@@ -44,8 +44,8 @@ This document explains key performance engineering concepts used throughout Auto
 Latency is the **time it takes to complete a single operation** or request.
 
 ```
-Request ─────────────────────> Response
-         |<── Latency ──>|
+Request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€> Response
+         |<â”€â”€ Latency â”€â”€>|
 ```
 
 ### Why Latency Matters
@@ -57,7 +57,7 @@ Request ─────────────────────> Respons
 | Type | Description | Example |
 |------|-------------|---------|
 | **Inference Latency** | Time to run the ML model | 25ms for YOLO detection |
-| **End-to-End Latency** | Full pipeline time (input → output) | 30ms (25ms inference + 5ms preprocessing) |
+| **End-to-End Latency** | Full pipeline time (input â†’ output) | 30ms (25ms inference + 5ms preprocessing) |
 | **Time-to-First-Token** | Latency before first output appears | 800ms for LLM |
 | **Time-per-Token** | Latency to generate each additional token | 50ms per token for LLM |
 
@@ -70,7 +70,7 @@ Not all latencies are the same. Some requests are fast, some are slow:
 
 ```
 Latencies (sorted): [10ms, 12ms, 15ms, 18ms, 20ms, 22ms, ..., 45ms, 50ms, 55ms]
-                     ↓              ↓              ↓              ↓              ↓
+                     â†“              â†“              â†“              â†“              â†“
                     P1            P50           P90            P99           P100
                   (Fastest)     (Median)    (Slow)        (Very Slow)    (Slowest)
 ```
@@ -107,10 +107,10 @@ P99 = 45ms   # 99 requests faster, 1 slower
 
 ```
 Scenario A: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
-Average: 25ms, P99: 29ms → Consistent performance ✓
+Average: 25ms, P99: 29ms â†’ Consistent performance âœ“
 
 Scenario B: [5, 5, 5, 5, 5, 5, 5, 5, 5, 1005]
-Average: 105ms, P99: 1005ms → Unpredictable spikes ✗
+Average: 105ms, P99: 1005ms â†’ Unpredictable spikes âœ—
 ```
 
 **Lesson**: Always look at P99 to catch problems with percentiles!
@@ -137,10 +137,10 @@ When you increase **batch size**, something interesting happens:
 #### Small Batch (Size = 1)
 ```
 Input: [Image1]
-  │
-  ├─ Overhead: 1ms (GPU kernel setup)
-  ├─ Processing: 5ms (computation)
-  └─ Total: 6ms per image
+  â”‚
+  â”œâ”€ Overhead: 1ms (GPU kernel setup)
+  â”œâ”€ Processing: 5ms (computation)
+  â””â”€ Total: 6ms per image
   
 Throughput: 1/0.006 = 167 images/sec
 ```
@@ -148,27 +148,27 @@ Throughput: 1/0.006 = 167 images/sec
 #### Large Batch (Size = 16)
 ```
 Input: [Image1, Image2, ..., Image16]
-  │
-  ├─ Overhead: 1ms (GPU kernel setup once)
-  ├─ Processing: 5ms × 16 = 80ms (computation amortized)
-  └─ Total: 81ms for 16 images = 5.06ms per image
+  â”‚
+  â”œâ”€ Overhead: 1ms (GPU kernel setup once)
+  â”œâ”€ Processing: 5ms Ã— 16 = 80ms (computation amortized)
+  â””â”€ Total: 81ms for 16 images = 5.06ms per image
   
-Throughput: 1/0.00506 = 197 images/sec ✓ (higher!)
+Throughput: 1/0.00506 = 197 images/sec âœ“ (higher!)
 
-BUT per-image latency in batch: 81ms (image waits for batch!) ✗
+BUT per-image latency in batch: 81ms (image waits for batch!) âœ—
 ```
 
 ### The Trade-off Visualization
 
 ```
          Latency
-            ↑
-            │      Small batch: Low latency, low throughput
-            │      •
-            │        \
-            │         \____  Large batch: High throughput, high latency
-            │              •
-            └────────────────────→ Throughput
+            â†‘
+            â”‚      Small batch: Low latency, low throughput
+            â”‚      â€¢
+            â”‚        \
+            â”‚         \____  Large batch: High throughput, high latency
+            â”‚              â€¢
+            â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â†’ Throughput
 ```
 
 ### Choosing Batch Size
@@ -189,24 +189,24 @@ BUT per-image latency in batch: 81ms (image waits for batch!) ✗
 #### **Phase 1: Prefill (Processing Input)**
 ```
 User Input: "What is machine learning?"
-           ↓
+           â†“
      Process all tokens
-           ↓
+           â†“
   Generate First Token (output)
            
-Time: ~800ms  ← This is TTFT (Time-To-First-Token)
+Time: ~800ms  â† This is TTFT (Time-To-First-Token)
 Problem: User sees nothing for 800ms!
 ```
 
 #### **Phase 2: Decode (Generating Output)**
 ```
 "Machine learning is..." (already generated)
-           ↓
+           â†“
     Generate one more token
-           ↓
+           â†“
   "Machine learning is a..."
            
-Time: ~50ms per token  ← This is Time-Per-Token
+Time: ~50ms per token  â† This is Time-Per-Token
 Benefit: User sees tokens appearing in real-time (streaming)
 ```
 
@@ -221,10 +221,10 @@ Benefit: User sees tokens appearing in real-time (streaming)
 ### Example Timeline
 
 ```
-t=0ms      ━━━━━━━ User sends request
-t=800ms    ━━━━━━━ First token appears (TTFT) 🎯
-t=850ms    ━━━━━━━ Second token appears (50ms per token)
-t=900ms    ━━━━━━━ Third token appears (50ms per token)
+t=0ms      â”â”â”â”â”â”â” User sends request
+t=800ms    â”â”â”â”â”â”â” First token appears (TTFT) ðŸŽ¯
+t=850ms    â”â”â”â”â”â”â” Second token appears (50ms per token)
+t=900ms    â”â”â”â”â”â”â” Third token appears (50ms per token)
 ...
 ```
 
@@ -248,37 +248,37 @@ t=900ms    ━━━━━━━ Third token appears (50ms per token)
 
 ```
 GPU Memory Layout:
-┌─────────────────────────────────────┐
-│ Model Weights (Static)              │
-│ - 7B LLM: ~14GB (fp16)              │
-├─────────────────────────────────────┤
-│ KV Cache (Grows per token)          │
-│ - Increases with sequence length    │
-├─────────────────────────────────────┤
-│ Activation Memory (Temporary)       │
-│ - Used during forward pass          │
-├─────────────────────────────────────┤
-│ Free Memory                         │
-└─────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ Model Weights (Static)              â”‚
+â”‚ - 7B LLM: ~14GB (fp16)              â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ KV Cache (Grows per token)          â”‚
+â”‚ - Increases with sequence length    â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ Activation Memory (Temporary)       â”‚
+â”‚ - Used during forward pass          â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ Free Memory                         â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### KV Cache Calculation
 
 For each token generated, we store:
-- **K (Key)** vector: `layers × heads × head_size × batch_size`
-- **V (Value)** vector: `layers × heads × head_size × batch_size`
+- **K (Key)** vector: `layers Ã— heads Ã— head_size Ã— batch_size`
+- **V (Value)** vector: `layers Ã— heads Ã— head_size Ã— batch_size`
 
 **Example**:
 ```
 Model: 32 layers, 32 heads, 128 head_size, batch_size=1, fp16 (2 bytes)
 
 Memory per token:
-= 2 × 32 × 32 × 128 × 1 × 2 bytes
+= 2 Ã— 32 Ã— 32 Ã— 128 Ã— 1 Ã— 2 bytes
 = 524,288 bytes
 = ~512 KB per token
 
 For 2000 token sequence:
-= 512 KB × 2000 = 1 GB just for KV cache!
+= 512 KB Ã— 2000 = 1 GB just for KV cache!
 ```
 
 ### OOM (Out of Memory) Prevention
@@ -330,4 +330,5 @@ AutoPerfPy produces report artifacts in HTML/PDF along with JSON/CSV exports:
 
 ---
 
-**Now you understand the core concepts! Check the examples in [README.md](README.md) to see them in action.** 🚀
+**Now you understand the core concepts! Check the examples in [README.md](README.md) to see them in action.** ðŸš€
+
