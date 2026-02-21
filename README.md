@@ -95,7 +95,7 @@ python launch_dashboard.py
 ```
 
 Unified mode now includes:
-- AutoPerfPy result browser + graph-rich dashboard
+- AutoPerfPy run configuration (manual/auto), result browser, and graph-rich dashboard
 - MiniCluster run configuration (workers/steps/batch/lr/seed/tdp) and quick smoke run
 - Compare configuration (browse/manual inputs, labels, regression threshold) with comparison graphs
 
