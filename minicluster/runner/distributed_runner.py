@@ -5,7 +5,9 @@ minicluster-compatible config and metrics serialization.
 """
 
 import time
+import platform as _platform
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # Import from trackiq_core - the single source of truth for distributed training
@@ -18,6 +20,14 @@ from trackiq_core.distributed_validator import (
 )
 
 from minicluster.deps import load_json_file, save_json_file, ensure_parent_dir
+from trackiq_core.schema import (
+    Metrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+)
+from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
 
 
 @dataclass
@@ -270,7 +280,48 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
         output_path: Path to output JSON file
     """
     ensure_parent_dir(output_path)
-    save_json_file(output_path, metrics.to_dict())
+    metrics_dict = metrics.to_dict()
+    comm_overhead = None
+    denom = metrics.total_allreduce_time_ms + metrics.total_compute_time_ms
+    if denom > 0:
+        comm_overhead = (metrics.total_allreduce_time_ms / denom) * 100.0
+
+    result = TrackiqResult(
+        tool_name="minicluster",
+        tool_version="0.1.0",
+        timestamp=datetime.utcnow(),
+        platform=PlatformInfo(
+            hardware_name="CPU",
+            os=f"{_platform.system()} {_platform.release()}",
+            framework="pytorch",
+            framework_version=_safe_torch_version(),
+        ),
+        workload=WorkloadInfo(
+            name="distributed_training_validation",
+            workload_type="training",
+            batch_size=int(metrics.config.get("batch_size", 1)),
+            steps=metrics.num_steps,
+        ),
+        metrics=Metrics(
+            throughput_samples_per_sec=float(
+                metrics_dict.get("average_throughput_samples_per_sec", 0.0)
+            ),
+            latency_p50_ms=0.0,
+            latency_p95_ms=0.0,
+            latency_p99_ms=0.0,
+            memory_utilization_percent=0.0,
+            communication_overhead_percent=comm_overhead,
+            power_consumption_watts=None,
+        ),
+        regression=RegressionInfo(
+            baseline_id=None,
+            delta_percent=0.0,
+            status="pass",
+            failed_metrics=[],
+        ),
+        tool_payload=metrics_dict,
+    )
+    save_trackiq_result(result, output_path)
 
 
 def load_metrics(output_path: str) -> Dict[str, Any]:
@@ -282,4 +333,20 @@ def load_metrics(output_path: str) -> Dict[str, Any]:
     Returns:
         Dictionary with metrics
     """
-    return load_json_file(output_path)
+    data = load_json_file(output_path)
+    if isinstance(data, dict) and "tool_name" in data and "workload" in data and "metrics" in data:
+        result = load_trackiq_result(output_path)
+        if isinstance(result.tool_payload, dict):
+            return result.tool_payload
+        return result.to_dict()
+    return data
+
+
+def _safe_torch_version() -> str:
+    """Best-effort torch version lookup."""
+    try:
+        import torch  # local import to avoid hard dependency at module import time
+
+        return str(torch.__version__)
+    except Exception:
+        return "unknown"

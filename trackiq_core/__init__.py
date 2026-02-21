@@ -52,6 +52,15 @@ from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchma
 
 # Distributed validation
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from trackiq_core.schema import (
+    TrackiqResult,
+    PlatformInfo,
+    WorkloadInfo,
+    Metrics,
+    RegressionInfo,
+)
+from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
+from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
 
 __all__ = [
     # Utils
@@ -92,4 +101,14 @@ __all__ = [
     # Distributed validation
     "DistributedValidator",
     "DistributedValidationConfig",
+    # Canonical result schema
+    "TrackiqResult",
+    "PlatformInfo",
+    "WorkloadInfo",
+    "Metrics",
+    "RegressionInfo",
+    "save_trackiq_result",
+    "load_trackiq_result",
+    "validate_trackiq_result",
+    "validate_trackiq_result_obj",
 ]

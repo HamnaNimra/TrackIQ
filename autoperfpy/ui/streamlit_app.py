@@ -257,7 +257,7 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
 def samples_to_dataframe(samples: List[Dict]) -> pd.DataFrame:
     """Convert samples list to pandas DataFrame.
 
-    Uses shared implementation from trackiq.reporting.charts.
+    Uses shared implementation from autoperfpy.reports.charts.
 
     Args:
         samples: List of sample dictionaries
@@ -288,7 +288,7 @@ def get_platform_metadata() -> Dict[str, Any]:
     except Exception:
         pass
     try:
-        from trackiq.platform import query_nvidia_smi, get_memory_metrics
+        from trackiq_core.hardware import query_nvidia_smi, get_memory_metrics
 
         name_out = query_nvidia_smi(["name"], timeout=2)
         if name_out:
@@ -423,8 +423,8 @@ def _run_synthetic_fallback_ui(
     """Fallback: run synthetic benchmark from UI when Phase 5 runner unavailable."""
     try:
         from autoperfpy.device_config import DEFAULT_WARMUP_RUNS
-        from trackiq.collectors import SyntheticCollector
-        from trackiq.runner import BenchmarkRunner
+        from trackiq_core.collectors import SyntheticCollector
+        from trackiq_core.runners import BenchmarkRunner
     except ImportError:
         return None
     config = {"warmup_samples": DEFAULT_WARMUP_RUNS, "seed": 42}

@@ -6,9 +6,11 @@ commands for profiles, tegrastats analysis, and DNN pipeline analysis.
 import argparse
 import json
 import os
+import platform as _platform
 import sys
 import tempfile
 import time
+from datetime import datetime
 from turtle import st
 from typing import Optional, Tuple
 
@@ -40,6 +42,14 @@ from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
 from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
 from trackiq_core.hardware import DeviceProfile, get_all_devices
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from trackiq_core.schema import (
+    Metrics as TrackiqMetrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+)
+from trackiq_core.serializer import save_trackiq_result
 import numpy as np
 import matplotlib
 
@@ -617,8 +627,13 @@ def _run_default_benchmark(
             path_csv = None
     fd_json, path_json = tempfile.mkstemp(suffix=".json", prefix="autoperfpy_")
     try:
-        with os.fdopen(fd_json, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2)
+        os.close(fd_json)
+        _save_trackiq_wrapped_json(
+            path_json,
+            result,
+            workload_name="default_benchmark",
+            workload_type="inference",
+        )
     except Exception:
         if path_json and os.path.exists(path_json):
             try:
@@ -634,6 +649,113 @@ def _output_path(args, filename: str) -> str:
     out_dir = getattr(args, "output_dir", None) or "output"
     os.makedirs(out_dir, exist_ok=True)
     return os.path.join(out_dir, os.path.basename(filename))
+
+
+def _safe_torch_version() -> str:
+    """Best-effort PyTorch version lookup."""
+    try:
+        import torch
+
+        return str(torch.__version__)
+    except Exception:
+        return "unknown"
+
+
+def _infer_trackiq_result(
+    payload: dict,
+    workload_name: str = "autoperfpy_run",
+    workload_type: str = "inference",
+) -> TrackiqResult:
+    """Convert autoperfpy payload to canonical TrackiqResult."""
+    summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+    latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
+    throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
+    power = summary.get("power", {}) if isinstance(summary, dict) else {}
+    memory = summary.get("memory", {}) if isinstance(summary, dict) else {}
+    regression = payload.get("regression", {}) if isinstance(payload, dict) else {}
+    platform_metadata = payload.get("platform_metadata", {}) if isinstance(payload, dict) else {}
+    inference_cfg = payload.get("inference_config", {}) if isinstance(payload, dict) else {}
+
+    status = regression.get("status")
+    if status not in ("pass", "fail"):
+        status = "fail" if payload.get("has_regressions") else "pass"
+
+    return TrackiqResult(
+        tool_name="autoperfpy",
+        tool_version="0.1.0",
+        timestamp=datetime.utcnow(),
+        platform=PlatformInfo(
+            hardware_name=str(
+                platform_metadata.get("device_name")
+                or payload.get("collector_name")
+                or "unknown"
+            ),
+            os=str(platform_metadata.get("os") or f"{_platform.system()} {_platform.release()}"),
+            framework="pytorch",
+            framework_version=_safe_torch_version(),
+        ),
+        workload=WorkloadInfo(
+            name=str(payload.get("run_label") or workload_name),
+            workload_type="training" if workload_type == "training" else "inference",
+            batch_size=int(inference_cfg.get("batch_size", 1)),
+            steps=int(summary.get("sample_count", len(payload.get("samples", [])))),
+        ),
+        metrics=TrackiqMetrics(
+            throughput_samples_per_sec=float(throughput.get("mean_fps", 0.0)),
+            latency_p50_ms=float(latency.get("p50_ms", 0.0)),
+            latency_p95_ms=float(latency.get("p95_ms", 0.0)),
+            latency_p99_ms=float(latency.get("p99_ms", 0.0)),
+            memory_utilization_percent=float(memory.get("mean_percent", 0.0)),
+            communication_overhead_percent=None,
+            power_consumption_watts=(
+                float(power.get("mean_w")) if power.get("mean_w") is not None else None
+            ),
+        ),
+        regression=RegressionInfo(
+            baseline_id=regression.get("baseline") if isinstance(regression, dict) else None,
+            delta_percent=float(regression.get("delta_percent", 0.0))
+            if isinstance(regression, dict)
+            else 0.0,
+            status=status,
+            failed_metrics=list(regression.get("failed_metrics", []))
+            if isinstance(regression, dict)
+            else [],
+        ),
+        tool_payload=payload,
+    )
+
+
+def _save_trackiq_wrapped_json(
+    path: str,
+    payload: object,
+    workload_name: str = "autoperfpy_run",
+    workload_type: str = "inference",
+) -> None:
+    """Save payload wrapped as TrackiqResult JSON."""
+    if isinstance(payload, list):
+        wrapped = [
+            _infer_trackiq_result(
+                p if isinstance(p, dict) else {"tool_payload": p},
+                workload_name=workload_name,
+                workload_type=workload_type,
+            ).to_dict()
+            for p in payload
+        ]
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(wrapped, handle, indent=2)
+        return
+
+    if isinstance(payload, dict):
+        result = _infer_trackiq_result(
+            payload, workload_name=workload_name, workload_type=workload_type
+        )
+    else:
+        result = _infer_trackiq_result(
+            {"tool_payload": payload},
+            workload_name=workload_name,
+            workload_type=workload_type,
+        )
+    save_trackiq_result(result, path)
 
 
 def _write_result_to_csv(result: dict, path: str) -> bool:
@@ -1020,8 +1142,12 @@ def run_benchmark_distributed(args, config):
     # Save output if requested
     if getattr(args, "output", None):
         output_path = _output_path(args, args.output)
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+        _save_trackiq_wrapped_json(
+            output_path,
+            results,
+            workload_name="distributed_validation",
+            workload_type="training",
+        )
         print(f"\n[OK] Results saved to: {output_path}")
 
     return results
@@ -1258,8 +1384,12 @@ def run_report_html(args, config):
                 csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
                 json_out = _output_path(args, json_out)
                 csv_out = _output_path(args, csv_out)
-                with open(json_out, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
+                _save_trackiq_wrapped_json(
+                    json_out,
+                    data,
+                    workload_name="html_report_data",
+                    workload_type="inference",
+                )
                 print(f"[OK] JSON exported to: {json_out}")
                 if _write_result_to_csv(data, csv_out):
                     print(f"[OK] CSV exported to: {csv_out}")
@@ -1531,8 +1661,12 @@ def run_report_pdf(args, config):
             csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
             json_out = _output_path(args, json_out)
             csv_out = _output_path(args, csv_out)
-            with open(json_out, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            _save_trackiq_wrapped_json(
+                json_out,
+                data,
+                workload_name="pdf_report_data",
+                workload_type="inference",
+            )
             print(f"[OK] JSON exported to: {json_out}")
             if _write_result_to_csv(data, csv_out):
                 print(f"[OK] CSV exported to: {csv_out}")
@@ -1861,8 +1995,12 @@ def run_with_profile(args, _config):
             "power_pass": power_pass,
             "overall_pass": overall_pass,
         }
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path,
+            export_data,
+            workload_name=f"profile_{profile.name}",
+            workload_type="inference",
+        )
         print(f"\nResults exported to: {export_path}")
 
     if getattr(args, "export_csv", None):
@@ -1947,8 +2085,9 @@ def run_auto_benchmarks_cli(args) -> int:
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path, results, workload_name="auto_run_batch", workload_type="inference"
+        )
         print(f"\n[OK] Exported {len(results)} runs to {export_path}")
     if getattr(args, "export_csv", None):
         base = (
@@ -2007,8 +2146,9 @@ def run_manual_single(args):
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path, result, workload_name="manual_run", workload_type="inference"
+        )
         print(f"\n[OK] Exported to {export_path}")
     if getattr(args, "export_csv", None):
         csv_path = _output_path(args, args.export_csv)
@@ -2104,11 +2244,10 @@ def main():
     # Save output if requested (report html/pdf already write to output dir; do not overwrite)
     if args.output and result and getattr(args, "command", None) != "report":
         out_path = _output_path(args, args.output)
-        with open(out_path, "w", encoding="utf-8") as f:
-            if hasattr(result, "to_dict"):
-                json.dump(result.to_dict(), f, indent=2)
-            else:
-                json.dump(result, f, indent=2)
+        if hasattr(result, "to_dict"):
+            _save_trackiq_wrapped_json(out_path, result.to_dict())
+        else:
+            _save_trackiq_wrapped_json(out_path, result)
         print(f"\n[OK] Results saved to {out_path}")
 
     return 0
