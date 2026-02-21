@@ -50,6 +50,24 @@ def setup_run_parser(subparsers):
         help="Number of worker processes (default: 2)",
     )
     parser.add_argument(
+        "--backend",
+        choices=["gloo", "nccl"],
+        default="gloo",
+        help="Collective communication backend (default: gloo)",
+    )
+    parser.add_argument(
+        "--workload",
+        choices=["mlp", "transformer", "embedding"],
+        default="mlp",
+        help="Synthetic workload type (default: mlp)",
+    )
+    parser.add_argument(
+        "--baseline-throughput",
+        type=float,
+        default=None,
+        help="Single-worker baseline throughput for scaling efficiency calculation",
+    )
+    parser.add_argument(
         "--steps",
         type=int,
         default=100,
@@ -326,6 +344,9 @@ def cmd_run(args):
         num_processes=args.workers,
         seed=args.seed,
         tdp_watts=args.tdp_watts,
+        collective_backend=args.backend,
+        baseline_throughput=args.baseline_throughput,
+        workload=args.workload,
     )
 
     if args.verbose:
@@ -334,6 +355,10 @@ def cmd_run(args):
         print(f"  Steps: {config.num_steps}")
         print(f"  Batch size: {config.batch_size}")
         print(f"  Learning rate: {config.learning_rate}")
+        print(f"  Backend: {config.collective_backend}")
+        print(f"  Workload: {config.workload}")
+        if config.baseline_throughput is not None:
+            print(f"  Baseline throughput: {config.baseline_throughput}")
 
     print("\nStarting distributed training run...")
     metrics = run_distributed(config, health_checkpoint_path=args.health_checkpoint_path)
