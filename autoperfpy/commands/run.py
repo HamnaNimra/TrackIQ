@@ -105,6 +105,7 @@ def run_auto_benchmarks_cli(
     output_path: Callable[[Any, str], str],
     save_trackiq_wrapped_json: Callable[[str, Any, str, str], None],
     write_result_to_csv: Callable[[dict[str, Any], str], bool],
+    run_auto_benchmarks_fn: Callable[..., list[dict[str, Any]]] = run_auto_benchmarks,
 ) -> int:
     """Run automatic benchmarks on all detected devices and configs."""
     device_ids_filter = None
@@ -149,7 +150,7 @@ def run_auto_benchmarks_cli(
         print(f"Devices: {device_ids}")
         print(f"Runs: {len(pairs)} (duration {duration}s each)")
         print("=" * 60)
-    results = run_auto_benchmarks(
+    results = run_auto_benchmarks_fn(
         pairs,
         duration_seconds=duration,
         sample_interval_seconds=0.2,
@@ -193,6 +194,7 @@ def run_manual_single(
     output_path: Callable[[Any, str], str],
     save_trackiq_wrapped_json: Callable[[str, Any, str, str], None],
     write_result_to_csv: Callable[[dict[str, Any], str], bool],
+    run_single_benchmark_fn: Callable[..., dict[str, Any]] = run_single_benchmark,
 ) -> Any:
     """Run a single benchmark with manually selected device and config."""
     device_id = getattr(args, "device", None) or "cpu_0"
@@ -223,7 +225,7 @@ def run_manual_single(
         print(f"Device: {device.device_name} ({device.device_id})")
         print(f"Precision: {config.precision}  Batch: {config.batch_size}")
         print("=" * 60)
-    result = run_single_benchmark(
+    result = run_single_benchmark_fn(
         device,
         config,
         duration_seconds=duration,
@@ -310,7 +312,9 @@ def run_with_profile(
             from autoperfpy.collectors import NVMLCollector
         except ImportError as exc:
             print(f"Error: NVML collector requires nvidia-ml-py. {exc}", file=sys.stderr)
-            raise DependencyError("NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py") from exc
+            raise DependencyError(
+                "NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py"
+            ) from exc
 
         if get_memory_metrics() is None:
             raise HardwareNotFoundError(
