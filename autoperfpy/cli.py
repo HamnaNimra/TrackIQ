@@ -16,18 +16,24 @@ from typing import Any
 import matplotlib
 import numpy as np
 
-from autoperfpy.analyzers import (
-    DNNPipelineAnalyzer,
-    EfficiencyAnalyzer,
-    LogAnalyzer,
-    PercentileLatencyAnalyzer,
-    TegrastatsAnalyzer,
-    VariabilityAnalyzer,
+from autoperfpy.commands.analyze import (
+    run_analyze_dnn_pipeline as _cmd_run_analyze_dnn_pipeline,
+    run_analyze_efficiency as _cmd_run_analyze_efficiency,
+    run_analyze_latency as _cmd_run_analyze_latency,
+    run_analyze_logs as _cmd_run_analyze_logs,
+    run_analyze_tegrastats as _cmd_run_analyze_tegrastats,
+    run_analyze_variability as _cmd_run_analyze_variability,
 )
-from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
+from autoperfpy.commands.benchmark import (
+    run_benchmark_batching as _cmd_run_benchmark_batching,
+    run_benchmark_llm as _cmd_run_benchmark_llm,
+)
+from autoperfpy.commands.monitor import (
+    run_monitor_gpu as _cmd_run_monitor_gpu,
+    run_monitor_kv_cache as _cmd_run_monitor_kv_cache,
+)
 from autoperfpy.collectors import SyntheticCollector
 from autoperfpy.config import ConfigManager
-from autoperfpy.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from autoperfpy.profiles import (
     CollectorType,
     ProfileValidationError,
