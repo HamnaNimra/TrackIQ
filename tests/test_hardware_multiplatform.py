@@ -85,6 +85,44 @@ def test_get_cpu_metrics_always_returns_dict() -> None:
     assert "memory_percent" in data
 
 
+def test_get_cpu_metrics_uses_windows_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When psutil has no temps on Windows, fallback probe should populate temperature."""
+    fake_psutil = type(
+        "FakePsutil",
+        (),
+        {
+            "cpu_percent": staticmethod(lambda interval=0.1: 33.0),
+            "virtual_memory": staticmethod(lambda: type("VM", (), {"percent": 44.0})()),
+            "sensors_temperatures": staticmethod(lambda: {}),
+        },
+    )
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    monkeypatch.setattr(gpu_mod.sys, "platform", "win32", raising=False)
+    monkeypatch.setattr(gpu_mod, "_get_windows_cpu_temperature", lambda: 61.5)
+    data = gpu_mod.get_cpu_metrics()
+    assert data is not None
+    assert data["temperature"] == 61.5
+
+
+def test_get_cpu_metrics_uses_macos_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When psutil has no temps on macOS, fallback probe should populate temperature."""
+    fake_psutil = type(
+        "FakePsutil",
+        (),
+        {
+            "cpu_percent": staticmethod(lambda interval=0.1: 22.0),
+            "virtual_memory": staticmethod(lambda: type("VM", (), {"percent": 55.0})()),
+            "sensors_temperatures": staticmethod(lambda: {}),
+        },
+    )
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    monkeypatch.setattr(gpu_mod.sys, "platform", "darwin", raising=False)
+    monkeypatch.setattr(gpu_mod, "_get_macos_cpu_temperature", lambda: 58.0)
+    data = gpu_mod.get_cpu_metrics()
+    assert data is not None
+    assert data["temperature"] == 58.0
+
+
 def test_get_all_devices_includes_amd_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """get_all_devices should include AMD devices when include_amd=True."""
     amd = DeviceProfile("amd_0", DEVICE_TYPE_AMD_GPU, "AMD MI300X")
