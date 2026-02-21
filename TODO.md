@@ -136,7 +136,7 @@ Goal: docs reflect current monorepo reality (`trackiq_core` + 3 tools).
 Tasks:
 1. Keep root README as monorepo source of truth.
 2. Keep case study architecture/roadmap aligned with shipped features.
-3. Maintain a short “what is shipped vs next” section in docs.
+3. Maintain a short "what is shipped vs next" section in docs.
 
 Acceptance criteria:
 - No stale architecture claims.
@@ -167,6 +167,78 @@ Tasks:
 
 ---
 
+## Refactoring and Code Health
+
+### 14) CLI decomposition and boundary cleanup `[P1] [OPEN]`
+Problem: very large command modules increase regression risk and reduce maintainability.
+
+Tasks:
+1. Split `autoperfpy/cli.py` into command modules (`run`, `report`, `analyze`, `monitor`).
+2. Keep parser wiring thin and move command logic into testable functions.
+3. Add shared save/serialization helpers to remove duplicate result-writing paths.
+4. Add import-cycle checks between tool packages and `trackiq_core`.
+
+Acceptance criteria:
+- No CLI behavior regressions.
+- Reduced complexity and better unit-test coverage per command area.
+
+### 15) Schema-first contract enforcement `[P1] [OPEN]`
+Tasks:
+1. Validate all final tool outputs with `validate_trackiq_result_obj`.
+2. Add contract tests for autoperfpy/minicluster/compare outputs.
+3. Add backward-compatibility tests for loading older schema versions.
+
+Acceptance criteria:
+- Schema contract breaks are caught in CI before merge.
+
+### 16) Technical debt register `[P2] [OPEN]`
+Tasks:
+1. Track temporary shims/workarounds with owner + removal milestone.
+2. Add a quarterly debt burn-down checkpoint.
+3. Enforce "no new TODO without owner/date" rule in PR reviews.
+
+---
+
+## Repository Quality Standards
+
+### 17) Engineering standards baseline `[P1] [OPEN]`
+Tasks:
+1. Standardize `ruff`, `black`, `isort`, and `mypy` configuration.
+2. Add pre-commit hooks for lint/format/import checks.
+3. Define minimum docstring/type-hint requirements for new modules.
+
+Acceptance criteria:
+- CI blocks non-conforming style/type/lint changes.
+
+### 18) CI quality gates `[P1] [OPEN]`
+Tasks:
+1. Require tests + coverage threshold + integration smoke tests.
+2. Add packaging smoke test (`pip install .` and import core/tool modules).
+3. Add CLI smoke test for `autoperfpy`, `minicluster`, `trackiq-compare`.
+
+Acceptance criteria:
+- No release-branch merge without passing all gates.
+
+### 19) Release and versioning discipline `[P2] [OPEN]`
+Tasks:
+1. Adopt semantic versioning rules for repo/tool/schema changes.
+2. Add release checklist (compatibility, migrations, docs).
+3. Auto-generate changelog entries from PR labels.
+
+### 20) Security and dependency hygiene `[P2] [OPEN]`
+Tasks:
+1. Add dependency audit checks in CI.
+2. Add monthly dependency update cadence.
+3. Ensure dependency parity between `pyproject.toml` and `requirements.txt`.
+
+### 21) Observability and diagnostics `[P2] [OPEN]`
+Tasks:
+1. Standardize structured logging across tools.
+2. Add run/correlation IDs to reports and monitor outputs.
+3. Improve actionable error messages for dependency/hardware failures.
+
+---
+
 ## Immediate Action Plan (This Week)
 
 1. `[P0]` Run real `autoperfpy`, `minicluster`, and `trackiq-compare` flows and capture artifacts.
@@ -174,4 +246,3 @@ Tasks:
 3. `[P1]` Start LLM schema integration (`ttft_ms`, KV metrics) behind additive fields.
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
-
