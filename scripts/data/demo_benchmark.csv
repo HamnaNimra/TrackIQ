@@ -1,9 +1,0 @@
-workload,p50,p95,p99,batch,latency,throughput,timestamp,memory,power,performance,config
-ResNet50,22.5,25.3,28.1,1,22.5,66.7,0,2600,65.2,44.4,Baseline
-YOLO_V8,30.2,35.8,42.5,1,30.2,66.7,1,2750,82.5,33.1,Baseline
-Segformer,18.5,20.3,23.8,1,18.5,66.7,2,2450,55.3,54.1,Baseline
-EfficientDet,15.2,17.5,19.8,1,15.2,66.7,3,2300,48.1,65.8,Baseline
-MobileNet,12.1,14.0,15.8,1,12.1,120.0,4,1800,35.6,81.2,Baseline
-Optimized_V1,22.3,24.8,27.6,1,22.3,70.0,5,2550,60.0,46.0,Optimized V1
-Optimized_V2,20.8,22.9,25.4,1,20.8,75.0,6,2400,58.0,50.0,Optimized V2
-Quantized,18.5,20.2,22.7,1,18.5,90.0,7,2000,45.0,60.0,Quantized
