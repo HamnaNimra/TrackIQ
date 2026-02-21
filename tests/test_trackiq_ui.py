@@ -23,7 +23,9 @@ from trackiq_core.ui import (
     PowerGauge,
     RegressionBadge,
     ResultBrowser,
+    RunHistoryLoader,
     TrackiqDashboard,
+    TrendChart,
     WorkerGrid,
     run_dashboard,
 )
@@ -178,6 +180,7 @@ def test_components_import_without_streamlit_dependency() -> None:
         __import__("trackiq_core.ui.components.comparison_table")
         __import__("trackiq_core.ui.components.device_panel")
         __import__("trackiq_core.ui.components.result_browser")
+        __import__("trackiq_core.ui.components.trend_chart")
         assert "streamlit" not in sys.modules
     finally:
         if preloaded is not None:
@@ -219,6 +222,62 @@ def test_result_browser_to_dict_returns_metadata_for_valid_result(tmp_path: Path
     assert rows[0]["tool_name"] == "tool_a"
     assert rows[0]["workload_name"] == "demo"
     assert rows[0]["path"] == str(out)
+
+
+def test_run_history_loader_loads_sorted_results_and_skips_invalid(tmp_path: Path) -> None:
+    """RunHistoryLoader should return valid results sorted by timestamp."""
+    history_dir = tmp_path / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    older = _result(throughput=90.0, perf_per_watt=0.7)
+    older.timestamp = datetime(2026, 2, 20, 10, 0, 0)
+    newer = _result(throughput=120.0, perf_per_watt=1.0)
+    newer.timestamp = datetime(2026, 2, 21, 10, 0, 0)
+    save_trackiq_result(newer, history_dir / "newer.json")
+    save_trackiq_result(older, history_dir / "older.json")
+    (history_dir / "broken.json").write_text("{not-json", encoding="utf-8")
+
+    loaded = RunHistoryLoader(str(history_dir)).load()
+    assert len(loaded) == 2
+    assert [item.metrics.throughput_samples_per_sec for item in loaded] == [90.0, 120.0]
+
+
+def test_trend_chart_to_dict_default_metrics_filters_null_points() -> None:
+    """TrendChart should include default metrics and omit null metric points."""
+    run_a = _result(throughput=95.0, perf_per_watt=0.8)
+    run_a.timestamp = datetime(2026, 2, 19, 8, 0, 0)
+    run_a.metrics.latency_p99_ms = 16.0
+
+    run_b = _result(throughput=110.0, perf_per_watt=1.1)
+    run_b.timestamp = datetime(2026, 2, 20, 8, 0, 0)
+    run_b.metrics.latency_p99_ms = 12.0
+
+    run_c = _result(throughput=125.0, perf_per_watt=1.3)
+    run_c.timestamp = datetime(2026, 2, 21, 8, 0, 0)
+    run_c.metrics.latency_p99_ms = 10.0
+    run_c.metrics.performance_per_watt = None
+
+    payload = TrendChart(results=[run_c, run_a, run_b]).to_dict()
+
+    assert payload["run_count"] == 3
+    assert payload["metric_names"] == list(TrendChart.DEFAULT_METRICS)
+    assert [point["value"] for point in payload["trends"]["throughput_samples_per_sec"]] == [
+        95.0,
+        110.0,
+        125.0,
+    ]
+    assert len(payload["trends"]["performance_per_watt"]) == 2
+
+
+def test_trend_chart_supports_custom_metric_names() -> None:
+    """TrendChart should preserve custom metric ordering and unknown metrics."""
+    payload = TrendChart(
+        results=[_result()],
+        metric_names=["latency_p95_ms", "missing_metric"],
+    ).to_dict()
+    assert payload["metric_names"] == ["latency_p95_ms", "missing_metric"]
+    assert len(payload["trends"]["latency_p95_ms"]) == 1
+    assert payload["trends"]["missing_metric"] == []
 
 
 def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
