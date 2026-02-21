@@ -50,6 +50,7 @@ from trackiq_core.schema import (
     WorkloadInfo,
 )
 from trackiq_core.serializer import save_trackiq_result
+from trackiq_core.power_profiler import PowerProfiler, detect_power_source
 import numpy as np
 import matplotlib
 
@@ -256,6 +257,11 @@ Environment Variables:
         type=int,
         default=6,
         help="Auto mode: max (precision x batch) configs per device (default: 6)",
+    )
+    run_parser.add_argument(
+        "--no-power",
+        action="store_true",
+        help="Disable power profiling for run commands",
     )
 
     # Compare command (uses trackiq comparison module)
@@ -672,6 +678,12 @@ def _infer_trackiq_result(
     throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
     power = summary.get("power", {}) if isinstance(summary, dict) else {}
     memory = summary.get("memory", {}) if isinstance(summary, dict) else {}
+    power_profile = payload.get("power_profile", {}) if isinstance(payload, dict) else {}
+    power_profile_summary = (
+        power_profile.get("summary", {})
+        if isinstance(power_profile, dict)
+        else {}
+    )
     regression = payload.get("regression", {}) if isinstance(payload, dict) else {}
     platform_metadata = payload.get("platform_metadata", {}) if isinstance(payload, dict) else {}
     inference_cfg = payload.get("inference_config", {}) if isinstance(payload, dict) else {}
@@ -709,6 +721,24 @@ def _infer_trackiq_result(
             communication_overhead_percent=None,
             power_consumption_watts=(
                 float(power.get("mean_w")) if power.get("mean_w") is not None else None
+            ),
+            energy_per_step_joules=(
+                (
+                    float(power_profile_summary.get("total_energy_joules"))
+                    / max(1, int(summary.get("sample_count", len(payload.get("samples", [])))))
+                )
+                if power_profile_summary.get("total_energy_joules") is not None
+                else None
+            ),
+            performance_per_watt=(
+                float(power_profile_summary.get("performance_per_watt"))
+                if power_profile_summary.get("performance_per_watt") is not None
+                else None
+            ),
+            temperature_celsius=(
+                float(power_profile_summary.get("mean_temperature_celsius"))
+                if power_profile_summary.get("mean_temperature_celsius") is not None
+                else None
             ),
         ),
         regression=RegressionInfo(
@@ -1902,6 +1932,9 @@ def run_with_profile(args, _config):
         print(f"Device: {_device or 'default'} | Precision: {_precision}")
 
     # Run collection
+    profiler = None if getattr(args, "no_power", False) else PowerProfiler(detect_power_source())
+    if profiler is not None:
+        profiler.start_session()
     collector.start()
     sample_count = 0
     sample_interval = profile.sample_interval_ms / 1000.0  # Convert to seconds
@@ -1911,6 +1944,8 @@ def run_with_profile(args, _config):
         while time.time() - start_time < duration and sample_count < iterations:
             timestamp = time.time()
             metrics = collector.sample(timestamp)
+            if profiler is not None and metrics:
+                profiler.record_step(sample_count, float(metrics.get("throughput_fps", 0.0) or 0.0))
 
             if not args.quiet and metrics:
                 warmup_marker = "[WARMUP]" if metrics.get("is_warmup") else ""
@@ -1932,10 +1967,18 @@ def run_with_profile(args, _config):
         print("\nCollection interrupted by user")
 
     collector.stop()
+    if profiler is not None:
+        profiler.end_session()
 
     # Export and analyze results
     export = collector.export()
     summary = export.summary
+    if profiler is not None:
+        profile_payload = profiler.to_tool_payload().get("power_profile", {})
+        profile_summary = profile_payload.get("summary", {})
+        summary.setdefault("power", {})
+        summary["power"]["mean_w"] = profile_summary.get("mean_power_watts")
+        summary["power"]["peak_w"] = profile_summary.get("peak_power_watts")
 
     # Check against profile thresholds
     latency_p99 = summary.get("latency", {}).get("p99_ms", 0)
@@ -1988,6 +2031,8 @@ def run_with_profile(args, _config):
     if args.export:
         export_path = _output_path(args, args.export)
         export_data = export.to_dict()
+        if profiler is not None:
+            export_data["power_profile"] = profiler.to_tool_payload().get("power_profile")
         export_data["profile"] = profile.name
         export_data["validation"] = {
             "latency_pass": latency_pass,
@@ -2075,6 +2120,7 @@ def run_auto_benchmarks_cli(args) -> int:
         duration_seconds=duration,
         sample_interval_seconds=0.2,
         quiet=args.quiet,
+        enable_power=not getattr(args, "no_power", False),
         progress_callback=(
             None
             if args.quiet
@@ -2143,6 +2189,7 @@ def run_manual_single(args):
         duration_seconds=duration,
         sample_interval_seconds=0.2,
         quiet=args.quiet,
+        enable_power=not getattr(args, "no_power", False),
     )
     if args.export:
         export_path = _output_path(args, args.export)
