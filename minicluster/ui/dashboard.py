@@ -99,6 +99,121 @@ class MiniClusterDashboard(TrackiqDashboard):
         else:
             st.info("Loss curve unavailable in tool payload.")
 
+    def _render_config_section(self, payload: Dict[str, Any]) -> None:
+        """Render run configuration and execution context."""
+        import streamlit as st
+
+        config = payload.get("config")
+        if not isinstance(config, dict):
+            st.info("Run configuration not available in tool payload.")
+            return
+
+        st.markdown("### Run Configuration")
+        left, right = st.columns(2)
+        with left:
+            st.markdown("**Training**")
+            st.markdown(f"- Steps: `{config.get('num_steps', 'N/A')}`")
+            st.markdown(f"- Batch Size: `{config.get('batch_size', 'N/A')}`")
+            st.markdown(f"- Learning Rate: `{config.get('learning_rate', 'N/A')}`")
+            st.markdown(f"- Layers: `{config.get('num_layers', 'N/A')}`")
+            st.markdown(f"- Hidden Size: `{config.get('hidden_size', 'N/A')}`")
+        with right:
+            st.markdown("**Runtime**")
+            st.markdown(f"- Workers: `{config.get('num_processes', config.get('num_workers', 'N/A'))}`")
+            st.markdown(f"- Seed: `{config.get('seed', 'N/A')}`")
+            st.markdown(f"- TDP (W): `{config.get('tdp_watts', 'N/A')}`")
+            st.markdown(f"- Loss Tolerance: `{config.get('loss_tolerance', 'N/A')}`")
+            st.markdown(
+                f"- Regression Threshold (%): `{config.get('regression_threshold', 'N/A')}`"
+            )
+
+    def _render_training_graphs(self, payload: Dict[str, Any]) -> None:
+        """Render graph-heavy training timelines from step payload."""
+        import streamlit as st
+
+        steps_data = payload.get("steps")
+        if not isinstance(steps_data, list) or not steps_data:
+            st.info("No per-step data available for training graphs.")
+            return
+
+        rows: List[Dict[str, float]] = []
+        for idx, item in enumerate(steps_data):
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                {
+                    "step": float(item.get("step", idx)),
+                    "loss": float(item.get("loss", 0.0)),
+                    "throughput": float(item.get("throughput_samples_per_sec", 0.0)),
+                    "allreduce_ms": float(item.get("allreduce_time_ms", 0.0)),
+                    "compute_ms": float(item.get("compute_time_ms", 0.0)),
+                }
+            )
+        if not rows:
+            st.info("Step data is malformed; unable to render graphs.")
+            return
+
+        st.markdown("### Training Graphs")
+        try:
+            import pandas as pd
+            import plotly.express as px
+            import plotly.graph_objects as go
+        except Exception:
+            # Fallback when plotly/pandas are unavailable
+            st.line_chart(
+                {
+                    "loss": [row["loss"] for row in rows],
+                    "throughput": [row["throughput"] for row in rows],
+                }
+            )
+            return
+
+        df = pd.DataFrame(rows)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_loss = px.line(
+                df,
+                x="step",
+                y="loss",
+                title="Loss by Step",
+                labels={"step": "Step", "loss": "Loss"},
+            )
+            st.plotly_chart(fig_loss, use_container_width=True)
+        with col_b:
+            fig_thr = px.line(
+                df,
+                x="step",
+                y="throughput",
+                title="Throughput by Step",
+                labels={"step": "Step", "throughput": "Samples/sec"},
+            )
+            st.plotly_chart(fig_thr, use_container_width=True)
+
+        fig_timing = go.Figure()
+        fig_timing.add_trace(
+            go.Bar(
+                x=df["step"],
+                y=df["compute_ms"],
+                name="Compute (ms)",
+                marker_color="#2563eb",
+            )
+        )
+        fig_timing.add_trace(
+            go.Bar(
+                x=df["step"],
+                y=df["allreduce_ms"],
+                name="Allreduce (ms)",
+                marker_color="#dc2626",
+            )
+        )
+        fig_timing.update_layout(
+            title="Per-Step Timing Breakdown",
+            xaxis_title="Step",
+            yaxis_title="Time (ms)",
+            barmode="stack",
+        )
+        st.plotly_chart(fig_timing, use_container_width=True)
+
     def render_sidebar(self) -> None:
         """Render shared sidebar plus MiniCluster auto-refresh controls."""
         import streamlit as st
@@ -186,6 +301,8 @@ class MiniClusterDashboard(TrackiqDashboard):
                     break
                 time.sleep(2)
 
+        self._render_config_section(local_payload)
+        self._render_training_graphs(local_payload)
         components["power_gauge"].render()
         self.render_kv_cache_section()
 

@@ -247,6 +247,130 @@ class CompareDashboard(TrackiqDashboard):
                 key="platform_comparison_export",
             )
 
+    def _render_input_context(self) -> None:
+        """Render comparison input/configuration context for both sides."""
+        import streamlit as st
+
+        st.markdown("### Comparison Configuration")
+        left, right = st.columns(2)
+        with left:
+            st.markdown(f"**{self.label_a}**")
+            st.markdown(f"- Tool: `{self.result_a.tool_name} {self.result_a.tool_version}`")
+            st.markdown(f"- Hardware: `{self.result_a.platform.hardware_name}`")
+            st.markdown(f"- Framework: `{self.result_a.platform.framework} {self.result_a.platform.framework_version}`")
+            st.markdown(
+                f"- Workload: `{self.result_a.workload.name}` ({self.result_a.workload.workload_type})"
+            )
+            st.markdown(f"- Batch Size: `{self.result_a.workload.batch_size}`")
+            st.markdown(f"- Steps: `{self.result_a.workload.steps}`")
+        with right:
+            st.markdown(f"**{self.label_b}**")
+            st.markdown(f"- Tool: `{self.result_b.tool_name} {self.result_b.tool_version}`")
+            st.markdown(f"- Hardware: `{self.result_b.platform.hardware_name}`")
+            st.markdown(f"- Framework: `{self.result_b.platform.framework} {self.result_b.platform.framework_version}`")
+            st.markdown(
+                f"- Workload: `{self.result_b.workload.name}` ({self.result_b.workload.workload_type})"
+            )
+            st.markdown(f"- Batch Size: `{self.result_b.workload.batch_size}`")
+            st.markdown(f"- Steps: `{self.result_b.workload.steps}`")
+
+    def _render_metric_graphs(self, rows: List[Dict[str, Any]]) -> None:
+        """Render chart-based metric comparison visuals."""
+        import streamlit as st
+
+        if not rows:
+            st.info("No comparable metric rows available for graph rendering.")
+            return
+
+        plot_rows = [
+            row
+            for row in rows
+            if isinstance(row.get("a"), (int, float))
+            and isinstance(row.get("b"), (int, float))
+        ]
+        if not plot_rows:
+            st.info("No numeric metrics available for graph rendering.")
+            return
+
+        st.markdown("### Comparison Graphs")
+        try:
+            import pandas as pd
+            import plotly.express as px
+            import plotly.graph_objects as go
+        except Exception:
+            st.bar_chart(
+                {
+                    self.label_a: [float(row["a"]) for row in plot_rows],
+                    self.label_b: [float(row["b"]) for row in plot_rows],
+                }
+            )
+            return
+
+        df = pd.DataFrame(
+            {
+                "metric": [str(row["metric"]) for row in plot_rows],
+                "a": [float(row["a"]) for row in plot_rows],
+                "b": [float(row["b"]) for row in plot_rows],
+                "delta_percent": [float(row.get("delta_percent", 0.0)) for row in plot_rows],
+            }
+        )
+        long_df = df.melt(
+            id_vars=["metric", "delta_percent"],
+            value_vars=["a", "b"],
+            var_name="side",
+            value_name="value",
+        )
+        long_df["side"] = long_df["side"].map({"a": self.label_a, "b": self.label_b})
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_values = px.bar(
+                long_df,
+                x="metric",
+                y="value",
+                color="side",
+                barmode="group",
+                title="Metric Values by Side",
+                labels={"metric": "Metric", "value": "Value", "side": "Result"},
+            )
+            fig_values.update_layout(xaxis_tickangle=-25)
+            st.plotly_chart(fig_values, use_container_width=True)
+        with col_b:
+            fig_delta = px.bar(
+                df,
+                x="metric",
+                y="delta_percent",
+                title="Percent Delta (B vs A)",
+                labels={"metric": "Metric", "delta_percent": "Delta (%)"},
+                color="delta_percent",
+                color_continuous_scale="RdYlGn",
+            )
+            fig_delta.update_layout(xaxis_tickangle=-25)
+            fig_delta.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+            st.plotly_chart(fig_delta, use_container_width=True)
+
+        weighted: List[Tuple[str, int]] = []
+        for row in plot_rows:
+            winner = str(row.get("winner", "tie"))
+            weight = int(row.get("weight", 0))
+            if winner == self.label_a:
+                weighted.append((self.label_a, weight))
+            elif winner == self.label_b:
+                weighted.append((self.label_b, weight))
+        score_a = sum(weight for label, weight in weighted if label == self.label_a)
+        score_b = sum(weight for label, weight in weighted if label == self.label_b)
+        fig_score = go.Figure(
+            data=[
+                go.Bar(x=[self.label_a, self.label_b], y=[score_a, score_b], marker_color=["#3b82f6", "#22c55e"])
+            ]
+        )
+        fig_score.update_layout(
+            title="Weighted Winner Score",
+            xaxis_title="Result",
+            yaxis_title="Score",
+        )
+        st.plotly_chart(fig_score, use_container_width=True)
+
     def build_components(self) -> Dict[str, object]:
         """Build testable comparison dashboard components."""
         return {
@@ -266,8 +390,11 @@ class CompareDashboard(TrackiqDashboard):
         import streamlit as st
 
         components = self.build_components()
+        self._render_input_context()
         if self.is_platform_comparison_mode():
             self._render_platform_comparison_mode()
+        rows = self._competitive_metric_rows()
+        self._render_metric_graphs(rows)
         components["comparison_table"].render()
 
         col_a, col_b = st.columns(2)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Dict
+from typing import Any, Dict
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
@@ -44,6 +44,55 @@ class AutoPerfDashboard(TrackiqDashboard):
             ),
         }
 
+    def _tool_payload(self) -> Dict[str, Any]:
+        result = self._primary_result()
+        return result.tool_payload if isinstance(result.tool_payload, dict) else {}
+
+    def _render_performance_charts(self) -> None:
+        """Render chart sections from canonical tool payload samples when available."""
+        import streamlit as st
+
+        payload = self._tool_payload()
+        samples = payload.get("samples")
+        if not isinstance(samples, list) or not samples:
+            st.info("No sample timeline data available for charts in this result.")
+            return
+
+        try:
+            from autoperfpy.reports import charts as shared_charts
+        except Exception as exc:  # pragma: no cover - optional dependency path
+            st.warning(f"Chart module unavailable: {exc}")
+            return
+
+        if not shared_charts.is_available():
+            st.warning("Plotly/pandas are required to render charts.")
+            return
+
+        try:
+            df = shared_charts.samples_to_dataframe(samples)
+            if df.empty:
+                st.info("Sample timeline data is empty.")
+                return
+            shared_charts.ensure_throughput_column(df)
+            summary = payload.get("summary")
+            if not isinstance(summary, dict) or not summary:
+                summary = shared_charts.compute_summary_from_dataframe(df)
+            sections = shared_charts.build_all_charts(df, summary)
+        except Exception as exc:  # pragma: no cover - defensive UI path
+            st.warning(f"Failed to build charts from result payload: {exc}")
+            return
+
+        if not sections:
+            st.info("No supported chart metrics found in this result payload.")
+            return
+
+        st.markdown("### Performance Charts")
+        for idx, (section, charts) in enumerate(sections.items()):
+            with st.expander(section, expanded=(idx == 0)):
+                for caption, fig in charts:
+                    st.markdown(f"**{caption}**")
+                    st.plotly_chart(fig, use_container_width=True)
+
     def render_body(self) -> None:
         """Render AutoPerfPy-specific dashboard body."""
         import streamlit as st
@@ -52,6 +101,7 @@ class AutoPerfDashboard(TrackiqDashboard):
         components["regression_badge"].render()
         components["metric_table"].render()
         components["power_gauge"].render()
+        self._render_performance_charts()
         self.render_kv_cache_section()
 
         result = self._primary_result()
