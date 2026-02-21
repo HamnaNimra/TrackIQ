@@ -27,6 +27,10 @@ _REGRESSION = _load_module(
     "trackiq_core_regression",
     _ROOT / "trackiq_core" / "utils" / "compare" / "regression.py",
 )
+_PDF = _load_module(
+    "trackiq_core_reporting_pdf",
+    _ROOT / "trackiq_core" / "reporting" / "pdf.py",
+)
 
 TrackiqResult = _SCHEMA.TrackiqResult
 PlatformInfo = _SCHEMA.PlatformInfo
@@ -36,6 +40,9 @@ RegressionInfo = _SCHEMA.RegressionInfo
 
 RegressionDetector = _REGRESSION.RegressionDetector
 RegressionThreshold = _REGRESSION.RegressionThreshold
+render_pdf_from_html_file = _PDF.render_pdf_from_html_file
+PDF_BACKENDS = _PDF.PDF_BACKENDS
+PdfBackendError = _PDF.PdfBackendError
 
 
 def ensure_parent_dir(path: str) -> None:
@@ -77,6 +84,8 @@ __all__ = [
     "validate_trackiq_result",
     "RegressionDetector",
     "RegressionThreshold",
+    "render_pdf_from_html_file",
+    "PDF_BACKENDS",
+    "PdfBackendError",
     "ensure_parent_dir",
 ]
-
