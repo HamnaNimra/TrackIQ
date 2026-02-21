@@ -48,6 +48,15 @@ class TerminalReporter:
         self.console.print("")
         self.console.print("[bold]Summary[/bold]")
         self.console.print(summary.text)
+        if comparison.consistency_findings:
+            self.console.print("")
+            self.console.print("[bold]Consistency Analysis[/bold]")
+            for finding in comparison.consistency_findings:
+                self.console.print(
+                    f"[yellow]{finding.code}[/yellow]: {finding.label} | "
+                    f"stdev A={finding.stddev_a_ms:.4f} ms, stdev B={finding.stddev_b_ms:.4f} ms, "
+                    f"increase={finding.increase_percent:+.2f}% (threshold {finding.threshold_percent:.2f}%)"
+                )
 
     def _render_plain(self, comparison: ComparisonResult, summary: SummaryResult) -> None:
         """Fallback renderer when rich is unavailable."""
@@ -67,6 +76,14 @@ class TerminalReporter:
             )
         print("\nSummary")
         print(summary.text)
+        if comparison.consistency_findings:
+            print("\nConsistency Analysis")
+            for finding in comparison.consistency_findings:
+                print(
+                    f"{finding.code}: {finding.label} | "
+                    f"stdev A={finding.stddev_a_ms:.4f} ms, stdev B={finding.stddev_b_ms:.4f} ms, "
+                    f"increase={finding.increase_percent:+.2f}% (threshold {finding.threshold_percent:.2f}%)"
+                )
 
     @staticmethod
     def _fmt_value(value: float | None) -> str:
