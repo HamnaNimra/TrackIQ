@@ -1,6 +1,7 @@
-﻿# TrackIQ Monorepo
+# TrackIQ Monorepo
 
-TrackIQ is a multi-tool performance validation repository.
+(Formerly Autoperfpy)  
+TrackIQ is a multi-tool performance validation repository.  
 It contains one shared library (`trackiq_core`) and three tool applications (`autoperfpy`, `minicluster`, `trackiq_compare`) built on top of that library.
 
 ## Naming and Scope
