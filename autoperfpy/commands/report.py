@@ -8,7 +8,6 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from autoperfpy.reporting import HTMLReportGenerator, PDFReportGenerator
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PdfBackendError
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 
@@ -57,6 +56,7 @@ def run_report_html(
     """Generate HTML report."""
     del config
     import pandas as pd
+    from autoperfpy.reporting import HTMLReportGenerator
     from autoperfpy.reports.report_builder import (
         populate_multi_run_html_report,
         populate_standard_html_report,
@@ -243,6 +243,7 @@ def run_report_pdf(
     """Generate PDF report (same content as HTML, converted to PDF)."""
     del config
     import pandas as pd
+    from autoperfpy.reporting import PDFReportGenerator
 
     json_path_to_cleanup = None
     if not getattr(args, "csv", None) and not getattr(args, "json", None):

@@ -12,28 +12,7 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
-import matplotlib
-
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
-from autoperfpy.commands.analyze import run_analyze_dnn_pipeline as _cmd_run_analyze_dnn_pipeline
-from autoperfpy.commands.analyze import run_analyze_efficiency as _cmd_run_analyze_efficiency
-from autoperfpy.commands.analyze import run_analyze_latency as _cmd_run_analyze_latency
-from autoperfpy.commands.analyze import run_analyze_logs as _cmd_run_analyze_logs
-from autoperfpy.commands.analyze import run_analyze_tegrastats as _cmd_run_analyze_tegrastats
-from autoperfpy.commands.analyze import run_analyze_variability as _cmd_run_analyze_variability
-from autoperfpy.commands.benchmark import run_benchmark_batching as _cmd_run_benchmark_batching
-from autoperfpy.commands.benchmark import run_benchmark_llm as _cmd_run_benchmark_llm
-from autoperfpy.commands.compare import run_compare as _cmd_run_compare
-from autoperfpy.commands.monitor import run_monitor_gpu as _cmd_run_monitor_gpu
-from autoperfpy.commands.monitor import run_monitor_kv_cache as _cmd_run_monitor_kv_cache
-from autoperfpy.commands.report import run_report_html as _cmd_run_report_html
-from autoperfpy.commands.report import run_report_pdf as _cmd_run_report_pdf
-from autoperfpy.commands.run import run_auto_benchmarks_cli as _cmd_run_auto_benchmarks_cli
-from autoperfpy.commands.run import run_devices_list as _cmd_run_devices_list
-from autoperfpy.commands.run import run_manual_single as _cmd_run_manual_single
-from autoperfpy.commands.run import run_profiles as _cmd_run_profiles
-from autoperfpy.commands.run import run_with_profile as _cmd_run_with_profile
-from autoperfpy.commands.ui import run_ui as _cmd_run_ui
 from autoperfpy.config import ConfigManager
 from autoperfpy.profiles import ProfileValidationError
 from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
@@ -51,8 +30,6 @@ from trackiq_core.schema import (
 )
 from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
-
-matplotlib.use("Agg")
 
 from autoperfpy.device_config import (
     DEFAULT_WARMUP_RUNS,
@@ -741,6 +718,8 @@ def _write_result_to_csv(result: dict, path: str) -> bool:
 
 def run_analyze_latency(args, config):
     """Run latency analysis."""
+    from autoperfpy.commands.analyze import run_analyze_latency as _cmd_run_analyze_latency
+
     return _cmd_run_analyze_latency(
         args,
         config,
@@ -750,21 +729,29 @@ def run_analyze_latency(args, config):
 
 def run_analyze_logs(args, config):
     """Run log analysis."""
+    from autoperfpy.commands.analyze import run_analyze_logs as _cmd_run_analyze_logs
+
     return _cmd_run_analyze_logs(args, config)
 
 
 def run_analyze_dnn_pipeline(args, config):
     """Run DNN pipeline analysis."""
+    from autoperfpy.commands.analyze import run_analyze_dnn_pipeline as _cmd_run_analyze_dnn_pipeline
+
     return _cmd_run_analyze_dnn_pipeline(args, config)
 
 
 def run_analyze_tegrastats(args, _config):
     """Run tegrastats analysis."""
+    from autoperfpy.commands.analyze import run_analyze_tegrastats as _cmd_run_analyze_tegrastats
+
     return _cmd_run_analyze_tegrastats(args, _config)
 
 
 def run_analyze_efficiency(args, config):
     """Run efficiency analysis."""
+    from autoperfpy.commands.analyze import run_analyze_efficiency as _cmd_run_analyze_efficiency
+
     return _cmd_run_analyze_efficiency(
         args,
         config,
@@ -774,6 +761,8 @@ def run_analyze_efficiency(args, config):
 
 def run_analyze_variability(args, config):
     """Run variability analysis."""
+    from autoperfpy.commands.analyze import run_analyze_variability as _cmd_run_analyze_variability
+
     return _cmd_run_analyze_variability(
         args,
         config,
@@ -783,11 +772,15 @@ def run_analyze_variability(args, config):
 
 def run_benchmark_batching(args, config):
     """Run batching trade-off benchmark."""
+    from autoperfpy.commands.benchmark import run_benchmark_batching as _cmd_run_benchmark_batching
+
     return _cmd_run_benchmark_batching(args, config)
 
 
 def run_benchmark_llm(args, config):
     """Run LLM latency benchmark."""
+    from autoperfpy.commands.benchmark import run_benchmark_llm as _cmd_run_benchmark_llm
+
     return _cmd_run_benchmark_llm(args, config)
 
 
@@ -851,11 +844,15 @@ def run_benchmark_distributed(args, config):
 
 def run_monitor_gpu(args, config):
     """Run GPU monitoring."""
+    from autoperfpy.commands.monitor import run_monitor_gpu as _cmd_run_monitor_gpu
+
     return _cmd_run_monitor_gpu(args, config)
 
 
 def run_monitor_kv_cache(args, config):
     """Run KV cache estimation monitor."""
+    from autoperfpy.commands.monitor import run_monitor_kv_cache as _cmd_run_monitor_kv_cache
+
     return _cmd_run_monitor_kv_cache(args, config)
 
 
@@ -864,6 +861,8 @@ def run_monitor_kv_cache(args, config):
 
 def run_report_html(args, config):
     """Generate HTML report."""
+    from autoperfpy.commands.report import run_report_html as _cmd_run_report_html
+
     return _cmd_run_report_html(
         args,
         config,
@@ -877,11 +876,15 @@ def run_report_html(args, config):
 
 def run_ui(args):
     """Launch Streamlit dashboard."""
+    from autoperfpy.commands.ui import run_ui as _cmd_run_ui
+
     return _cmd_run_ui(args, cli_file=__file__)
 
 
 def run_report_pdf(args, config):
     """Generate PDF report (same content as HTML, converted to PDF)."""
+    from autoperfpy.commands.report import run_report_pdf as _cmd_run_report_pdf
+
     return _cmd_run_report_pdf(
         args,
         config,
@@ -895,16 +898,22 @@ def run_report_pdf(args, config):
 
 def run_compare(args):
     """Compare current run against baseline (uses trackiq_core.cli.commands.compare)."""
+    from autoperfpy.commands.compare import run_compare as _cmd_run_compare
+
     return _cmd_run_compare(args)
 
 
 def run_profiles(args):
     """Handle profiles command."""
+    from autoperfpy.commands.run import run_profiles as _cmd_run_profiles
+
     return _cmd_run_profiles(args)
 
 
 def run_with_profile(args, _config):
     """Run performance test with a profile."""
+    from autoperfpy.commands.run import run_with_profile as _cmd_run_with_profile
+
     return _cmd_run_with_profile(
         args,
         _config,
@@ -922,11 +931,15 @@ def _resolve_device(device_id: str) -> DeviceProfile | None:
 
 def run_devices_list(args) -> int:
     """List all detected devices (uses trackiq_core.cli.commands.devices)."""
+    from autoperfpy.commands.run import run_devices_list as _cmd_run_devices_list
+
     return _cmd_run_devices_list(args)
 
 
 def run_auto_benchmarks_cli(args) -> int:
     """Run automatic benchmarks on all detected devices and configs."""
+    from autoperfpy.commands.run import run_auto_benchmarks_cli as _cmd_run_auto_benchmarks_cli
+
     return _cmd_run_auto_benchmarks_cli(
         args,
         parse_precision_list=_parse_precision_list,
@@ -939,6 +952,8 @@ def run_auto_benchmarks_cli(args) -> int:
 
 def run_manual_single(args):
     """Run a single benchmark with manually selected device and config."""
+    from autoperfpy.commands.run import run_manual_single as _cmd_run_manual_single
+
     return _cmd_run_manual_single(
         args,
         resolve_device_fn=_resolve_device,

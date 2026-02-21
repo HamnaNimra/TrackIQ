@@ -51,7 +51,12 @@ from .profiles import (
     validate_profile_collector,
     validate_profile_precision,
 )
-from .reporting import HTMLReportGenerator, PDFReportGenerator, PerformanceVisualizer
+try:
+    from .reporting import HTMLReportGenerator, PDFReportGenerator, PerformanceVisualizer
+except Exception:  # pragma: no cover - optional/reporting dependency gaps
+    HTMLReportGenerator = None
+    PDFReportGenerator = None
+    PerformanceVisualizer = None
 
 __all__ = [
     "Config",
