@@ -1,4 +1,4 @@
-"""Command-line interface for AutoPerfPy.
+﻿"""Command-line interface for AutoPerfPy.
 This CLI uses generic utilities from trackiq_core.cli and adds automotive-specific
 commands for profiles, tegrastats analysis, and DNN pipeline analysis.
 """
@@ -311,7 +311,7 @@ Environment Variables:
         "--throttle-threshold",
         type=float,
         default=85.0,
-        help="Thermal throttling threshold (°C)",
+        help="Thermal throttling threshold (Â°C)",
     )
 
     # Analyze efficiency
@@ -833,7 +833,7 @@ def run_benchmark_distributed(args, config):
         regression_threshold=5.0,  # Default
     )
 
-    print("\n🔄 Distributed Training Validation")
+    print("\nðŸ”„ Distributed Training Validation")
     print("=" * 60)
     print(f"Steps: {val_config.num_steps}")
     print(f"Processes: {val_config.num_processes}")
@@ -1075,7 +1075,7 @@ def main():
         print(f"[ERROR] {e}", file=sys.stderr)
         return 1
     except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"❌ Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
     # Save output if requested (report html/pdf already write to output dir; do not overwrite)
@@ -1092,3 +1092,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
