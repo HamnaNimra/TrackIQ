@@ -28,6 +28,7 @@ from trackiq_core.schema import (
     WorkloadInfo,
 )
 from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
+from trackiq_core.power_profiler import PowerProfiler, SimulatedPowerReader
 
 
 @dataclass
@@ -54,6 +55,8 @@ class RunMetrics:
     total_compute_time_ms: float = 0.0
     start_timestamp: str = ""
     end_timestamp: str = ""
+    power_metrics: Optional[Dict[str, Any]] = None
+    power_tool_payload: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -67,6 +70,8 @@ class RunMetrics:
             "total_compute_time_ms": self.total_compute_time_ms,
             "start_timestamp": self.start_timestamp,
             "end_timestamp": self.end_timestamp,
+            "power_metrics": self.power_metrics,
+            "power_tool_payload": self.power_tool_payload,
             "average_loss": sum(s.loss for s in self.steps) / len(self.steps) if self.steps else 0.0,
             "final_loss": self.steps[-1].loss if self.steps else 0.0,
             "average_throughput_samples_per_sec": (
@@ -96,6 +101,7 @@ class RunConfig:
     num_processes: int = 2
     regression_threshold: float = 5.0
     seed: int = 42
+    tdp_watts: float = 150.0
 
     @property
     def num_workers(self) -> int:
@@ -162,11 +168,32 @@ def train_single_process(config: RunConfig) -> RunMetrics:
 
     torch.manual_seed(config.seed)
 
+    profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
+    profiler.start_session()
     # Call trackiq_core implementation
     start = time.time()
     losses = _train_single_process_impl(config.to_core())
     elapsed = time.time() - start
-    metrics_dict: Dict[str, Any] = {"losses": losses, "total_time_sec": elapsed}
+    throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
+    for idx in range(len(losses)):
+        profiler.record_step(idx, throughput)
+    profiler.end_session()
+    base_metrics = Metrics(
+        throughput_samples_per_sec=throughput,
+        latency_p50_ms=0.0,
+        latency_p95_ms=0.0,
+        latency_p99_ms=0.0,
+        memory_utilization_percent=0.0,
+        communication_overhead_percent=None,
+        power_consumption_watts=None,
+    )
+    updated_metrics = profiler.to_metrics_update(base_metrics)
+    metrics_dict: Dict[str, Any] = {
+        "losses": losses,
+        "total_time_sec": elapsed,
+        "power_metrics": asdict(updated_metrics),
+        "power_tool_payload": profiler.to_tool_payload(),
+    }
 
     # Convert to minicluster RunMetrics format
     return _convert_to_run_metrics(metrics_dict, num_workers=1, config=config)
@@ -191,10 +218,31 @@ def train_distributed(rank: int, world_size: int, config: RunConfig) -> Optional
     # Compatibility wrapper: build equivalent multi-process run and return rank-0 view.
     core_cfg = config.to_core()
     core_cfg.num_processes = world_size
+    profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
+    profiler.start_session()
     start = time.time()
     losses = _train_multi_process_impl(core_cfg)
     elapsed = time.time() - start
-    metrics_dict = {"losses": losses, "total_time_sec": elapsed}
+    throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
+    for idx in range(len(losses)):
+        profiler.record_step(idx, throughput)
+    profiler.end_session()
+    base_metrics = Metrics(
+        throughput_samples_per_sec=throughput,
+        latency_p50_ms=0.0,
+        latency_p95_ms=0.0,
+        latency_p99_ms=0.0,
+        memory_utilization_percent=0.0,
+        communication_overhead_percent=None,
+        power_consumption_watts=None,
+    )
+    updated_metrics = profiler.to_metrics_update(base_metrics)
+    metrics_dict = {
+        "losses": losses,
+        "total_time_sec": elapsed,
+        "power_metrics": asdict(updated_metrics),
+        "power_tool_payload": profiler.to_tool_payload(),
+    }
     return _convert_to_run_metrics(metrics_dict, num_workers=world_size, config=config)
 
 
@@ -215,11 +263,32 @@ def run_distributed(config: RunConfig) -> RunMetrics:
         return train_single_process(config)
 
     core_cfg = config.to_core()
+    profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
+    profiler.start_session()
     start = time.time()
     losses = _train_multi_process_impl(core_cfg)
     elapsed = time.time() - start
+    throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
+    for idx in range(len(losses)):
+        profiler.record_step(idx, throughput)
+    profiler.end_session()
+    base_metrics = Metrics(
+        throughput_samples_per_sec=throughput,
+        latency_p50_ms=0.0,
+        latency_p95_ms=0.0,
+        latency_p99_ms=0.0,
+        memory_utilization_percent=0.0,
+        communication_overhead_percent=None,
+        power_consumption_watts=None,
+    )
+    updated_metrics = profiler.to_metrics_update(base_metrics)
     return _convert_to_run_metrics(
-        {"losses": losses, "total_time_sec": elapsed},
+        {
+            "losses": losses,
+            "total_time_sec": elapsed,
+            "power_metrics": asdict(updated_metrics),
+            "power_tool_payload": profiler.to_tool_payload(),
+        },
         num_workers=config.num_processes,
         config=config,
     )
@@ -269,6 +338,8 @@ def _convert_to_run_metrics(
         total_compute_time_ms=0.0,
         start_timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
         end_timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+        power_metrics=metrics_dict.get("power_metrics"),
+        power_tool_payload=metrics_dict.get("power_tool_payload"),
     )
 
 
@@ -311,7 +382,26 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
             latency_p99_ms=0.0,
             memory_utilization_percent=0.0,
             communication_overhead_percent=comm_overhead,
-            power_consumption_watts=None,
+            power_consumption_watts=(
+                float(metrics.power_metrics.get("power_consumption_watts"))
+                if metrics.power_metrics and metrics.power_metrics.get("power_consumption_watts") is not None
+                else None
+            ),
+            energy_per_step_joules=(
+                float(metrics.power_metrics.get("energy_per_step_joules"))
+                if metrics.power_metrics and metrics.power_metrics.get("energy_per_step_joules") is not None
+                else None
+            ),
+            performance_per_watt=(
+                float(metrics.power_metrics.get("performance_per_watt"))
+                if metrics.power_metrics and metrics.power_metrics.get("performance_per_watt") is not None
+                else None
+            ),
+            temperature_celsius=(
+                float(metrics.power_metrics.get("temperature_celsius"))
+                if metrics.power_metrics and metrics.power_metrics.get("temperature_celsius") is not None
+                else None
+            ),
         ),
         regression=RegressionInfo(
             baseline_id=None,
@@ -319,7 +409,11 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
             status="pass",
             failed_metrics=[],
         ),
-        tool_payload=metrics_dict,
+        tool_payload=(
+            metrics.power_tool_payload
+            if isinstance(metrics.power_tool_payload, dict)
+            else metrics_dict
+        ),
     )
     save_trackiq_result(result, output_path)
 
