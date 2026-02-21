@@ -133,6 +133,81 @@ Acceptance criteria:
 - Multi-run comparison supports at least 10 runs and still renders within acceptable UI time.
 - Tests cover at least one full-metric fixture and one sparse-metric fixture.
 
+### 4.2) MiniCluster visualization expansion `[P1] [OPEN]`
+
+Problem: `minicluster` currently shows strong single-run training curves, but it lacks consolidated views for distributed-system behavior (worker skew, fault impact, timing bottlenecks) across runs and time windows.
+
+Tasks:
+
+1. Add a shared MiniCluster chart pack (`minicluster/ui/dashboard.py` + reusable helpers) for:
+   - worker throughput skew over time
+   - allreduce/compute ratio trend
+   - per-step fault/anomaly overlay on loss and throughput
+2. Add worker health heatmap (`worker x step`) for status/throughput/loss deltas.
+3. Add fault impact visualization:
+   - pre-fault vs post-fault throughput/latency deltas
+   - fault-type frequency and duration bars
+4. Add checkpoint continuity chart from health monitor snapshots (gap/staleness visualization).
+5. Add multi-run MiniCluster comparison view:
+   - run-level summary bars (mean throughput, max allreduce time, final loss)
+   - consistency chart for convergence variance across runs
+6. Add HTML export parity for new MiniCluster visuals (report or dashboard export path).
+7. Add tests for sparse worker payloads, missing fault data, and partial checkpoint streams.
+
+Candidate visualizations to add:
+
+1. Worker skew band chart (median throughput with min/max envelope).
+2. Step timing stack area (compute vs allreduce vs overhead).
+3. Worker status timeline (healthy/slow/failed state transitions).
+4. Fault impact waterfall (% drop and recovery by metric).
+5. Multi-run convergence comparison (loss curves aligned by step).
+6. Data completeness panel (which workers/steps were observed).
+
+Acceptance criteria:
+
+- MiniCluster dashboard renders consolidated sections without regression for existing single-run views.
+- Visuals remain usable with partial checkpoints or missing fault payloads.
+- Multi-run comparison supports at least 5 runs x 8 workers without UI failure.
+- New visuals are covered by unit/integration tests with deterministic fixtures.
+
+### 4.3) Compare visualization expansion `[P1] [OPEN]`
+
+Problem: `trackiq-compare` has core pairwise bars/tables, but needs richer comparison visuals for platform-level decision making and clearer regression storytelling.
+
+Tasks:
+
+1. Add advanced comparison charts in `trackiq_compare/ui/dashboard.py`:
+   - normalized metric radar/spider view (A vs B)
+   - signed delta waterfall by metric family (latency, throughput, power, memory, comms)
+2. Add weighted-score sensitivity visualization:
+   - show how winner changes under alternate weight profiles
+   - expose default profile vs custom profile comparison
+3. Add comparison confidence/context panel:
+   - metric availability matrix
+   - "insufficient data" flags where conclusions are weak
+4. Add baseline-chain mode (`A vs baseline`, `B vs baseline`, and `A vs B`) for three-way context.
+5. Add platform-vendor comparison enhancements:
+   - metric-family winners summary grid
+   - exportable one-page executive summary chart section
+6. Add HTML reporter parity for all new compare visuals (`trackiq_compare/reporters/html_reporter.py`).
+7. Add tests for mixed-workload comparisons, missing metrics, and tie/near-tie scenarios.
+
+Candidate visualizations to add:
+
+1. Metric delta waterfall (largest positive/negative drivers).
+2. Radar chart (normalized percentile score by metric family).
+3. Winner confidence matrix (strong/moderate/weak support).
+4. Trade-off quadrant (throughput vs power vs latency markers).
+5. Baseline-relative dual bars (`A-baseline`, `B-baseline`) + direct `A-B` overlay.
+6. Platform summary card strip for executive report export.
+
+Acceptance criteria:
+
+- Compare dashboard and HTML report include the same new visualization sections.
+- Tie and sparse-data scenarios render explicit neutral/insufficient indicators.
+- Winner logic remains consistent with comparator rules and test fixtures.
+- New charts stay readable for at least 20 compared metrics.
+
 ---
 
 ## Platform Expansion
@@ -384,3 +459,5 @@ Tasks:
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
 6. `[P1]` Deliver consolidated visualization MVP (overview pack + multi-run heatmap + baseline deltas) across CLI HTML and Streamlit export.
+7. `[P1]` Add MiniCluster visualization MVP (worker skew + timing ratio + fault impact overlays).
+8. `[P1]` Add Compare visualization MVP (normalized deltas + metric-family waterfall + confidence matrix).
