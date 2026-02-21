@@ -46,6 +46,7 @@ class HtmlReporter:
         )
         platform_diff = self._platform_comparison(result_a, result_b)
         highlighted = self._highlighted_metrics(summary)
+        consistency_html = self._render_consistency_analysis(comparison)
         generated = datetime.now(timezone.utc).isoformat()
 
         html = f"""<!doctype html>
@@ -393,6 +394,11 @@ class HtmlReporter:
           {self._render_confidence_rows(confidence_rows)}
         </tbody>
       </table>
+    </section>
+
+    <section class="card">
+      <h2>Consistency Analysis</h2>
+      {consistency_html}
     </section>
 
     <section class="card">
@@ -996,4 +1002,35 @@ class HtmlReporter:
             f'<span class="pill">{escape(item.metric_name)}: {item.percent_delta:+.2f}%</span>'
             for item in summary.largest_deltas
             if item.percent_delta is not None and item.percent_delta != float("inf")
+        )
+
+    @staticmethod
+    def _render_consistency_analysis(comparison: ComparisonResult) -> str:
+        """Render consistency-analysis findings table or graceful fallback."""
+        findings = comparison.consistency_findings
+        if not findings:
+            return "<p>No consistency regressions detected or all-reduce step data was unavailable.</p>"
+
+        rows = []
+        for finding in findings:
+            increase = "inf" if finding.increase_percent == float("inf") else f"{finding.increase_percent:+.2f}%"
+            rows.append(
+                "<tr>"
+                f"<td>{escape(finding.code)}</td>"
+                f"<td>{escape(finding.label)}</td>"
+                f"<td>{escape(finding.status)}</td>"
+                f"<td>{finding.stddev_a_ms:.6f}</td>"
+                f"<td>{finding.stddev_b_ms:.6f}</td>"
+                f"<td>{escape(increase)}</td>"
+                f"<td>{finding.threshold_percent:.2f}%</td>"
+                f"<td>{escape(finding.reason)}</td>"
+                "</tr>"
+            )
+        return (
+            "<table><thead><tr>"
+            "<th>Code</th><th>Label</th><th>Status</th><th>StdDev A (ms)</th><th>StdDev B (ms)</th>"
+            "<th>Increase %</th><th>Threshold %</th><th>Details</th>"
+            "</tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table>"
         )
