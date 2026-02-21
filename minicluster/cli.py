@@ -9,14 +9,9 @@ Provides subcommands for:
 """
 
 import argparse
-import json
 import sys
-import tempfile
-from pathlib import Path
-from typing import Optional
 
-from minicluster.runner import RunConfig, run_distributed, save_metrics, load_metrics
-from minicluster.validators import CorrectnessValidator, FaultInjector
+from minicluster.runner import RunConfig, run_distributed, save_metrics
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
 from trackiq_core.reporting import (
@@ -303,13 +298,13 @@ def cmd_run(args):
     )
 
     if args.verbose:
-        print(f"Running minicluster with config:")
+        print("Running minicluster with config:")
         print(f"  Workers: {config.num_processes}")
         print(f"  Steps: {config.num_steps}")
         print(f"  Batch size: {config.batch_size}")
         print(f"  Learning rate: {config.learning_rate}")
 
-    print(f"\nStarting distributed training run...")
+    print("\nStarting distributed training run...")
     metrics = run_distributed(
         config, health_checkpoint_path=args.health_checkpoint_path
     )
@@ -325,6 +320,8 @@ def cmd_run(args):
 def cmd_validate(args):
     """Execute 'minicluster validate' command."""
     try:
+        from minicluster.validators.correctness_validator import CorrectnessValidator
+
         validator = CorrectnessValidator(tolerance=args.tolerance)
         report = validator.validate_file_pair(
             args.single_run, args.multi_run, output_path=args.output
@@ -347,6 +344,16 @@ def cmd_validate(args):
 
 def cmd_fault_test(args):
     """Execute 'minicluster fault-test' command."""
+    try:
+        from minicluster.validators.fault_injector import FaultInjector
+    except Exception as exc:
+        print(
+            "Error: fault injection requires optional ML dependencies. "
+            "Install with: pip install -e \".[ml]\"",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from exc
+
     base_config = RunConfig(num_steps=args.steps)
     injector = FaultInjector(base_config, tolerance=args.tolerance)
 
