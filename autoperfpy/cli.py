@@ -35,6 +35,7 @@ from autoperfpy.profiles import (
     get_profile,
     get_profile_info,
     validate_profile_collector,
+    validate_profile_precision,
     CollectorType,
     ProfileValidationError,
 )
@@ -64,7 +65,14 @@ from autoperfpy.device_config import (
     DEFAULT_WARMUP_RUNS,
     InferenceConfig,
     PRECISION_FP32,
+    PRECISION_FP16,
+    PRECISION_BF16,
+    PRECISION_INT8,
+    PRECISION_INT4,
+    PRECISION_MIXED,
     PRECISIONS,
+    get_supported_precisions_for_device,
+    resolve_precision_for_device,
     get_devices_and_configs_auto,
     resolve_device,
 )
@@ -239,14 +247,20 @@ Environment Variables:
     run_parser.add_argument(
         "--precision",
         "-P",
-        choices=["fp32", "fp16", "int8"],
-        default="fp32",
-        help="Inference precision (default: fp32)",
+        choices=PRECISIONS,
+        default=PRECISION_FP32,
+        help=(
+            "Inference precision "
+            f"(default: {PRECISION_FP32}; supported: {', '.join(PRECISIONS)})"
+        ),
     )
     run_parser.add_argument(
         "--precisions",
-        default="fp32,fp16",
-        help="Auto mode: comma-separated precisions (default: fp32,fp16)",
+        default=f"{PRECISION_FP32},{PRECISION_FP16}",
+        help=(
+            "Auto mode: comma-separated precisions "
+            f"(default: {PRECISION_FP32},{PRECISION_FP16})"
+        ),
     )
     run_parser.add_argument(
         "--batch-sizes",
@@ -461,7 +475,11 @@ Environment Variables:
     cache_parser.add_argument("--num-heads", type=int, default=32)
     cache_parser.add_argument("--head-size", type=int, default=128)
     cache_parser.add_argument("--batch-size", type=int, default=1)
-    cache_parser.add_argument("--precision", choices=["fp16", "fp32"], default="fp16")
+    cache_parser.add_argument(
+        "--precision",
+        choices=[PRECISION_FP16, PRECISION_BF16, PRECISION_FP32, PRECISION_INT8, PRECISION_INT4],
+        default=PRECISION_FP16,
+    )
 
     # Report commands
     report_parser = subparsers.add_parser("report", help="Generate performance reports")
