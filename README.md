@@ -43,6 +43,25 @@ trackiq/
 py -3.12 -m pip install -e .
 ```
 
+Install optional stacks as needed:
+
+```bash
+# dashboards (Streamlit)
+py -3.12 -m pip install -e ".[ui]"
+
+# distributed training / torch features
+py -3.12 -m pip install -e ".[ml]"
+
+# GPU/NVML integrations
+py -3.12 -m pip install -e ".[gpu]"
+
+# full contributor environment
+py -3.12 -m pip install -e ".[dev,test,security]"
+
+# contributor environment with all optional runtime stacks
+py -3.12 -m pip install -e ".[dev,test,security,ml,ui,gpu,reports]"
+```
+
 If your shell entry points are stale on Windows, use module execution directly:
 
 ```bash
