@@ -474,21 +474,13 @@ def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -
         Tuple of (report_bytes, filename) or (None, None) on failure
     """
     from autoperfpy.reports import HTMLReportGenerator
-    from autoperfpy.reports import charts as shared_charts
+    from autoperfpy.reports.report_builder import populate_standard_html_report
 
+    del report_type
     samples = data.get("samples", [])
-    summary = data.get("summary", {})
 
     if not samples:
         return None, None
-
-    # Build DataFrame from samples
-    df = shared_charts.samples_to_dataframe(samples)
-    shared_charts.ensure_throughput_column(df)
-
-    # Compute summary from DataFrame if empty (e.g., from CSV upload)
-    if not summary or not summary.get("latency"):
-        summary = shared_charts.compute_summary_from_dataframe(df)
 
     # Create report generator
     report = HTMLReportGenerator(
@@ -497,47 +489,7 @@ def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -
         theme="light",
     )
 
-    # Add metadata
-    report.add_metadata("Collector", data.get("collector_name", "Unknown"))
-    if data.get("profile"):
-        report.add_metadata("Profile", data["profile"])
-    if data.get("run_label"):
-        report.add_metadata("Run Label", data["run_label"])
-
-    # Add device info if available
-    device_info = data.get("device_info", {})
-    if device_info and device_info.get("device_name"):
-        report.add_metadata("Device", device_info["device_name"])
-
-    # Add summary items
-    sample_count = summary.get("sample_count") or len(samples)
-    report.add_summary_item("Samples", sample_count, "", "neutral")
-
-    lat = summary.get("latency", {})
-    if lat:
-        report.add_summary_item("P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral")
-        report.add_summary_item("P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral")
-        report.add_summary_item("Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral")
-
-    thr = summary.get("throughput", {})
-    if thr:
-        report.add_summary_item("Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral")
-
-    pwr = summary.get("power", {})
-    if pwr and pwr.get("mean_w") is not None:
-        report.add_summary_item("Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral")
-
-    # Add GPU/CPU utilization if available
-    gpu = summary.get("gpu", {})
-    if gpu and gpu.get("mean_percent") is not None:
-        report.add_summary_item("Avg GPU", f"{gpu.get('mean_percent', 0):.1f}", "%", "neutral")
-
-    cpu = summary.get("cpu", {})
-    if cpu and cpu.get("mean_percent") is not None:
-        report.add_summary_item("Avg CPU", f"{cpu.get('mean_percent', 0):.1f}", "%", "neutral")
-
-    # Add all Plotly charts (same as UI)
-    shared_charts.add_charts_to_html_report(report, df, summary)
+    populate_standard_html_report(report, data)
 
     # Generate report to temp file
     out_dir = tempfile.mkdtemp(prefix="autoperfpy_report_")
