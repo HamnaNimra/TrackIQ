@@ -83,6 +83,56 @@ Acceptance criteria:
 - Each tool can generate PDF from canonical result input.
 - Clear error message when system dependency is missing.
 
+### 4.1) Consolidated graphs and visualizations `[P1] [OPEN]`
+
+Problem: current charts are strong per-metric views, but we still need consolidated visuals that summarize run health quickly and compare runs with less manual tab-switching.
+
+Tasks:
+
+1. Add a shared "Overview" chart pack in `autoperfpy/reports/charts.py` for both Streamlit and HTML report paths.
+2. Add an "overview timeline" chart combining latency, throughput, and power/utilization (normalized index or dual-axis where appropriate).
+3. Add a "run health scorecard" visualization (table + bars) computed from p99 latency, mean throughput, perf/watt, and variability.
+4. Add a consolidated multi-run heatmap (`run x metric`) for p50/p95/p99 latency, mean throughput, mean power, mean CPU/GPU, and mean memory.
+5. Add correlation/scatter views:
+   - latency vs throughput
+   - throughput vs power (efficiency frontier)
+   - GPU utilization vs latency (where GPU data exists)
+6. Add missing-data coverage view (which metrics were present per run) to avoid misleading comparisons.
+7. Wire the same consolidated pack into:
+   - CLI HTML report generation
+   - Streamlit report export
+   - Streamlit in-app comparison page
+8. Add tests for consolidated builders (non-empty figures, expected section names, and graceful behavior when metrics are missing).
+
+Candidate visualizations to add:
+
+1. Overview KPI strip (already partly available; consolidate and standardize labels/units).
+2. Normalized trend chart (`0-100`) for latency/throughput/power over elapsed time.
+3. Multi-run metric heatmap (`runs x metrics`).
+4. Efficiency frontier scatter (`power_w` vs `throughput_fps`, colored by run/device).
+5. Regression delta bars against baseline (`% change` for key metrics).
+6. Data completeness matrix (metric presence by run).
+
+Implementation plan:
+
+1. Sprint 1 (MVP):
+   - Add shared overview pack + multi-run heatmap.
+   - Add baseline delta bars for runs with baseline selected.
+   - Wire into HTML report + Streamlit report export.
+2. Sprint 2:
+   - Add correlation/scatter pack and data completeness matrix.
+   - Add filtering controls in Streamlit (metric subset, run subset, normalize on/off).
+3. Sprint 3:
+   - Add ranking/scorecard view and optional weighted scoring config.
+   - Add PDF parity checks for consolidated sections.
+
+Acceptance criteria:
+
+- Same input data produces equivalent consolidated sections in CLI-generated HTML and Streamlit-generated HTML export.
+- Consolidated charts render with partial metrics (no crashes; unavailable metrics are omitted with clear note).
+- Multi-run comparison supports at least 10 runs and still renders within acceptable UI time.
+- Tests cover at least one full-metric fixture and one sparse-metric fixture.
+
 ---
 
 ## Platform Expansion
@@ -333,3 +383,4 @@ Tasks:
 3. `[P1]` Start LLM schema integration (`ttft_ms`, KV metrics) behind additive fields.
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
+6. `[P1]` Deliver consolidated visualization MVP (overview pack + multi-run heatmap + baseline deltas) across CLI HTML and Streamlit export.

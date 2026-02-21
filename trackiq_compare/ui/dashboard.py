@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -235,7 +235,7 @@ class CompareDashboard(TrackiqDashboard):
             st.subheader("Competitive Verdict")
             st.write(self._competitive_verdict(rows))
 
-            timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = self.platform_export_filename(vendor_a, vendor_b, timestamp)
             html = (
                 "<!doctype html><html><head><meta charset='utf-8'><title>Platform Comparison</title></head><body>"

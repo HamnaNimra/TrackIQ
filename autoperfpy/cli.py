@@ -9,7 +9,7 @@ import os
 import platform as _platform
 import sys
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import matplotlib
@@ -605,7 +605,7 @@ def _infer_trackiq_result(
     return TrackiqResult(
         tool_name="autoperfpy",
         tool_version="1.0",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         platform=PlatformInfo(
             hardware_name=str(platform_metadata.get("device_name") or payload.get("collector_name") or "unknown"),
             os=str(platform_metadata.get("os") or f"{_platform.system()} {_platform.release()}"),

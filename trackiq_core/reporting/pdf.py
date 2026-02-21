@@ -12,7 +12,7 @@ import re
 import tempfile
 import textwrap
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 PDF_BACKEND_AUTO = "auto"
@@ -161,7 +161,7 @@ def _render_with_matplotlib_fallback(
         lines = ["No report body content available."]
 
     lines_per_page = 44
-    created_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%SZ")
+    created_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
 
     with PdfPages(output_path) as pdf:
         for start in range(0, len(lines), lines_per_page):
@@ -199,7 +199,7 @@ def _render_with_matplotlib_fallback(
         info["Title"] = title
         info["Author"] = author
         info["Subject"] = "TrackIQ PDF Report"
-        info["CreationDate"] = datetime.now(UTC)
+        info["CreationDate"] = datetime.now(timezone.utc)
 
 
 def _extract_text_from_html(html: str) -> str:

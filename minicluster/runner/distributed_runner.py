@@ -11,7 +11,7 @@ import tempfile
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from minicluster.deps import ensure_parent_dir, load_json_file
@@ -419,7 +419,7 @@ def _convert_to_run_metrics(
                 )
             )
             worker_snapshots: list[WorkerSnapshot] = []
-            now_iso = datetime.now(UTC).isoformat()
+            now_iso = datetime.now(timezone.utc).isoformat()
             for worker_id in range(num_workers):
                 snap = WorkerSnapshot(
                     worker_id=worker_id,
@@ -456,7 +456,7 @@ def _convert_to_run_metrics(
                     total_steps=config.num_steps,
                     completed_steps=latest_step,
                     workers=[s for s in all_worker_snapshots if s.step == all_worker_snapshots[-1].step],
-                    timestamp=datetime.now(UTC).isoformat(),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     is_complete=True,
                 ),
                 health_checkpoint_path,
@@ -498,7 +498,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
     result = TrackiqResult(
         tool_name="minicluster",
         tool_version="0.1.0",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         platform=PlatformInfo(
             hardware_name="CPU",
             os=f"{_platform.system()} {_platform.release()}",
