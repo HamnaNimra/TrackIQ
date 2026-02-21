@@ -58,6 +58,7 @@ setup(
     entry_points={
         "console_scripts": [
             "autoperfpy=autoperfpy.cli:main",
+            "trackiq-compare=trackiq_compare.cli:main",
         ],
     },
     include_package_data=True,
