@@ -208,3 +208,4 @@ def test_populate_standard_html_report_adds_metadata_and_detailed_summary_tables
     assert "latency.p95_ms" in metric_names
     assert "power.max_w" in metric_names
     assert "temperature.max_c" in metric_names
+    assert any(table["section"] == "Raw Data" for table in report.tables)

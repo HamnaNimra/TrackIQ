@@ -164,6 +164,52 @@ def _add_detailed_summary_table(report: Any, merged_summary: dict[str, Any]) -> 
         report.add_table("Detailed Summary Metrics", ["Metric", "Value", "Unit"], rows, "Summary Details")
 
 
+def _add_raw_data_preview_table(
+    report: Any,
+    report_df: Any | None,
+    *,
+    max_rows: int = 120,
+) -> None:
+    """Add a bounded raw-data preview table for report/Streamlit parity."""
+    if report_df is None or len(report_df) == 0:
+        return
+
+    preferred_columns = [
+        "elapsed_seconds",
+        "latency_ms",
+        "cpu_percent",
+        "gpu_percent",
+        "memory_used_mb",
+        "memory_percent",
+        "power_w",
+        "temperature_c",
+        "throughput_fps",
+        "is_warmup",
+    ]
+    columns = [column for column in preferred_columns if column in report_df.columns]
+    if not columns:
+        columns = list(report_df.columns[: min(10, len(report_df.columns))])
+    if not columns:
+        return
+
+    preview = report_df[columns].head(max_rows)
+    rows: list[list[str]] = []
+    for _, sample_row in preview.iterrows():
+        rows.append([_format_value(sample_row[column]) for column in columns])
+
+    if rows:
+        report.add_section(
+            "Raw Data",
+            "Preview of collected samples used to compute summary metrics and charts.",
+        )
+        report.add_table(
+            f"Sample Preview (first {len(rows)} rows)",
+            columns,
+            rows,
+            "Raw Data",
+        )
+
+
 def prepare_report_dataframe_and_summary(
     data: dict[str, Any],
     *,
@@ -318,6 +364,7 @@ def populate_standard_html_report(
 
     if add_charts and report_df is not None and len(report_df) > 0:
         shared_charts.add_charts_to_html_report(report, report_df, merged_summary)
+    _add_raw_data_preview_table(report, report_df)
 
     return report_df, merged_summary
 
