@@ -5,6 +5,8 @@ import os
 import sys
 import tempfile
 from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
 
 from trackiq_compare.comparator import MetricComparator, SummaryGenerator
@@ -17,6 +19,11 @@ from trackiq_compare.deps import (
     render_pdf_from_html_file,
 )
 from trackiq_compare.reporters import HtmlReporter, TerminalReporter
+
+try:
+    TRACKIQ_COMPARE_CLI_VERSION = package_version("trackiq_compare")
+except PackageNotFoundError:
+    TRACKIQ_COMPARE_CLI_VERSION = "0.2.0"
 
 
 def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
@@ -151,6 +158,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trackiq-compare",
         description="Compare TrackiqResult outputs across tools/platforms.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"trackiq-compare {TRACKIQ_COMPARE_CLI_VERSION}",
+        help="Show CLI version and exit",
     )
     sub = parser.add_subparsers(dest="command")
 

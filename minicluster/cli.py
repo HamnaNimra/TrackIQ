@@ -11,7 +11,8 @@ Provides subcommands for:
 import argparse
 import json
 import sys
-from importlib.metadata import PackageNotFoundError, version as package_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
 from minicluster.benchmarks import run_collective_benchmark, save_collective_benchmark
 from minicluster.deps import RegressionDetector, RegressionThreshold
