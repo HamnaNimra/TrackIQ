@@ -83,6 +83,12 @@ def setup_run_parser(subparsers):
         help="Output path for metrics JSON (default: ./minicluster_results/run_metrics.json)",
     )
     parser.add_argument(
+        "--health-checkpoint-path",
+        type=str,
+        default="./minicluster_results/health.json",
+        help="Path for live health monitoring data. Read by minicluster monitor during a run.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print detailed output",
@@ -256,7 +262,9 @@ def cmd_run(args):
         print(f"  Learning rate: {config.learning_rate}")
 
     print(f"\nStarting distributed training run...")
-    metrics = run_distributed(config)
+    metrics = run_distributed(
+        config, health_checkpoint_path=args.health_checkpoint_path
+    )
 
     save_metrics(metrics, args.output)
     print("\n[OK] Run complete!")
