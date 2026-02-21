@@ -34,8 +34,8 @@ class CorrectnessReport:
     multi_run_path: str
     tolerance: float
     num_steps_compared: int
-    num_steps_passed: int
-    num_steps_failed: int
+    num_steps_passed: int = 0
+    num_steps_failed: int = 0
     step_comparisons: List[StepComparison] = field(default_factory=list)
     overall_passed: bool = False
     summary: str = ""
