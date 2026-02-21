@@ -106,6 +106,18 @@ class TrackiqResult:
     @classmethod
     def from_dict(cls, payload: Dict[str, object]) -> "TrackiqResult":
         """Build a TrackiqResult from dictionary data."""
+        metrics_payload = (
+            dict(payload.get("metrics", {}))
+            if isinstance(payload.get("metrics"), dict)
+            else {}
+        )
+        # Backward compatibility: older payloads may omit newer/nullable metric keys.
+        metrics_payload.setdefault("communication_overhead_percent", None)
+        metrics_payload.setdefault("power_consumption_watts", None)
+        metrics_payload.setdefault("energy_per_step_joules", None)
+        metrics_payload.setdefault("performance_per_watt", None)
+        metrics_payload.setdefault("temperature_celsius", None)
+
         kv_cache_payload = payload.get("kv_cache")
         if kv_cache_payload is None and isinstance(payload.get("tool_payload"), dict):
             kv_cache_payload = payload["tool_payload"].get("kv_cache")  # type: ignore[index]
@@ -115,7 +127,7 @@ class TrackiqResult:
             timestamp=datetime.fromisoformat(str(payload["timestamp"])),
             platform=PlatformInfo(**payload["platform"]),  # type: ignore[arg-type]
             workload=WorkloadInfo(**payload["workload"]),  # type: ignore[arg-type]
-            metrics=Metrics(**payload["metrics"]),  # type: ignore[arg-type]
+            metrics=Metrics(**metrics_payload),
             regression=RegressionInfo(**payload["regression"]),  # type: ignore[arg-type]
             kv_cache=KVCacheInfo(**kv_cache_payload)  # type: ignore[arg-type]
             if isinstance(kv_cache_payload, dict)

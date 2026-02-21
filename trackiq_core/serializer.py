@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Union
 
 from trackiq_core.schema import TrackiqResult
-from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
+from trackiq_core.validator import validate_trackiq_result_obj
 
 
 PathLike = Union[str, Path]
@@ -25,5 +25,11 @@ def load_trackiq_result(path: PathLike) -> TrackiqResult:
     in_path = Path(path)
     with in_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
-    validate_trackiq_result(payload)
-    return TrackiqResult.from_dict(payload)
+    try:
+        result = TrackiqResult.from_dict(payload)
+    except KeyError as exc:
+        raise ValueError(f"Missing required field: {exc.args[0]}") from exc
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid TrackiqResult payload: {exc}") from exc
+    validate_trackiq_result_obj(result)
+    return result

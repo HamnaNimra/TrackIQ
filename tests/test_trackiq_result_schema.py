@@ -178,3 +178,18 @@ def test_load_trackiq_result_enforces_schema_contract(tmp_path) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError, match="Missing required field: metrics"):
         load_trackiq_result(path)
+
+
+def test_load_trackiq_result_backcompat_legacy_metrics_defaults_to_none(tmp_path) -> None:
+    """Legacy payloads missing newer nullable metrics should load successfully."""
+    path = tmp_path / "legacy_schema.json"
+    payload = _sample_result().to_dict()
+    payload["schema_version"] = "1.0.0"
+    metrics = payload["metrics"]
+    del metrics["communication_overhead_percent"]  # type: ignore[index]
+    del metrics["power_consumption_watts"]  # type: ignore[index]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_trackiq_result(path)
+    assert loaded.metrics.communication_overhead_percent is None
+    assert loaded.metrics.power_consumption_watts is None
