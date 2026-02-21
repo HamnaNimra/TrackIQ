@@ -24,20 +24,19 @@ from autoperfpy.commands.analyze import run_analyze_tegrastats as _cmd_run_analy
 from autoperfpy.commands.analyze import run_analyze_variability as _cmd_run_analyze_variability
 from autoperfpy.commands.benchmark import run_benchmark_batching as _cmd_run_benchmark_batching
 from autoperfpy.commands.benchmark import run_benchmark_llm as _cmd_run_benchmark_llm
+from autoperfpy.commands.compare import run_compare as _cmd_run_compare
 from autoperfpy.commands.monitor import run_monitor_gpu as _cmd_run_monitor_gpu
 from autoperfpy.commands.monitor import run_monitor_kv_cache as _cmd_run_monitor_kv_cache
+from autoperfpy.commands.report import run_report_html as _cmd_run_report_html
+from autoperfpy.commands.report import run_report_pdf as _cmd_run_report_pdf
 from autoperfpy.commands.run import run_auto_benchmarks_cli as _cmd_run_auto_benchmarks_cli
 from autoperfpy.commands.run import run_devices_list as _cmd_run_devices_list
 from autoperfpy.commands.run import run_manual_single as _cmd_run_manual_single
 from autoperfpy.commands.run import run_profiles as _cmd_run_profiles
 from autoperfpy.commands.run import run_with_profile as _cmd_run_with_profile
+from autoperfpy.commands.ui import run_ui as _cmd_run_ui
 from autoperfpy.config import ConfigManager
 from autoperfpy.profiles import ProfileValidationError
-from autoperfpy.reporting import (
-    HTMLReportGenerator,
-    PDFReportGenerator,
-    PerformanceVisualizer,
-)
 from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
 from trackiq_core.hardware import DeviceProfile
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError
