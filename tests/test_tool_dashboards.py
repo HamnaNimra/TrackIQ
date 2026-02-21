@@ -125,6 +125,27 @@ def test_cluster_health_launcher_missing_result_file_raises_clear_system_exit() 
         root_dashboard.main(["--tool", "cluster-health", "--result", "missing-minicluster.json"])
 
 
+def test_dashboard_parser_accepts_cluster_health_optional_inputs() -> None:
+    """Root parser should accept cluster-health fault and scaling arguments."""
+    args = root_dashboard._parse_args(  # type: ignore[attr-defined]
+        [
+            "--tool",
+            "cluster-health",
+            "--result",
+            "result.json",
+            "--fault-report",
+            "fault.json",
+            "--scaling-runs",
+            "run1.json",
+            "run2.json",
+        ]
+    )
+    assert args.tool == "cluster-health"
+    assert args.result == "result.json"
+    assert args.fault_report == "fault.json"
+    assert args.scaling_runs == ["run1.json", "run2.json"]
+
+
 def test_detect_platform_vendor_cases() -> None:
     """Vendor detection should normalize known platform names."""
     assert detect_platform_vendor("AMD MI300X") == "AMD"
