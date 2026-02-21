@@ -26,6 +26,8 @@ from trackiq_core.runners import (
 )
 from trackiq_core.collectors import SyntheticCollector
 from trackiq_core.inference import InferenceConfig
+from trackiq_core.power_profiler import PowerProfiler, detect_power_source
+from trackiq_core.schema import Metrics
 
 
 def _collector_nvidia_gpu(
@@ -99,6 +101,7 @@ def run_single_benchmark(
     duration_seconds: float = 10.0,
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
+    enable_power: bool = True,
 ) -> Dict[str, Any]:
     """Run one benchmark for (device, config) and return result dict.
 
@@ -115,14 +118,19 @@ def run_single_benchmark(
     Returns:
         Dictionary with benchmark results, metadata, and run_label
     """
-    return _run_single_benchmark_generic(
+    profiler = PowerProfiler(detect_power_source()) if enable_power else None
+    result = _run_single_benchmark_generic(
         device=device,
         config=config,
         collector_factory=_collector_for_device,
         duration_seconds=duration_seconds,
         sample_interval_seconds=sample_interval_seconds,
         quiet=quiet,
+        power_profiler=profiler,
     )
+    if profiler is not None:
+        _attach_power_profile(result, profiler)
+    return result
 
 
 def run_auto_benchmarks(
@@ -131,6 +139,7 @@ def run_auto_benchmarks(
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
     progress_callback: Optional[Callable[..., None]] = None,
+    enable_power: bool = True,
 ) -> List[Dict[str, Any]]:
     """Run benchmarks sequentially for each (device, config).
 
@@ -154,7 +163,31 @@ def run_auto_benchmarks(
         sample_interval_seconds=sample_interval_seconds,
         quiet=quiet,
         progress_callback=progress_callback,
+        power_profiler_factory=(
+            (lambda: PowerProfiler(detect_power_source())) if enable_power else None
+        ),
     )
+
+
+def _attach_power_profile(result: Dict[str, Any], profiler: PowerProfiler) -> None:
+    """Populate result summary and payload with profiler-derived power metrics."""
+    summary = result.setdefault("summary", {})
+    latency = summary.get("latency", {}) if isinstance(summary.get("latency"), dict) else {}
+    throughput = summary.get("throughput", {}) if isinstance(summary.get("throughput"), dict) else {}
+    memory = summary.get("memory", {}) if isinstance(summary.get("memory"), dict) else {}
+    base_metrics = Metrics(
+        throughput_samples_per_sec=float(throughput.get("mean_fps", 0.0)),
+        latency_p50_ms=float(latency.get("p50_ms", 0.0)),
+        latency_p95_ms=float(latency.get("p95_ms", 0.0)),
+        latency_p99_ms=float(latency.get("p99_ms", 0.0)),
+        memory_utilization_percent=float(memory.get("mean_percent", 0.0)),
+        communication_overhead_percent=None,
+        power_consumption_watts=None,
+    )
+    updated_metrics = profiler.to_metrics_update(base_metrics)
+    summary.setdefault("power", {})["mean_w"] = updated_metrics.power_consumption_watts
+    summary["power"]["peak_w"] = profiler.to_tool_payload()["power_profile"]["summary"].get("peak_power_watts")
+    result["power_profile"] = profiler.to_tool_payload()["power_profile"]
 
 
 __all__ = [
