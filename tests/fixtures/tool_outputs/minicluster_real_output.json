@@ -1,0 +1,240 @@
+{
+  "tool_name": "minicluster",
+  "tool_version": "0.1.0",
+  "timestamp": "2026-02-21T02:58:27.987985",
+  "platform": {
+    "hardware_name": "CPU",
+    "os": "Windows 11",
+    "framework": "pytorch",
+    "framework_version": "2.10.0+cpu"
+  },
+  "workload": {
+    "name": "distributed_training_validation",
+    "workload_type": "training",
+    "batch_size": 16,
+    "steps": 10
+  },
+  "metrics": {
+    "throughput_samples_per_sec": 105.58097817374069,
+    "latency_p50_ms": 0.0,
+    "latency_p95_ms": 0.0,
+    "latency_p99_ms": 0.0,
+    "memory_utilization_percent": 0.0,
+    "communication_overhead_percent": null,
+    "power_consumption_watts": 27.102727272727275,
+    "energy_per_step_joules": 4.109971558982676,
+    "performance_per_watt": 3.89558501295122,
+    "temperature_celsius": 37.458636363636366
+  },
+  "regression": {
+    "baseline_id": null,
+    "delta_percent": 0.0,
+    "status": "pass",
+    "failed_metrics": []
+  },
+  "tool_payload": {
+    "config": {
+      "num_steps": 10,
+      "learning_rate": 0.01,
+      "batch_size": 16,
+      "hidden_size": 128,
+      "num_layers": 2,
+      "input_size": 10,
+      "output_size": 1,
+      "loss_tolerance": 0.01,
+      "num_processes": 1,
+      "regression_threshold": 5.0,
+      "seed": 42,
+      "tdp_watts": 150.0
+    },
+    "num_workers": 1,
+    "num_steps": 10,
+    "steps": [
+      {
+        "step": 0,
+        "loss": 9.019577980041504,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 1,
+        "loss": 15.277003288269043,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 2,
+        "loss": 6.341562271118164,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 3,
+        "loss": 8.230742454528809,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 4,
+        "loss": 7.527835369110107,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 5,
+        "loss": 3.895609140396118,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 6,
+        "loss": 6.763896465301514,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 7,
+        "loss": 1.626076579093933,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 8,
+        "loss": 3.5830249786376953,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      },
+      {
+        "step": 9,
+        "loss": 2.28558087348938,
+        "throughput_samples_per_sec": 105.58097817374069,
+        "allreduce_time_ms": 0.0,
+        "compute_time_ms": 0.0
+      }
+    ],
+    "total_time_sec": 1.5154244899749756,
+    "total_allreduce_time_ms": 0.0,
+    "total_compute_time_ms": 0.0,
+    "start_timestamp": "2026-02-20T21:58:27",
+    "end_timestamp": "2026-02-20T21:58:27",
+    "power_metrics": {
+      "throughput_samples_per_sec": 105.58097817374068,
+      "latency_p50_ms": 0.0,
+      "latency_p95_ms": 0.0,
+      "latency_p99_ms": 0.0,
+      "memory_utilization_percent": 0.0,
+      "communication_overhead_percent": null,
+      "power_consumption_watts": 27.102727272727275,
+      "energy_per_step_joules": 4.109971558982676,
+      "performance_per_watt": 3.89558501295122,
+      "temperature_celsius": 37.458636363636366
+    },
+    "power_tool_payload": {
+      "power_profile": {
+        "reader": "SimulatedPowerReader",
+        "start_time": 1771642706.4708276,
+        "end_time": 1771642707.9872696,
+        "step_readings": [
+          {
+            "step": -1,
+            "timestamp": 1771642706.4708276,
+            "throughput": null,
+            "power_watts": 53.800000000000004,
+            "temperature_celsius": 46.7
+          },
+          {
+            "step": 0,
+            "timestamp": 1771642707.9866002,
+            "throughput": 105.58097817374068,
+            "power_watts": 64.33000000000001,
+            "temperature_celsius": 50.345
+          },
+          {
+            "step": 1,
+            "timestamp": 1771642707.9866922,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 2,
+            "timestamp": 1771642707.9867694,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 3,
+            "timestamp": 1771642707.9868405,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 4,
+            "timestamp": 1771642707.9869149,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 5,
+            "timestamp": 1771642707.986983,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 6,
+            "timestamp": 1771642707.9870517,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 7,
+            "timestamp": 1771642707.9871244,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 8,
+            "timestamp": 1771642707.987196,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          },
+          {
+            "step": 9,
+            "timestamp": 1771642707.9872663,
+            "throughput": 105.58097817374068,
+            "power_watts": 20.0,
+            "temperature_celsius": 35.0
+          }
+        ],
+        "summary": {
+          "mean_power_watts": 27.102727272727275,
+          "peak_power_watts": 64.33000000000001,
+          "total_energy_joules": 41.09971558982676,
+          "performance_per_watt": 3.89558501295122,
+          "mean_temperature_celsius": 37.458636363636366,
+          "elapsed_seconds": 1.516442060470581
+        }
+      }
+    },
+    "average_loss": 6.455090939998627,
+    "final_loss": 2.28558087348938,
+    "average_throughput_samples_per_sec": 105.58097817374069
+  },
+  "schema_version": "1.1.0"
+}
