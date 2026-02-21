@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from autoperfpy.ui.dashboard import AutoPerfDashboard
-from minicluster.ui.dashboard import MiniClusterDashboard
+from minicluster.ui.launcher import launch_minicluster_dashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import run_dashboard
@@ -55,13 +55,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 0
 
         if args.tool == "minicluster":
-            if args.result:
-                result_path = _validate_path(args.result, "--result")
-                run_dashboard(MiniClusterDashboard, result_path=result_path)
-            else:
-                from minicluster.ui import streamlit_app
-
-                streamlit_app.main()
+            launch_minicluster_dashboard(args.result)
             return 0
 
         if not args.result_a or not args.result_b:
