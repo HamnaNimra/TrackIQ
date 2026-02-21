@@ -361,7 +361,11 @@ def train_distributed(
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg) if config.workload == "mlp" else _train_single_process_custom_workload(config)
+    losses = (
+        _train_multi_process_impl(core_cfg)
+        if config.workload == "mlp"
+        else _train_single_process_custom_workload(config)
+    )
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -411,7 +415,11 @@ def run_distributed(config: RunConfig, health_checkpoint_path: str | None = None
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg) if config.workload == "mlp" else _train_single_process_custom_workload(config)
+    losses = (
+        _train_multi_process_impl(core_cfg)
+        if config.workload == "mlp"
+        else _train_single_process_custom_workload(config)
+    )
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):

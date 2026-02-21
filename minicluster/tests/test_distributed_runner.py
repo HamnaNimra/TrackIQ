@@ -149,6 +149,20 @@ class TestSingleProcessTraining:
         for m1, m2 in zip(metrics1.steps, metrics2.steps):
             assert abs(m1.loss - m2.loss) < 1e-5
 
+    def test_single_process_transformer_workload_runs(self):
+        """Transformer workload path should run and return expected step count."""
+        config = RunConfig(num_steps=5, num_processes=1, seed=42, workload="transformer")
+        metrics = train_single_process(config)
+        assert len(metrics.steps) == 5
+        assert all(step.loss > 0 for step in metrics.steps)
+
+    def test_single_process_embedding_workload_runs(self):
+        """Embedding workload path should run and return expected step count."""
+        config = RunConfig(num_steps=5, num_processes=1, seed=42, workload="embedding")
+        metrics = train_single_process(config)
+        assert len(metrics.steps) == 5
+        assert all(step.loss > 0 for step in metrics.steps)
+
 
 class TestMetricsSerialization:
     """Tests for metrics serialization and deserialization."""

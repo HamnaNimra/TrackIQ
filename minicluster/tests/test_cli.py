@@ -39,3 +39,29 @@ def test_run_parser_accepts_backend_workload_and_baseline() -> None:
     assert args.backend == "gloo"
     assert args.workload == "mlp"
     assert args.baseline_throughput == pytest.approx(42.0)
+
+
+def test_bench_collective_parser_accepts_expected_args() -> None:
+    """`minicluster bench-collective` parser should accept benchmark arguments."""
+    parser = minicluster_cli.setup_main_parser()
+    args = parser.parse_args(
+        [
+            "bench-collective",
+            "--workers",
+            "4",
+            "--size-mb",
+            "64",
+            "--iterations",
+            "10",
+            "--backend",
+            "gloo",
+            "--output",
+            "bench.json",
+        ]
+    )
+    assert args.command == "bench-collective"
+    assert args.workers == 4
+    assert args.size_mb == pytest.approx(64.0)
+    assert args.iterations == 10
+    assert args.backend == "gloo"
+    assert args.output == "bench.json"

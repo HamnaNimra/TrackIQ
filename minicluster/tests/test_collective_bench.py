@@ -43,4 +43,3 @@ def test_collective_benchmark_rejects_invalid_inputs() -> None:
         run_collective_benchmark(workers=2, size_mb=0.0, iterations=2)
     with pytest.raises(ValueError, match="iterations must be >= 1"):
         run_collective_benchmark(workers=2, size_mb=1.0, iterations=0)
-

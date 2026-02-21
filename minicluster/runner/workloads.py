@@ -48,7 +48,6 @@ if nn is not None:
             pooled = x.mean(dim=1)
             return self.head(pooled)
 
-
     class EmbeddingWorkload(nn.Module):
         """Simulates embedding-heavy recommendation models dominated by memory bandwidth."""
 
@@ -63,7 +62,6 @@ if nn is not None:
             x = F.relu(self.fc1(x))
             return self.fc2(x)
 
-
 else:
 
     class TransformerWorkload:  # pragma: no cover - exercised only when torch missing
@@ -72,10 +70,8 @@ else:
         def __init__(self, *args, **kwargs):
             _require_torch()
 
-
     class EmbeddingWorkload:  # pragma: no cover - exercised only when torch missing
         """Fallback type for optional torch dependency."""
 
         def __init__(self, *args, **kwargs):
             _require_torch()
-

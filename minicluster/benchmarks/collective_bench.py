@@ -82,7 +82,9 @@ def _bench_worker(
             dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
             dist.barrier()
             elapsed = time.perf_counter() - start
-            bandwidths.append(compute_allreduce_bandwidth_gbps(size_bytes=size_bytes, time_seconds=elapsed, workers=world_size))
+            bandwidths.append(
+                compute_allreduce_bandwidth_gbps(size_bytes=size_bytes, time_seconds=elapsed, workers=world_size)
+            )
         if rank == 0:
             queue.put(bandwidths)
     finally:
@@ -157,4 +159,3 @@ def save_collective_benchmark(result: dict[str, Any], output_path: str) -> None:
     ensure_parent_dir(output_path)
     with open(output_path, "w", encoding="utf-8") as handle:
         json.dump(result, handle, indent=2)
-

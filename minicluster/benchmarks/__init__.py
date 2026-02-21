@@ -13,4 +13,3 @@ __all__ = [
     "run_collective_benchmark",
     "save_collective_benchmark",
 ]
-
