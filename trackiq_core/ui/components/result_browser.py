@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,7 @@ class ResultBrowser:
                         "file_size_bytes": int(stat.st_size),
                     }
                 )
-        rows.sort(key=lambda row: row["timestamp"], reverse=True)
+        rows.sort(key=lambda row: _timestamp_sort_key(row["timestamp"]), reverse=True)
         return rows
 
     def to_dict(self) -> list[dict[str, Any]]:
@@ -131,3 +132,10 @@ class ResultBrowser:
                     st.experimental_rerun()
             except Exception as exc:
                 st.error(f"Failed to load result file: {exc}")
+
+
+def _timestamp_sort_key(value: datetime) -> float:
+    """Normalize naive/aware timestamps to UTC epoch for stable sorting."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).timestamp()
+    return value.astimezone(timezone.utc).timestamp()
