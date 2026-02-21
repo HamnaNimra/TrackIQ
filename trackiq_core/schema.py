@@ -46,6 +46,7 @@ class Metrics:
     energy_per_step_joules: float | None = None
     performance_per_watt: float | None = None
     temperature_celsius: float | None = None
+    scaling_efficiency_pct: float | None = None
     ttft_ms: float | None = None
     tokens_per_sec: float | None = None
     decode_tpt_ms: float | None = None
@@ -140,6 +141,7 @@ class TrackiqResult:
         metrics_payload.setdefault("energy_per_step_joules", None)
         metrics_payload.setdefault("performance_per_watt", None)
         metrics_payload.setdefault("temperature_celsius", None)
+        metrics_payload.setdefault("scaling_efficiency_pct", None)
         metrics_payload.setdefault("ttft_ms", None)
         metrics_payload.setdefault("tokens_per_sec", None)
         metrics_payload.setdefault("decode_tpt_ms", None)
