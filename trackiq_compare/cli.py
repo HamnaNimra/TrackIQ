@@ -32,6 +32,18 @@ def run_compare(args: argparse.Namespace) -> int:
     label_a = args.label_a or result_a.platform.hardware_name or "Result A"
     label_b = args.label_b or result_b.platform.hardware_name or "Result B"
 
+    # Make label semantics explicit: labels are display aliases, not hardware detection.
+    if args.label_a:
+        print(
+            f"[INFO] label-a is display-only. Actual Result A platform: "
+            f"{result_a.platform.hardware_name}"
+        )
+    if args.label_b:
+        print(
+            f"[INFO] label-b is display-only. Actual Result B platform: "
+            f"{result_b.platform.hardware_name}"
+        )
+
     comparator = MetricComparator(label_a=label_a, label_b=label_b)
     comparison = comparator.compare(result_a, result_b)
 
@@ -138,4 +150,3 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
