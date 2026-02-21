@@ -89,6 +89,9 @@ python -m streamlit run dashboard.py -- --tool autoperfpy
 
 # convenience wrapper (no Streamlit `--` separator needed)
 python launch_dashboard.py --tool autoperfpy --result output/autoperf_result.json
+
+# all-tools unified mode (default)
+python launch_dashboard.py
 ```
 
 ### MiniCluster

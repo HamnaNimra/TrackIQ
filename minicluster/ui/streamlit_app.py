@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 import streamlit as st
@@ -28,6 +29,29 @@ def _run_and_load_result(config: RunConfig) -> Optional[object]:
             pass
 
 
+def _latest_result_path() -> Optional[str]:
+    """Return latest known MiniCluster result file path if available."""
+    candidates = [
+        Path("minicluster_results") / "run_metrics.json",
+        Path("output") / "minicluster_result.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            return str(path)
+
+    directory = Path("minicluster_results")
+    if not directory.exists():
+        return None
+    json_files = sorted(
+        directory.glob("*.json"),
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    )
+    if not json_files:
+        return None
+    return str(json_files[0])
+
+
 def main() -> None:
     """Render interactive MiniCluster runner + dashboard view."""
     st.set_page_config(
@@ -47,6 +71,21 @@ def main() -> None:
         seed = st.number_input("Seed", min_value=0, max_value=2_147_483_647, value=42, step=1)
         tdp_watts = st.number_input("TDP Watts", min_value=10.0, max_value=1000.0, value=150.0, step=1.0)
         run_clicked = st.button("Run MiniCluster", use_container_width=True)
+        st.markdown("---")
+        st.subheader("Load Existing Result")
+        latest_path = _latest_result_path()
+        default_path = latest_path or "minicluster_results/run_metrics.json"
+        result_path = st.text_input("Result Path", value=default_path)
+        load_clicked = st.button("Load Result", use_container_width=True)
+
+    if "minicluster_result" not in st.session_state:
+        latest = _latest_result_path()
+        if latest:
+            try:
+                st.session_state["minicluster_result"] = load_trackiq_result(latest)
+                st.session_state["minicluster_result_path"] = latest
+            except Exception:
+                pass
 
     if run_clicked:
         cfg = RunConfig(
@@ -59,10 +98,21 @@ def main() -> None:
         )
         with st.spinner("Running MiniCluster..."):
             st.session_state["minicluster_result"] = _run_and_load_result(cfg)
+            st.session_state["minicluster_result_path"] = "generated-now"
+
+    if load_clicked:
+        try:
+            st.session_state["minicluster_result"] = load_trackiq_result(result_path)
+            st.session_state["minicluster_result_path"] = result_path
+        except Exception as exc:
+            st.error(f"Failed to load result file: {exc}")
 
     result = st.session_state.get("minicluster_result")
     if result is None:
-        st.info("Configure run settings and click 'Run MiniCluster' to generate a result.")
+        st.info(
+            "Configure run settings and click 'Run MiniCluster', or load an existing "
+            "result JSON from the sidebar."
+        )
         return
 
     dashboard = MiniClusterDashboard(result=result)

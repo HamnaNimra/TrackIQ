@@ -19,9 +19,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--tool",
-        required=True,
-        choices=["autoperfpy", "minicluster", "compare"],
-        help="Tool dashboard to launch",
+        required=False,
+        default="all",
+        choices=["all", "autoperfpy", "minicluster", "compare"],
+        help="Tool dashboard to launch (default: all)",
     )
     parser.add_argument("--result", help="Single TrackiqResult JSON path")
     parser.add_argument("--result-a", help="Compare mode: result A path")
@@ -40,9 +41,9 @@ def _build_streamlit_command(args: argparse.Namespace) -> List[str]:
         "run",
         str(dashboard_path),
         "--",
-        "--tool",
-        args.tool,
     ]
+    if args.tool:
+        cmd.extend(["--tool", args.tool])
     if args.result:
         cmd.extend(["--result", args.result])
     if args.result_a:

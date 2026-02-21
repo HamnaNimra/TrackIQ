@@ -11,7 +11,7 @@ from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import ResultBrowser, run_dashboard
+from trackiq_core.ui import DARK_THEME, ResultBrowser, run_dashboard
 
 
 def _validate_path(path: Optional[str], label: str) -> str:
@@ -26,9 +26,10 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified TrackIQ dashboard launcher")
     parser.add_argument(
         "--tool",
-        required=True,
-        choices=["autoperfpy", "minicluster", "compare"],
-        help="Tool dashboard to launch",
+        required=False,
+        default="all",
+        choices=["all", "autoperfpy", "minicluster", "compare"],
+        help="Tool dashboard to launch (default: all)",
     )
     parser.add_argument("--result", help="Single TrackiqResult JSON path")
     parser.add_argument("--result-a", help="Compare mode: result A path")
@@ -81,6 +82,106 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = _parse_args(argv)
 
     try:
+        if args.tool == "all":
+            import streamlit as st
+
+            st.set_page_config(
+                page_title="TrackIQ Unified Dashboard",
+                layout="wide",
+                initial_sidebar_state="expanded",
+            )
+            st.title("TrackIQ Unified Dashboard")
+            st.caption("Switch between AutoPerfPy, MiniCluster, and Compare in one app.")
+
+            tool_choice = st.sidebar.selectbox(
+                "Tool",
+                options=["autoperfpy", "minicluster", "compare"],
+                index=0,
+                key="trackiq_unified_tool_choice",
+            )
+
+            if tool_choice in {"autoperfpy", "minicluster"}:
+                with st.sidebar.expander("Load Result", expanded=False):
+                    ResultBrowser(
+                        theme=DARK_THEME,
+                        allowed_tools=[tool_choice],
+                    ).render()
+
+                loaded = st.session_state.get("loaded_result")
+                if tool_choice == "autoperfpy":
+                    if loaded is None and args.result and Path(args.result).exists():
+                        loaded = load_trackiq_result(args.result)
+                    dashboard = AutoPerfDashboard(
+                        result=loaded
+                        if isinstance(loaded, TrackiqResult)
+                        else _placeholder_result("autoperfpy", workload_type="inference")
+                    )
+                else:
+                    if loaded is None and args.result and Path(args.result).exists():
+                        loaded = load_trackiq_result(args.result)
+                    dashboard = MiniClusterDashboard(
+                        result=loaded
+                        if isinstance(loaded, TrackiqResult)
+                        else _placeholder_result("minicluster", workload_type="training")
+                    )
+                dashboard.apply_theme(dashboard.theme)
+                dashboard.render_header()
+                dashboard.render_sidebar()
+                dashboard.render_body()
+                dashboard.render_footer()
+                return 0
+
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Compare Inputs")
+            result_a_path = st.sidebar.text_input(
+                "Result A Path",
+                value=args.result_a or "",
+                key="trackiq_unified_result_a",
+            )
+            result_b_path = st.sidebar.text_input(
+                "Result B Path",
+                value=args.result_b or "",
+                key="trackiq_unified_result_b",
+            )
+            label_a = st.sidebar.text_input(
+                "Label A",
+                value=args.label_a or "Result A",
+                key="trackiq_unified_label_a",
+            )
+            label_b = st.sidebar.text_input(
+                "Label B",
+                value=args.label_b or "Result B",
+                key="trackiq_unified_label_b",
+            )
+            if st.sidebar.button("Load Comparison", use_container_width=True):
+                if not result_a_path or not Path(result_a_path).exists():
+                    st.sidebar.error(f"Result A file not found: {result_a_path}")
+                elif not result_b_path or not Path(result_b_path).exists():
+                    st.sidebar.error(f"Result B file not found: {result_b_path}")
+                else:
+                    st.session_state["trackiq_unified_compare_a"] = load_trackiq_result(result_a_path)
+                    st.session_state["trackiq_unified_compare_b"] = load_trackiq_result(result_b_path)
+                    st.session_state["trackiq_unified_compare_label_a"] = label_a
+                    st.session_state["trackiq_unified_compare_label_b"] = label_b
+
+            result_a = st.session_state.get("trackiq_unified_compare_a")
+            result_b = st.session_state.get("trackiq_unified_compare_b")
+            if not isinstance(result_a, TrackiqResult) or not isinstance(result_b, TrackiqResult):
+                st.info("Load two result files in the sidebar to view comparison graphs.")
+                return 0
+
+            dashboard = CompareDashboard(
+                result_a=result_a,
+                result_b=result_b,
+                label_a=str(st.session_state.get("trackiq_unified_compare_label_a", label_a)),
+                label_b=str(st.session_state.get("trackiq_unified_compare_label_b", label_b)),
+            )
+            dashboard.apply_theme(dashboard.theme)
+            dashboard.render_header()
+            dashboard.render_body()
+            dashboard.render_footer()
+            return 0
+
         if args.tool == "autoperfpy":
             if args.result:
                 result_path = _validate_path(args.result, "--result")
