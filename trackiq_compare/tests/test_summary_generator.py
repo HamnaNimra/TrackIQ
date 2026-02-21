@@ -13,6 +13,7 @@ from trackiq_compare.deps import (
     WorkloadInfo,
     save_trackiq_result,
 )
+from trackiq_compare.tests.synthetic_result_generator import write_synthetic_pair
 
 
 def _result(throughput: float, p99: float) -> TrackiqResult:
@@ -70,3 +71,25 @@ def test_cli_run_subcommand_executes_without_errors(tmp_path) -> None:
     save_trackiq_result(_result(102.0, 14.0), path_b)
     rc = cli_main(["run", str(path_a), str(path_b), "--label-a", "A", "--label-b", "B"])
     assert rc == 0
+
+
+def test_cli_custom_labels_show_in_output(tmp_path, capsys) -> None:
+    """CLI output should include requested custom labels."""
+    path_a = tmp_path / "amd.json"
+    path_b = tmp_path / "nvidia.json"
+    write_synthetic_pair(path_a, path_b)
+    rc = cli_main(
+        [
+            "run",
+            str(path_a),
+            str(path_b),
+            "--label-a",
+            "AMD MI300X",
+            "--label-b",
+            "NVIDIA A100",
+        ]
+    )
+    assert rc == 0
+    output = capsys.readouterr().out
+    assert "AMD MI300X" in output
+    assert "NVIDIA A100" in output
