@@ -1,6 +1,6 @@
 """Monitoring module for AutoPerfPy.
 
-Re-exports generic monitoring from trackiq_core.
+Exports compatibility shims backed by ``trackiq_core`` monitoring.
 """
 
 from trackiq_core.hardware import (
@@ -9,7 +9,7 @@ from trackiq_core.hardware import (
     parse_gpu_metrics,
     query_nvidia_smi,
 )
-from trackiq_core.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
+from .gpu import GPUMemoryMonitor, LLMKVCacheMonitor
 
 __all__ = [
     "GPUMemoryMonitor",

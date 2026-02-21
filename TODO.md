@@ -394,7 +394,7 @@ Problem: dead standalone debug scripts were removed; a maintained replacement ma
 
 Tasks:
 
-1. Add a supported chart-debug harness under `scripts/` (or `tests/fixtures`) for synthetic sample generation and chart smoke checks.
+1. Add a supported chart-debug harness under `tests/fixtures` for synthetic sample generation and chart smoke checks.
 2. Add a maintained report-debug command that exercises `autoperfpy report html/pdf` using canonical fixture inputs.
 3. Add an optional `distributed-validator` smoke CLI wrapper (or documented pytest command) for quick local checks.
 4. Decide whether `autoperfpy/cli/utils.py` compatibility wrappers should be retained or removed in a future breaking-change window.
@@ -468,4 +468,3 @@ Tasks:
 6. `[P1]` Deliver consolidated visualization MVP (overview pack + multi-run heatmap + baseline deltas) across CLI HTML and Streamlit export.
 7. `[P1]` Add MiniCluster visualization MVP (worker skew + timing ratio + fault impact overlays).
 8. `[P1]` Add Compare visualization MVP (normalized deltas + metric-family waterfall + confidence matrix).
-
