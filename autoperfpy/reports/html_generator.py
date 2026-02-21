@@ -1049,7 +1049,11 @@ class HTMLReportGenerator:
                 padding: 25px !important;
                 margin-bottom: 20px !important;
             }}
-            
+
+            .header::after {{
+                display: none !important;
+            }}
+
             .header h1 {{
                 font-size: 1.8rem !important;
             }}
@@ -1142,8 +1146,24 @@ class HTMLReportGenerator:
 
         /* Responsive */
         @media (max-width: 768px) {{
+            .container {{
+                padding: 16px;
+            }}
+            .header {{
+                padding: 24px;
+                border-radius: 14px;
+            }}
+            .header-top {{
+                display: block;
+            }}
             .header h1 {{
                 font-size: 1.8rem;
+            }}
+            .header-kpi-grid {{
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }}
+            .platform-grid {{
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }}
             .figure-grid {{
                 grid-template-columns: 1fr;

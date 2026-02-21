@@ -10,6 +10,7 @@ import platform as _platform
 import sys
 import tempfile
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as package_version
 from typing import Any
 
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
@@ -41,6 +42,11 @@ from trackiq_core.schema import (
 )
 from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
+
+try:
+    AUTOPERFPY_CLI_VERSION = package_version("autoperfpy")
+except PackageNotFoundError:
+    AUTOPERFPY_CLI_VERSION = "1.0"
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -107,6 +113,12 @@ Environment Variables:
     )
 
     parser.add_argument("--config", help="Path to configuration file (YAML/JSON)")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"autoperfpy {AUTOPERFPY_CLI_VERSION}",
+        help="Show CLI version and exit",
+    )
     parser.add_argument("--output", help="Output file for results (JSON)")
     parser.add_argument(
         "--output-dir",

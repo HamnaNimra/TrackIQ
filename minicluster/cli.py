@@ -11,6 +11,7 @@ Provides subcommands for:
 import argparse
 import json
 import sys
+from importlib.metadata import PackageNotFoundError, version as package_version
 
 from minicluster.benchmarks import run_collective_benchmark, save_collective_benchmark
 from minicluster.deps import RegressionDetector, RegressionThreshold
@@ -29,6 +30,11 @@ from trackiq_core.reporting import (
     render_trackiq_result_html,
 )
 from trackiq_core.serializer import load_trackiq_result
+
+try:
+    MINICLUSTER_CLI_VERSION = package_version("minicluster")
+except PackageNotFoundError:
+    MINICLUSTER_CLI_VERSION = "0.1.0"
 
 
 def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
@@ -762,6 +768,12 @@ Examples:
   # Generate fault timeline HTML report
   minicluster report fault-timeline --json ./minicluster_results/fault_report.json --output ./minicluster_results/fault_timeline.html
         """,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"minicluster {MINICLUSTER_CLI_VERSION}",
+        help="Show CLI version and exit",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to execute")
