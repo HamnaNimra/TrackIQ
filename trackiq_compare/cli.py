@@ -54,7 +54,11 @@ def run_compare(args: argparse.Namespace) -> int:
     if args.label_b:
         print(f"[INFO] label-b is display-only. Actual Result B platform: " f"{result_b.platform.hardware_name}")
 
-    comparator = MetricComparator(label_a=label_a, label_b=label_b)
+    comparator = MetricComparator(
+        label_a=label_a,
+        label_b=label_b,
+        variance_threshold_percent=float(getattr(args, "variance_threshold", 25.0)),
+    )
     comparison = comparator.compare(result_a, result_b)
 
     summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
@@ -83,7 +87,11 @@ def run_report_pdf(args: argparse.Namespace) -> int:
     label_a = args.label_a or result_a.platform.hardware_name or "Result A"
     label_b = args.label_b or result_b.platform.hardware_name or "Result B"
 
-    comparator = MetricComparator(label_a=label_a, label_b=label_b)
+    comparator = MetricComparator(
+        label_a=label_a,
+        label_b=label_b,
+        variance_threshold_percent=float(getattr(args, "variance_threshold", 25.0)),
+    )
     comparison = comparator.compare(result_a, result_b)
     summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
 
@@ -164,6 +172,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=5.0,
         help="Regression threshold (%%) for summary flagging",
     )
+    run.add_argument(
+        "--variance-threshold",
+        type=float,
+        default=25.0,
+        help="All-reduce variance regression threshold (%% increase, default: 25.0)",
+    )
     run.set_defaults(func=run_compare)
 
     report = sub.add_parser("report", help="Generate reports from compare inputs")
@@ -188,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         help="Regression threshold (%%) for summary flagging",
+    )
+    report_pdf.add_argument(
+        "--variance-threshold",
+        type=float,
+        default=25.0,
+        help="All-reduce variance regression threshold (%% increase, default: 25.0)",
     )
     report_pdf.add_argument(
         "--pdf-backend",
