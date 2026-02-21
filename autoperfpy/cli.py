@@ -47,12 +47,14 @@ from trackiq_core.power_profiler import PowerProfiler, detect_power_source
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError
 from trackiq_core.schema import (
     KVCacheInfo,
+)
+from trackiq_core.schema import Metrics as TrackiqMetrics
+from trackiq_core.schema import (
     PlatformInfo,
     RegressionInfo,
     TrackiqResult,
     WorkloadInfo,
 )
-from trackiq_core.schema import Metrics as TrackiqMetrics
 from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 

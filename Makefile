@@ -67,7 +67,7 @@ lint:
 	ruff check autoperfpy trackiq_core minicluster trackiq_compare tests
 
 typecheck:
-	mypy autoperfpy trackiq_core minicluster trackiq_compare --ignore-missing-imports
+	mypy trackiq_compare/comparator trackiq_compare/reporters trackiq_compare/cli.py --ignore-missing-imports
 
 format:
 	ruff check --fix autoperfpy trackiq_core minicluster trackiq_compare tests

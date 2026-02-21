@@ -104,6 +104,7 @@ class MetricComparator:
             percent_delta = (delta / float(value_a)) * 100.0
 
         lower_is_better = name in LOWER_IS_BETTER_METRICS
+        margin: float | None
         if delta == 0:
             winner = "tie"
             margin = 0.0
