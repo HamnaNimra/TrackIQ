@@ -136,7 +136,9 @@ class MiniClusterDashboard(TrackiqDashboard):
         with right:
             st.markdown("**Runtime**")
             st.markdown(f"- Workers: `{config.get('num_processes', config.get('num_workers', 'N/A'))}`")
-            st.markdown(f"- Collective Backend: `{config.get('collective_backend', payload.get('collective_backend', 'N/A'))}`")
+            st.markdown(
+                f"- Collective Backend: `{config.get('collective_backend', payload.get('collective_backend', 'N/A'))}`"
+            )
             st.markdown(f"- Workload: `{config.get('workload', payload.get('workload_type', 'N/A'))}`")
             st.markdown(f"- Baseline Throughput: `{config.get('baseline_throughput', 'N/A')}`")
             st.markdown(f"- Seed: `{config.get('seed', 'N/A')}`")
@@ -158,11 +160,19 @@ class MiniClusterDashboard(TrackiqDashboard):
         st.markdown("### Cluster Health Summary")
         col_a, col_b, col_c, col_d = st.columns(4)
         with col_a:
-            st.metric("Avg Throughput (samples/s)", f"{float(avg_thr):.2f}" if isinstance(avg_thr, (int, float)) else "N/A")
+            st.metric(
+                "Avg Throughput (samples/s)", f"{float(avg_thr):.2f}" if isinstance(avg_thr, (int, float)) else "N/A"
+            )
         with col_b:
-            st.metric("P99 All-Reduce (ms)", f"{float(p99_allreduce):.3f}" if isinstance(p99_allreduce, (int, float)) else "N/A")
+            st.metric(
+                "P99 All-Reduce (ms)",
+                f"{float(p99_allreduce):.3f}" if isinstance(p99_allreduce, (int, float)) else "N/A",
+            )
         with col_c:
-            st.metric("P95 All-Reduce (ms)", f"{float(p95_allreduce):.3f}" if isinstance(p95_allreduce, (int, float)) else "N/A")
+            st.metric(
+                "P95 All-Reduce (ms)",
+                f"{float(p95_allreduce):.3f}" if isinstance(p95_allreduce, (int, float)) else "N/A",
+            )
         with col_d:
             st.metric(
                 "Scaling Efficiency (%)",
@@ -170,11 +180,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             )
         st.caption(
             "All-Reduce variability (stdev ms): "
-            + (
-                f"{float(allreduce_stdev):.3f}"
-                if isinstance(allreduce_stdev, (int, float))
-                else "N/A"
-            )
+            + (f"{float(allreduce_stdev):.3f}" if isinstance(allreduce_stdev, (int, float)) else "N/A")
         )
 
     def _render_training_graphs(self, payload: dict[str, Any]) -> None:

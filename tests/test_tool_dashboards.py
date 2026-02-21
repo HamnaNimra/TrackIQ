@@ -213,6 +213,9 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
             "learning_rate": 0.01,
             "hidden_size": 128,
             "num_layers": 2,
+            "collective_backend": "gloo",
+            "workload": "mlp",
+            "baseline_throughput": 50.0,
             "seed": 42,
             "tdp_watts": 150.0,
         },
@@ -234,6 +237,8 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
         ],
         "total_time_sec": 0.2,
         "final_loss": 1.0,
+        "p99_allreduce_ms": 1.2,
+        "scaling_efficiency_pct": 95.0,
     }
     result = _result(tool_name="minicluster", workload_type="training", tool_payload=payload)
     dash = MiniClusterDashboard(result=result)
@@ -241,4 +246,6 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
 
     assert "MiniCluster Performance Report" in html
     assert "Training Graphs" in html
+    assert "Scaling Efficiency (%)" in html
+    assert "collective_backend" in html
     assert ("plotly-graph-div" in html) or ("<svg" in html)

@@ -189,6 +189,7 @@ def _render_autoperf_interactive(
 ) -> int:
     """Render AutoPerfPy with rich run configuration and graph output."""
     import streamlit as st
+
     from autoperfpy.device_config import (
         DEFAULT_BATCH_SIZES,
         DEFAULT_ITERATIONS,
@@ -360,11 +361,7 @@ def _render_autoperf_interactive(
                 selected = only
 
     loaded = st.session_state.get("loaded_result")
-    if (
-        selected is None
-        and isinstance(loaded, TrackiqResult)
-        and str(loaded.tool_name).lower() == "autoperfpy"
-    ):
+    if selected is None and isinstance(loaded, TrackiqResult) and str(loaded.tool_name).lower() == "autoperfpy":
         selected = loaded
     if selected is None and args.result and Path(args.result).exists():
         loaded_arg = load_trackiq_result(args.result)
@@ -514,11 +511,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         tdp_watts=float(tdp_watts),
                         collective_backend=str(backend),
                         workload=str(workload),
-                        baseline_throughput=(
-                            float(baseline_throughput)
-                            if bool(use_baseline)
-                            else None
-                        ),
+                        baseline_throughput=(float(baseline_throughput) if bool(use_baseline) else None),
                     )
                     with st.spinner("Running MiniCluster..."):
                         st.session_state["trackiq_unified_minicluster_result"] = _run_minicluster_once(cfg)
@@ -531,19 +524,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                     and str(loaded.tool_name).lower() == "minicluster"
                 ):
                     selected = loaded
-                if (
-                    not isinstance(selected, TrackiqResult)
-                    and args.result
-                    and Path(args.result).exists()
-                ):
+                if not isinstance(selected, TrackiqResult) and args.result and Path(args.result).exists():
                     loaded_arg = load_trackiq_result(args.result)
                     if str(loaded_arg.tool_name).lower() == "minicluster":
                         selected = loaded_arg
 
                 if not isinstance(selected, TrackiqResult):
-                    st.info(
-                        "Use sidebar run configuration to generate a MiniCluster run, or load an existing result."
-                    )
+                    st.info("Use sidebar run configuration to generate a MiniCluster run, or load an existing result.")
                     return 0
 
                 dashboard = MiniClusterDashboard(result=selected)
@@ -629,9 +616,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     st.session_state["trackiq_unified_compare_b"] = load_trackiq_result(result_b_path)
                     st.session_state["trackiq_unified_compare_label_a"] = label_a
                     st.session_state["trackiq_unified_compare_label_b"] = label_b
-                    st.session_state["trackiq_unified_compare_regression_threshold"] = float(
-                        regression_threshold
-                    )
+                    st.session_state["trackiq_unified_compare_regression_threshold"] = float(regression_threshold)
 
             result_a = st.session_state.get("trackiq_unified_compare_a")
             result_b = st.session_state.get("trackiq_unified_compare_b")
@@ -680,6 +665,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 result_path = _validate_path(args.result, "--result")
                 run_dashboard(MiniClusterDashboard, result_path=result_path)
             else:
+
                 class _MiniClusterBrowserDashboard(MiniClusterDashboard):
                     def render_body(self) -> None:
                         import streamlit as st
