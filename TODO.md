@@ -238,6 +238,24 @@ Tasks:
 2. Add a quarterly debt burn-down checkpoint.
 3. Enforce "no new TODO without owner/date" rule in PR reviews.
 
+### 16.1) Refactor and dead-code cleanup sweep `[P1] [OPEN]`
+
+Problem: incremental feature delivery has left stale helpers/imports and partially duplicated logic that increase maintenance and regression risk.
+
+Tasks:
+
+1. Run static checks for unused imports, variables, functions, and unreachable paths.
+2. Remove dead modules/helpers and eliminate duplicate utility paths across `trackiq_core` and tool packages.
+3. Refactor oversized modules where cleanup exposes boundary issues.
+4. Add or update tests in every touched area to preserve behavior during cleanup.
+5. Add a CI guard for unused code/import regressions.
+
+Acceptance criteria:
+
+- No behavior regressions in run/save/compare/dashboard flows.
+- Measurable reduction in unused-code lint findings.
+- Changelog note describing removed deprecated/stale paths.
+
 ---
 
 ## Repository Quality Standards
@@ -299,4 +317,3 @@ Tasks:
 3. `[P1]` Start LLM schema integration (`ttft_ms`, KV metrics) behind additive fields.
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
-
