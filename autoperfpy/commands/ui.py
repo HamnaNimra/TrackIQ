@@ -1,4 +1,4 @@
-"""UI command handler for AutoPerfPy CLI."""
+﻿"""UI command handler for AutoPerfPy CLI."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def run_ui(args: Any, *, cli_file: str) -> int:
     ui_module = Path(cli_file).parent / "ui" / "streamlit_app.py"
 
     if not ui_module.exists():
-        print(f"Error: Streamlit app not found at {ui_module}", file=sys.stderr)
+        print(f"[ERROR] Streamlit app not found at {ui_module}", file=sys.stderr)
         return 1
 
     cmd = [
@@ -50,9 +50,10 @@ def run_ui(args: Any, *, cli_file: str) -> int:
         return 1
     except FileNotFoundError:
         print(
-            "Error: Streamlit not found. Install with: pip install streamlit",
+            "[ERROR] Streamlit not found. Install with: pip install streamlit",
             file=sys.stderr,
         )
         return 1
 
     return 0
+

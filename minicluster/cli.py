@@ -1,4 +1,4 @@
-"""Command-line interface for minicluster.
+﻿"""Command-line interface for minicluster.
 
 Provides subcommands for:
 - run: Execute distributed training harness
@@ -477,10 +477,10 @@ def cmd_bench_collective(args):
             backend=args.backend,
         )
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:  # pragma: no cover - defensive runtime guard
-        print(f"Error: Collective benchmark failed: {e}", file=sys.stderr)
+        print(f"[ERROR] Collective benchmark failed: {e}", file=sys.stderr)
         sys.exit(2)
 
     if args.output:
@@ -512,10 +512,10 @@ def cmd_validate(args):
         sys.exit(0 if report.overall_passed else 1)
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(2)
     except ValueError as e:
-        print(f"✗ Validation error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] Validation error: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -525,7 +525,7 @@ def cmd_fault_test(args):
         from minicluster.validators.fault_injector import FaultInjector
     except Exception as exc:
         print(
-            "Error: fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"',
+            "[ERROR] fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"',
             file=sys.stderr,
         )
         raise SystemExit(2) from exc
@@ -556,7 +556,7 @@ def cmd_baseline_save(args):
         print(f"[OK] Baseline '{args.name}' saved successfully")
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -597,7 +597,7 @@ def cmd_baseline_compare(args):
 
             print(
                 f"{metric_name:30} {comparison.baseline_value:12.6f} "
-                f"→ {comparison.current_value:12.6f} ({comparison.percent_change:+7.2f}%) {status}"
+                f"â†’ {comparison.current_value:12.6f} ({comparison.percent_change:+7.2f}%) {status}"
             )
 
         print("=" * 80 + "\n")
@@ -627,7 +627,7 @@ def cmd_baseline_compare(args):
         sys.exit(1 if regressions_found else 0)
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -636,10 +636,10 @@ def cmd_report_pdf(args):
     try:
         result = load_trackiq_result(args.result)
     except FileNotFoundError:
-        print(f"Error: Result file not found: {args.result}", file=sys.stderr)
+        print(f"[ERROR] Result file not found: {args.result}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:  # pragma: no cover - defensive parse guard
-        print(f"Error: Invalid TrackiqResult input: {e}", file=sys.stderr)
+        print(f"[ERROR] Invalid TrackiqResult input: {e}", file=sys.stderr)
         sys.exit(2)
 
     try:
@@ -652,7 +652,7 @@ def cmd_report_pdf(args):
             author="minicluster",
         )
     except PdfBackendError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
 
     if outcome.used_fallback:
@@ -667,10 +667,10 @@ def cmd_report_html(args):
         try:
             result = load_trackiq_result(path)
         except FileNotFoundError:
-            print(f"Error: Result file not found: {path}", file=sys.stderr)
+            print(f"[ERROR] Result file not found: {path}", file=sys.stderr)
             sys.exit(2)
         except Exception as e:  # pragma: no cover - defensive parse guard
-            print(f"Error: Invalid TrackiqResult input ({path}): {e}", file=sys.stderr)
+            print(f"[ERROR] Invalid TrackiqResult input ({path}): {e}", file=sys.stderr)
             sys.exit(2)
         results.append(result)
 
@@ -681,7 +681,7 @@ def cmd_report_html(args):
             title=args.title,
         )
     except Exception as e:
-        print(f"Error: Failed to generate HTML report: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to generate HTML report: {e}", file=sys.stderr)
         sys.exit(2)
 
     mode = "consolidated" if len(results) > 1 else "single-run"
@@ -694,13 +694,13 @@ def cmd_report_heatmap(args):
         rows = load_worker_results_from_dir(args.results_dir, args.metric)
         generate_cluster_heatmap(rows, metric=args.metric, output_path=args.output)
     except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:  # pragma: no cover - defensive runtime guard
-        print(f"Error: Failed to generate heatmap report: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to generate heatmap report: {e}", file=sys.stderr)
         sys.exit(2)
 
     print(f"[OK] Heatmap report generated: {args.output}")
@@ -715,13 +715,13 @@ def cmd_report_fault_timeline(args):
             raise ValueError("Fault report JSON must be an object.")
         generate_fault_timeline(report, output_path=args.output)
     except FileNotFoundError:
-        print(f"Error: Fault report file not found: {args.json}", file=sys.stderr)
+        print(f"[ERROR] Fault report file not found: {args.json}", file=sys.stderr)
         sys.exit(2)
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:  # pragma: no cover - defensive runtime guard
-        print(f"Error: Failed to generate fault timeline report: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to generate fault timeline report: {e}", file=sys.stderr)
         sys.exit(2)
 
     print(f"[OK] Fault timeline report generated: {args.output}")
@@ -818,3 +818,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

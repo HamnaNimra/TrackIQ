@@ -1,4 +1,4 @@
-"""Analyze command handlers for AutoPerfPy CLI."""
+﻿"""Analyze command handlers for AutoPerfPy CLI."""
 
 from __future__ import annotations
 
@@ -62,11 +62,11 @@ def run_analyze_latency(
     try:
         csv_path, cleanup_paths = _resolve_csv_input(args, run_default_benchmark)
     except (HardwareNotFoundError, DependencyError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     if not csv_path:
-        print("Error: Could not generate benchmark CSV", file=sys.stderr)
+        print("[ERROR] Could not generate benchmark CSV", file=sys.stderr)
         return None
 
     try:
@@ -111,7 +111,7 @@ def run_analyze_dnn_pipeline(args: Any, config: Any) -> Any:
             content = handle.read()
         result = analyzer.analyze_profiler_output(content)
     else:
-        print("Error: Either --csv or --profiler must be specified", file=sys.stderr)
+        print("[ERROR] Either --csv or --profiler must be specified", file=sys.stderr)
         return None
 
     print("\nDNN Pipeline Analysis")
@@ -208,11 +208,11 @@ def run_analyze_efficiency(
     try:
         csv_path, cleanup_paths = _resolve_csv_input(args, run_default_benchmark)
     except (HardwareNotFoundError, DependencyError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     if not csv_path:
-        print("Error: Could not generate benchmark CSV", file=sys.stderr)
+        print("[ERROR] Could not generate benchmark CSV", file=sys.stderr)
         return None
 
     try:
@@ -247,11 +247,11 @@ def run_analyze_variability(
     try:
         csv_path, cleanup_paths = _resolve_csv_input(args, run_default_benchmark)
     except (HardwareNotFoundError, DependencyError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     if not csv_path:
-        print("Error: Could not generate benchmark CSV", file=sys.stderr)
+        print("[ERROR] Could not generate benchmark CSV", file=sys.stderr)
         return None
 
     try:
@@ -273,3 +273,4 @@ def run_analyze_variability(
         return result
     finally:
         _cleanup_paths(cleanup_paths)
+

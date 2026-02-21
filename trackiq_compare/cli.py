@@ -114,7 +114,7 @@ def run_report_pdf(args: argparse.Namespace) -> int:
             author="trackiq-compare",
         )
     except PdfBackendError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return 2
     finally:
         try:

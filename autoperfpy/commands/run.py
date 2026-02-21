@@ -1,4 +1,4 @@
-"""Run/profile/device command handlers for AutoPerfPy CLI."""
+﻿"""Run/profile/device command handlers for AutoPerfPy CLI."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def run_profiles(args: Any) -> int:
         try:
             profile = get_profile(args.info)
         except ValueError as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+            print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
 
         print(f"\nProfile: {profile.name}")
@@ -260,7 +260,7 @@ def run_with_profile(
     try:
         profile = get_profile(profile_name)
     except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     collector_map = {
@@ -274,14 +274,14 @@ def run_with_profile(
     try:
         validate_profile_collector(profile, collector_type)
     except ProfileValidationError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     requested_precision = str(getattr(args, "precision", PRECISION_FP32) or PRECISION_FP32).lower()
     try:
         validate_profile_precision(profile, requested_precision)
     except ProfileValidationError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
 
     if args.validate_only:
@@ -311,7 +311,7 @@ def run_with_profile(
         try:
             from autoperfpy.collectors import NVMLCollector
         except ImportError as exc:
-            print(f"Error: NVML collector requires nvidia-ml-py. {exc}", file=sys.stderr)
+            print(f"[ERROR] NVML collector requires nvidia-ml-py. {exc}", file=sys.stderr)
             raise DependencyError(
                 "NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py"
             ) from exc
@@ -331,14 +331,14 @@ def run_with_profile(
         try:
             from autoperfpy.collectors import PsutilCollector
         except ImportError as exc:
-            print(f"Error: Psutil collector requires psutil. {exc}", file=sys.stderr)
+            print(f"[ERROR] Psutil collector requires psutil. {exc}", file=sys.stderr)
             raise DependencyError("Psutil collector requires psutil. Install with: pip install psutil") from exc
         collector = PsutilCollector(config=profile.get_synthetic_config() or {})
     elif collector_type == CollectorType.TEGRASTATS:
         try:
             from autoperfpy.collectors import TegrastatsCollector
         except ImportError as exc:
-            print(f"Error: Tegrastats collector not available. {exc}", file=sys.stderr)
+            print(f"[ERROR] Tegrastats collector not available. {exc}", file=sys.stderr)
             raise DependencyError(
                 "Tegrastats collector requires Jetson/tegrastats. Use --collector synthetic on non-Jetson."
             ) from exc
@@ -488,3 +488,4 @@ def run_with_profile(
             print("No samples to export as CSV", file=sys.stderr)
 
     return export
+

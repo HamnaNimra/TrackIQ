@@ -1,4 +1,4 @@
-"""Report command handlers for AutoPerfPy CLI."""
+﻿"""Report command handlers for AutoPerfPy CLI."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def run_report_html(
                 args.json = json_path
                 json_path_to_cleanup = json_path
         except (HardwareNotFoundError, DependencyError) as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+            print(f"[ERROR] {exc}", file=sys.stderr)
             return None
 
     try:
@@ -278,7 +278,7 @@ def run_report_pdf(
                 args.json = json_path
                 json_path_to_cleanup = json_path
         except (HardwareNotFoundError, DependencyError) as exc:
-            print(f"Error: {exc}", file=sys.stderr)
+            print(f"[ERROR] {exc}", file=sys.stderr)
             return None
 
     try:
@@ -375,7 +375,7 @@ def run_report_pdf(
         print(f"\n[OK] PDF report generated: {report_output}")
         return {"output_path": report_output}
     except PdfBackendError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return None
     finally:
         if json_path_to_cleanup and os.path.exists(json_path_to_cleanup):
@@ -383,3 +383,4 @@ def run_report_pdf(
                 os.unlink(json_path_to_cleanup)
             except OSError:
                 pass
+
