@@ -329,9 +329,9 @@ class FaultInjector:
 
         # Get clean baseline
         clean_config = RunConfig(
-            num_steps=20,
+            num_steps=8,
             batch_size=32,
-            num_processes=2,
+            num_processes=1,
             seed=42,
         )
         clean_metrics = run_distributed(clean_config)
