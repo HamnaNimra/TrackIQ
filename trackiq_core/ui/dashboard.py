@@ -32,6 +32,17 @@ class TrackiqDashboard(ABC):
             return self.result[0]
         return self.result
 
+    def expected_tool_names(self) -> Optional[List[str]]:
+        """Return allowed tool names for browser-loaded results, or None for any."""
+        return None
+
+    def _is_result_compatible(self, result: TrackiqResult) -> bool:
+        allowed = self.expected_tool_names()
+        if not allowed:
+            return True
+        normalized_allowed = {str(item).strip().lower() for item in allowed}
+        return str(result.tool_name).strip().lower() in normalized_allowed
+
     def configure_page(self) -> None:
         """Configure Streamlit page metadata."""
         import streamlit as st
@@ -81,7 +92,10 @@ class TrackiqDashboard(ABC):
         import streamlit as st
 
         with st.expander("Load Result", expanded=False):
-            ResultBrowser(theme=self.theme).render()
+            ResultBrowser(
+                theme=self.theme,
+                allowed_tools=self.expected_tool_names(),
+            ).render()
 
     def render_trend_section(
         self,
@@ -201,7 +215,15 @@ class TrackiqDashboard(ABC):
 
         loaded_result = st.session_state.get("loaded_result")
         if loaded_result is not None and not isinstance(self.result, list):
-            self.result = loaded_result
+            if isinstance(loaded_result, TrackiqResult) and self._is_result_compatible(loaded_result):
+                self.result = loaded_result
+            elif isinstance(loaded_result, TrackiqResult):
+                st.session_state.pop("loaded_result", None)
+                st.session_state.pop("loaded_result_path", None)
+                with st.sidebar:
+                    st.warning(
+                        f"Ignored loaded result for tool '{loaded_result.tool_name}' in this dashboard."
+                    )
 
         result = self._primary_result()
         with st.sidebar:

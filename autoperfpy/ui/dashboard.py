@@ -7,7 +7,7 @@ from typing import Dict
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    DARK_THEME,
+    LIGHT_THEME,
     MetricTable,
     PowerGauge,
     RegressionBadge,
@@ -22,10 +22,14 @@ class AutoPerfDashboard(TrackiqDashboard):
     def __init__(
         self,
         result: TrackiqResult,
-        theme: TrackiqTheme = DARK_THEME,
+        theme: TrackiqTheme = LIGHT_THEME,
         title: str = "AutoPerfPy Dashboard",
     ) -> None:
         super().__init__(result=result, theme=theme, title=title)
+
+    def expected_tool_names(self) -> list[str]:
+        """AutoPerf dashboard should only load AutoPerfPy results."""
+        return ["autoperfpy"]
 
     def build_components(self) -> Dict[str, object]:
         """Build component instances for testing and rendering."""

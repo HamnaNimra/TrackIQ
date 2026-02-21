@@ -15,13 +15,20 @@ class ResultBrowser:
     def __init__(
         self,
         search_paths: Optional[List[str]] = None,
+        allowed_tools: Optional[List[str]] = None,
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
         self.search_paths = search_paths or [
+            "./output",
             "./minicluster_results",
             "./autoperfpy_results",
             "./trackiq_compare_results",
         ]
+        self.allowed_tools = (
+            {str(tool).strip().lower() for tool in allowed_tools if str(tool).strip()}
+            if allowed_tools
+            else None
+        )
         self.theme = theme
 
     def _scan_results(self) -> List[Dict[str, Any]]:
@@ -35,6 +42,10 @@ class ResultBrowser:
                     result = load_trackiq_result(json_path)
                 except Exception:
                     continue
+                if self.allowed_tools is not None:
+                    tool_name = str(result.tool_name).strip().lower()
+                    if tool_name not in self.allowed_tools:
+                        continue
                 stat = json_path.stat()
                 rows.append(
                     {
@@ -96,7 +107,14 @@ class ResultBrowser:
                 )
             with col_load:
                 if st.button("Load", key=f"trackiq_load_{idx}"):
-                    st.session_state["loaded_result"] = load_trackiq_result(row["path"])
+                    loaded = load_trackiq_result(row["path"])
+                    tool_name = str(loaded.tool_name).strip().lower()
+                    if self.allowed_tools is not None and tool_name not in self.allowed_tools:
+                        st.error(
+                            f"Loaded result tool '{loaded.tool_name}' is not allowed in this dashboard."
+                        )
+                        continue
+                    st.session_state["loaded_result"] = loaded
                     st.session_state["loaded_result_path"] = row["path"]
                     if hasattr(st, "rerun"):
                         st.rerun()
@@ -107,7 +125,16 @@ class ResultBrowser:
         manual_path = st.text_input("Manual file path", key="trackiq_manual_result_path")
         if st.button("Load Manual Path", key="trackiq_manual_load"):
             try:
-                st.session_state["loaded_result"] = load_trackiq_result(manual_path)
+                loaded = load_trackiq_result(manual_path)
+                tool_name = str(loaded.tool_name).strip().lower()
+                if self.allowed_tools is not None and tool_name not in self.allowed_tools:
+                    allowed = ", ".join(sorted(self.allowed_tools))
+                    st.error(
+                        f"Result tool '{loaded.tool_name}' is not allowed here. "
+                        f"Allowed tools: {allowed}"
+                    )
+                    return
+                st.session_state["loaded_result"] = loaded
                 st.session_state["loaded_result_path"] = manual_path
                 if hasattr(st, "rerun"):
                     st.rerun()
@@ -115,4 +142,3 @@ class ResultBrowser:
                     st.experimental_rerun()
             except Exception as exc:
                 st.error(f"Failed to load result file: {exc}")
-
