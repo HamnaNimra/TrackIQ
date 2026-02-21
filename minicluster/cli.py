@@ -9,8 +9,10 @@ Provides subcommands for:
 """
 
 import argparse
+import json
 import sys
 
+from minicluster.benchmarks import run_collective_benchmark, save_collective_benchmark
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
 from minicluster.reporting import MiniClusterHtmlReporter
@@ -333,6 +335,45 @@ def setup_report_parser(subparsers):
     pdf_parser.set_defaults(func=cmd_report_pdf)
 
 
+def setup_bench_collective_parser(subparsers):
+    """Setup 'minicluster bench-collective' subcommand."""
+    parser = subparsers.add_parser(
+        "bench-collective",
+        help="Benchmark all-reduce bandwidth without compute overhead",
+        description="Run communication-only collective benchmark",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Number of worker processes (default: 2)",
+    )
+    parser.add_argument(
+        "--size-mb",
+        type=float,
+        default=256.0,
+        help="All-reduce tensor size in MB (default: 256.0)",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=50,
+        help="Number of all-reduce iterations (default: 50)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["gloo", "nccl"],
+        default="gloo",
+        help="Collective communication backend (default: gloo)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Optional output path for benchmark JSON",
+    )
+    parser.set_defaults(func=cmd_bench_collective)
+
+
 def cmd_run(args):
     """Execute 'minicluster run' command."""
     config = RunConfig(
@@ -369,6 +410,35 @@ def cmd_run(args):
     print(f"  Final loss: {metrics.steps[-1].loss:.6f}")
     print(f"  Avg throughput: {metrics.to_dict()['average_throughput_samples_per_sec']:.1f} samples/sec")
     print(f"  Metrics saved to: {args.output}")
+
+
+def cmd_bench_collective(args):
+    """Execute 'minicluster bench-collective' command."""
+    try:
+        result = run_collective_benchmark(
+            workers=int(args.workers),
+            size_mb=float(args.size_mb),
+            iterations=int(args.iterations),
+            backend=args.backend,
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"Error: Collective benchmark failed: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.output:
+        save_collective_benchmark(result, args.output)
+        print(f"[OK] Collective benchmark written to: {args.output}")
+    else:
+        print(json.dumps(result, indent=2))
+
+    print(
+        f"[OK] mean={result['mean_bandwidth_gbps']:.3f} GB/s, "
+        f"p99={result['p99_bandwidth_gbps']:.3f} GB/s, "
+        f"min={result['min_bandwidth_gbps']:.3f} GB/s"
+    )
 
 
 def cmd_validate(args):
@@ -584,6 +654,9 @@ Examples:
   # Run fault injection tests
   minicluster fault-test --steps 50
 
+  # Run communication-only all-reduce benchmark
+  minicluster bench-collective --workers 2 --size-mb 256 --iterations 50
+
   # Save baseline after stable run
   minicluster baseline save --metrics run.json --name stable_v1
 
@@ -603,6 +676,7 @@ Examples:
     setup_run_parser(subparsers)
     setup_validate_parser(subparsers)
     setup_fault_test_parser(subparsers)
+    setup_bench_collective_parser(subparsers)
     setup_baseline_parser(subparsers)
     setup_report_parser(subparsers)
     register_monitor_subcommand(subparsers)
