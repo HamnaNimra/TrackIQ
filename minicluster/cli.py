@@ -259,7 +259,7 @@ def cmd_run(args):
     metrics = run_distributed(config)
 
     save_metrics(metrics, args.output)
-    print(f"\n✓ Run complete!")
+    print("\n[OK] Run complete!")
     print(f"  Total time: {metrics.total_time_sec:.2f}s")
     print(f"  Final loss: {metrics.steps[-1].loss:.6f}")
     print(f"  Avg throughput: {metrics.to_dict()['average_throughput_samples_per_sec']:.1f} samples/sec")
@@ -314,7 +314,7 @@ def cmd_baseline_save(args):
         detector = RegressionDetector(baseline_dir=args.baseline_dir)
 
         detector.save_baseline(args.name, metrics)
-        print(f"✓ Baseline '{args.name}' saved successfully")
+        print(f"[OK] Baseline '{args.name}' saved successfully")
 
     except FileNotFoundError as e:
         print(f"✗ Error: {str(e)}", file=sys.stderr)
@@ -352,7 +352,7 @@ def cmd_baseline_compare(args):
 
         regressions_found = False
         for metric_name, comparison in comparisons.items():
-            status = "✓" if not comparison.is_regression else "✗ REGRESS"
+            status = "OK" if not comparison.is_regression else "REGRESS"
             if comparison.is_regression:
                 regressions_found = True
 
