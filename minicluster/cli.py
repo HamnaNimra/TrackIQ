@@ -71,6 +71,12 @@ def setup_run_parser(subparsers):
         help="Random seed for reproducibility (default: 42)",
     )
     parser.add_argument(
+        "--tdp-watts",
+        type=float,
+        default=150.0,
+        help="TDP used by simulated power profiler (default: 150.0)",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default="./minicluster_results/run_metrics.json",
@@ -239,6 +245,7 @@ def cmd_run(args):
         num_layers=args.num_layers,
         num_processes=args.workers,
         seed=args.seed,
+        tdp_watts=args.tdp_watts,
     )
 
     if args.verbose:
