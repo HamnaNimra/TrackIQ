@@ -113,6 +113,18 @@ def test_dashboard_launcher_missing_file_raises_clear_system_exit() -> None:
         root_dashboard.main(["--tool", "autoperfpy", "--result", "missing-result.json"])
 
 
+def test_cluster_health_launcher_requires_result_argument() -> None:
+    """Cluster-health mode should require --result path."""
+    with pytest.raises(SystemExit, match="--result is required"):
+        root_dashboard.main(["--tool", "cluster-health"])
+
+
+def test_cluster_health_launcher_missing_result_file_raises_clear_system_exit() -> None:
+    """Cluster-health mode should fail clearly when --result does not exist."""
+    with pytest.raises(SystemExit, match="--result does not exist"):
+        root_dashboard.main(["--tool", "cluster-health", "--result", "missing-minicluster.json"])
+
+
 def test_detect_platform_vendor_cases() -> None:
     """Vendor detection should normalize known platform names."""
     assert detect_platform_vendor("AMD MI300X") == "AMD"
