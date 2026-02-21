@@ -17,3 +17,25 @@ def test_report_without_subcommand_exits_nonzero(monkeypatch: pytest.MonkeyPatch
     assert exc.value.code == 1
     output = capsys.readouterr().out.lower()
     assert "usage: minicluster report" in output
+
+
+def test_run_parser_accepts_backend_workload_and_baseline() -> None:
+    """`minicluster run` parser should accept new cluster-health options."""
+    parser = minicluster_cli.setup_main_parser()
+    args = parser.parse_args(
+        [
+            "run",
+            "--workers",
+            "2",
+            "--backend",
+            "gloo",
+            "--workload",
+            "mlp",
+            "--baseline-throughput",
+            "42.0",
+        ]
+    )
+    assert args.command == "run"
+    assert args.backend == "gloo"
+    assert args.workload == "mlp"
+    assert args.baseline_throughput == pytest.approx(42.0)

@@ -31,6 +31,7 @@ class TestDistributedValidationConfig:
         assert config.loss_tolerance == 0.01
         assert config.num_processes == 2
         assert config.regression_threshold == 5.0
+        assert config.backend == "gloo"
 
 
 class TestSimpleMLP:

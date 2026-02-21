@@ -4,6 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
 import torch
 
 from minicluster.runner import (
@@ -192,6 +193,46 @@ class TestMetricsSerialization:
         parsed = json.loads(json_str)
         assert len(parsed["steps"]) == 5
 
+    def test_runmetrics_allreduce_aggregates_none_with_fewer_than_two_steps(self):
+        """All aggregate all-reduce fields should be None when fewer than 2 steps exist."""
+        metrics = run_distributed(RunConfig(num_steps=1, num_processes=1, seed=42))
+        payload = metrics.to_dict()
+
+        assert payload["p50_allreduce_ms"] is None
+        assert payload["p95_allreduce_ms"] is None
+        assert payload["p99_allreduce_ms"] is None
+        assert payload["max_allreduce_ms"] is None
+        assert payload["allreduce_stdev_ms"] is None
+
+    def test_runmetrics_allreduce_aggregates_present_with_two_or_more_steps(self):
+        """All aggregate all-reduce fields should be populated with 2+ steps."""
+        metrics = run_distributed(RunConfig(num_steps=3, num_processes=1, seed=42))
+        payload = metrics.to_dict()
+
+        assert isinstance(payload["p50_allreduce_ms"], float)
+        assert isinstance(payload["p95_allreduce_ms"], float)
+        assert isinstance(payload["p99_allreduce_ms"], float)
+        assert isinstance(payload["max_allreduce_ms"], float)
+        assert isinstance(payload["allreduce_stdev_ms"], float)
+        assert payload["collective_backend"] == "gloo"
+        assert payload["workload_type"] == "mlp"
+
+    def test_runmetrics_scaling_efficiency_from_baseline_throughput(self):
+        """Scaling efficiency should be computed when baseline throughput is provided."""
+        config = RunConfig(num_steps=2, num_processes=2, baseline_throughput=50.0)
+        metrics = run_distributed(RunConfig(num_steps=2, num_processes=1, seed=42))
+        metrics.num_workers = 2
+        metrics.config = config.__dict__.copy()
+        metrics.steps = [
+            metrics.steps[0],
+            metrics.steps[1],
+        ]
+        metrics.steps[0].throughput_samples_per_sec = 100.0
+        metrics.steps[1].throughput_samples_per_sec = 100.0
+
+        payload = metrics.to_dict()
+        assert payload["scaling_efficiency_pct"] == pytest.approx(100.0)
+
 
 class TestMultiProcessTraining:
     """Tests for multi-process training via run_distributed function.
@@ -244,6 +285,21 @@ def test_minicluster_power_profiler_integration_full_session(tmp_path):
 
     assert result.metrics.power_consumption_watts is not None
     assert result.metrics.performance_per_watt is not None
+
+
+def test_minicluster_save_metrics_writes_scaling_efficiency_metric(tmp_path):
+    """Canonical TrackiqResult should include scaling_efficiency_pct when available."""
+    metrics = run_distributed(RunConfig(num_steps=2, num_processes=1, seed=42))
+    metrics.num_workers = 2
+    metrics.config["baseline_throughput"] = 50.0
+    metrics.steps[0].throughput_samples_per_sec = 100.0
+    metrics.steps[1].throughput_samples_per_sec = 100.0
+
+    output_path = tmp_path / "minicluster_scaling_result.json"
+    save_metrics(metrics, str(output_path))
+    result = load_trackiq_result(output_path)
+
+    assert result.metrics.scaling_efficiency_pct == pytest.approx(100.0)
 
 
 def test_determine_worker_status_healthy() -> None:

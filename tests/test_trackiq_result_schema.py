@@ -94,6 +94,14 @@ def test_trackiq_result_validation_fails_on_invalid_llm_metric_type() -> None:
         validate_trackiq_result(payload)
 
 
+def test_trackiq_result_validation_fails_on_invalid_scaling_efficiency_type() -> None:
+    """Validator should reject non-numeric scaling efficiency values."""
+    payload = _sample_result().to_dict()
+    payload["metrics"]["scaling_efficiency_pct"] = "high"
+    with pytest.raises(TypeError, match="metrics.scaling_efficiency_pct"):
+        validate_trackiq_result(payload)
+
+
 def test_trackiq_result_null_handling_for_optional_fields(tmp_path) -> None:
     """Optional nullable fields should be preserved through save/load."""
     path = tmp_path / "trackiq_result_nulls.json"
@@ -129,6 +137,17 @@ def test_new_power_fields_round_trip_through_dict_conversion() -> None:
     assert loaded.metrics.energy_per_step_joules == 12.5
     assert loaded.metrics.performance_per_watt == 3.2
     assert loaded.metrics.temperature_celsius == 71.4
+
+
+def test_scaling_efficiency_round_trip_through_dict_conversion() -> None:
+    """Optional scaling_efficiency_pct should round-trip via to_dict/from_dict."""
+    source = _sample_result()
+    source.metrics.scaling_efficiency_pct = 92.5
+
+    payload = source.to_dict()
+    loaded = TrackiqResult.from_dict(payload)
+
+    assert loaded.metrics.scaling_efficiency_pct == 92.5
 
 
 def test_new_llm_fields_round_trip_through_dict_conversion() -> None:
