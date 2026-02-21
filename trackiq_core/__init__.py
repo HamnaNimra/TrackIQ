@@ -62,6 +62,21 @@ from trackiq_core.schema import (
 from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
 from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
 
+# UI layer
+from trackiq_core.ui import (
+    TrackiqDashboard,
+    TrackiqTheme,
+    DARK_THEME,
+    LIGHT_THEME,
+    run_dashboard,
+    MetricTable,
+    LossChart,
+    RegressionBadge,
+    WorkerGrid,
+    PowerGauge,
+    ComparisonTable,
+)
+
 __all__ = [
     # Utils
     "safe_get",
@@ -111,4 +126,16 @@ __all__ = [
     "load_trackiq_result",
     "validate_trackiq_result",
     "validate_trackiq_result_obj",
+    # UI layer
+    "TrackiqDashboard",
+    "TrackiqTheme",
+    "DARK_THEME",
+    "LIGHT_THEME",
+    "run_dashboard",
+    "MetricTable",
+    "LossChart",
+    "RegressionBadge",
+    "WorkerGrid",
+    "PowerGauge",
+    "ComparisonTable",
 ]
