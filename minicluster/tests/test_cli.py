@@ -65,3 +65,44 @@ def test_bench_collective_parser_accepts_expected_args() -> None:
     assert args.iterations == 10
     assert args.backend == "gloo"
     assert args.output == "bench.json"
+
+
+def test_report_heatmap_parser_accepts_expected_args() -> None:
+    """`minicluster report heatmap` parser should accept expected arguments."""
+    parser = minicluster_cli.setup_main_parser()
+    args = parser.parse_args(
+        [
+            "report",
+            "heatmap",
+            "--results-dir",
+            "worker_results",
+            "--metric",
+            "p99_allreduce_ms",
+            "--output",
+            "heatmap.html",
+        ]
+    )
+    assert args.command == "report"
+    assert args.report_cmd == "heatmap"
+    assert args.results_dir == "worker_results"
+    assert args.metric == "p99_allreduce_ms"
+    assert args.output == "heatmap.html"
+
+
+def test_report_fault_timeline_parser_accepts_expected_args() -> None:
+    """`minicluster report fault-timeline` parser should accept expected arguments."""
+    parser = minicluster_cli.setup_main_parser()
+    args = parser.parse_args(
+        [
+            "report",
+            "fault-timeline",
+            "--json",
+            "fault_report.json",
+            "--output",
+            "fault_timeline.html",
+        ]
+    )
+    assert args.command == "report"
+    assert args.report_cmd == "fault-timeline"
+    assert args.json == "fault_report.json"
+    assert args.output == "fault_timeline.html"

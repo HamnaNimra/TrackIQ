@@ -15,7 +15,12 @@ import sys
 from minicluster.benchmarks import run_collective_benchmark, save_collective_benchmark
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
-from minicluster.reporting import MiniClusterHtmlReporter
+from minicluster.reporting import (
+    MiniClusterHtmlReporter,
+    generate_cluster_heatmap,
+    generate_fault_timeline,
+    load_worker_results_from_dir,
+)
 from minicluster.runner import RunConfig, run_distributed, save_metrics
 from trackiq_core.reporting import (
     PDF_BACKENDS,
@@ -334,6 +339,49 @@ def setup_report_parser(subparsers):
     )
     pdf_parser.set_defaults(func=cmd_report_pdf)
 
+    heatmap_parser = report_subparsers.add_parser(
+        "heatmap",
+        help="Generate cluster health heatmap from per-worker JSON files",
+    )
+    heatmap_parser.add_argument(
+        "--results-dir",
+        required=True,
+        help="Directory containing per-worker JSON files",
+    )
+    heatmap_parser.add_argument(
+        "--metric",
+        choices=[
+            "allreduce_time_ms",
+            "p99_allreduce_ms",
+            "throughput_samples_per_sec",
+            "compute_time_ms",
+        ],
+        default="allreduce_time_ms",
+        help="Metric to visualize in heatmap (default: allreduce_time_ms)",
+    )
+    heatmap_parser.add_argument(
+        "--output",
+        default="./minicluster_results/heatmap.html",
+        help="Output HTML file path (default: ./minicluster_results/heatmap.html)",
+    )
+    heatmap_parser.set_defaults(func=cmd_report_heatmap)
+
+    fault_timeline_parser = report_subparsers.add_parser(
+        "fault-timeline",
+        help="Generate fault injection timeline HTML report",
+    )
+    fault_timeline_parser.add_argument(
+        "--json",
+        required=True,
+        help="Path to fault-test report JSON (e.g. output from `minicluster fault-test`)",
+    )
+    fault_timeline_parser.add_argument(
+        "--output",
+        default="./minicluster_results/fault_timeline.html",
+        help="Output HTML file path (default: ./minicluster_results/fault_timeline.html)",
+    )
+    fault_timeline_parser.set_defaults(func=cmd_report_fault_timeline)
+
 
 def setup_bench_collective_parser(subparsers):
     """Setup 'minicluster bench-collective' subcommand."""
@@ -633,6 +681,45 @@ def cmd_report_html(args):
     print(f"[OK] HTML report generated ({mode}): {output_path}")
 
 
+def cmd_report_heatmap(args):
+    """Execute `minicluster report heatmap` command."""
+    try:
+        rows = load_worker_results_from_dir(args.results_dir, args.metric)
+        generate_cluster_heatmap(rows, metric=args.metric, output_path=args.output)
+    except FileNotFoundError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"Error: Failed to generate heatmap report: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"[OK] Heatmap report generated: {args.output}")
+
+
+def cmd_report_fault_timeline(args):
+    """Execute `minicluster report fault-timeline` command."""
+    try:
+        with open(args.json, encoding="utf-8") as handle:
+            report = json.load(handle)
+        if not isinstance(report, dict):
+            raise ValueError("Fault report JSON must be an object.")
+        generate_fault_timeline(report, output_path=args.output)
+    except FileNotFoundError:
+        print(f"Error: Fault report file not found: {args.json}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"Error: Failed to generate fault timeline report: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"[OK] Fault timeline report generated: {args.output}")
+
+
 def setup_main_parser() -> argparse.ArgumentParser:
     """Setup main argument parser with all subcommands.
 
@@ -668,6 +755,12 @@ Examples:
 
   # Generate consolidated HTML report from multiple configs
   minicluster report html --result run_cfg_a.json run_cfg_b.json --output ./minicluster_results/report.html
+
+  # Generate worker heatmap from per-worker JSON files
+  minicluster report heatmap --results-dir ./minicluster_results/workers --metric p99_allreduce_ms --output ./minicluster_results/heatmap.html
+
+  # Generate fault timeline HTML report
+  minicluster report fault-timeline --json ./minicluster_results/fault_report.json --output ./minicluster_results/fault_timeline.html
         """,
     )
 
