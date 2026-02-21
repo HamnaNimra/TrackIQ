@@ -6,6 +6,7 @@ trackiq_core package-level initializers, which may pull optional heavy deps.
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict
@@ -17,6 +18,7 @@ def _load_module(name: str, file_path: Path) -> ModuleType:
     if spec is None or spec.loader is None:
         raise ImportError(f"Unable to load module {name} from {file_path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
