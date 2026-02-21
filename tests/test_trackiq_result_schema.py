@@ -96,3 +96,26 @@ def test_trackiq_result_null_handling_for_optional_fields(tmp_path) -> None:
     assert loaded.metrics.communication_overhead_percent is None
     assert loaded.metrics.power_consumption_watts is None
     assert loaded.regression.baseline_id is None
+
+
+def test_from_dict_defaults_schema_version_when_missing() -> None:
+    """Loading payload without schema_version should default to 1.0.0."""
+    payload = _sample_result().to_dict()
+    del payload["schema_version"]
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.schema_version == "1.0.0"
+
+
+def test_new_power_fields_round_trip_through_dict_conversion() -> None:
+    """New optional power/thermal fields should round-trip via to_dict/from_dict."""
+    source = _sample_result()
+    source.metrics.energy_per_step_joules = 12.5
+    source.metrics.performance_per_watt = 3.2
+    source.metrics.temperature_celsius = 71.4
+
+    payload = source.to_dict()
+    loaded = TrackiqResult.from_dict(payload)
+
+    assert loaded.metrics.energy_per_step_joules == 12.5
+    assert loaded.metrics.performance_per_watt == 3.2
+    assert loaded.metrics.temperature_celsius == 71.4
