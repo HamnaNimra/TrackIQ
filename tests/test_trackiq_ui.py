@@ -231,6 +231,7 @@ def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
     dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
     assert hasattr(dash, "render_device_panel")
     assert hasattr(dash, "render_result_browser")
+    assert hasattr(dash, "render_download_section")
 
 
 def test_power_gauge_placeholder_with_null_metrics_and_live_device_none() -> None:
@@ -262,3 +263,40 @@ def test_apply_theme_css_contains_font_and_background(monkeypatch: pytest.Monkey
     dash.apply_theme(DARK_THEME)
     assert DARK_THEME.font_family in captured["css"]
     assert DARK_THEME.background_color in captured["css"]
+
+
+def test_render_download_section_emits_two_download_buttons(monkeypatch: pytest.MonkeyPatch) -> None:
+    """render_download_section should render JSON and HTML download buttons."""
+    calls = {"labels": []}
+
+    class _Ctx:
+        def __enter__(self):  # noqa: D401
+            return self
+
+        def __exit__(self, exc_type, exc, tb):  # noqa: D401, ANN001
+            return False
+
+    class _FakeStreamlit:
+        @staticmethod
+        def markdown(*args, **kwargs):  # noqa: ANN001
+            return None
+
+        @staticmethod
+        def columns(n):  # noqa: ANN001
+            return tuple(_Ctx() for _ in range(n))
+
+        @staticmethod
+        def download_button(label, **kwargs):  # noqa: ANN001
+            calls["labels"].append(label)
+            return True
+
+    monkeypatch.setitem(sys.modules, "streamlit", _FakeStreamlit)
+
+    class _Dash(TrackiqDashboard):
+        def render_body(self) -> None:
+            return None
+
+    dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
+    dash.render_download_section()
+    assert "Download JSON" in calls["labels"]
+    assert "Download HTML Report" in calls["labels"]

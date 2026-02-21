@@ -6,7 +6,11 @@ import pytest
 
 from autoperfpy.ui.dashboard import AutoPerfDashboard
 from minicluster.ui.dashboard import MiniClusterDashboard
-from trackiq_compare.ui.dashboard import CompareDashboard
+from trackiq_compare.ui.dashboard import (
+    VENDOR_COLORS,
+    CompareDashboard,
+    detect_platform_vendor,
+)
 from trackiq_core.schema import (
     Metrics,
     PlatformInfo,
@@ -110,3 +114,41 @@ def test_dashboard_launcher_missing_file_raises_clear_system_exit() -> None:
     with pytest.raises(SystemExit, match="--result does not exist"):
         root_dashboard.main(["--tool", "autoperfpy", "--result", "missing-result.json"])
 
+
+def test_detect_platform_vendor_cases() -> None:
+    """Vendor detection should normalize known platform names."""
+    assert detect_platform_vendor("AMD MI300X") == "AMD"
+    assert detect_platform_vendor("NVIDIA A100") == "NVIDIA"
+    assert detect_platform_vendor("Intel Arc A770") == "Intel"
+    assert detect_platform_vendor("Apple M2 Pro") == "Apple"
+    assert detect_platform_vendor("Qualcomm Snapdragon 8 Gen 3") == "Qualcomm"
+    assert detect_platform_vendor("Intel Core i9") in {"CPU", "Intel"}
+    assert detect_platform_vendor("Unknown Device XYZ") == "Unknown"
+
+
+def test_platform_comparison_mode_activation_differs_by_vendor() -> None:
+    """Platform comparison mode should activate only when vendors differ."""
+    a = _result(tool_name="a", hardware="AMD MI300X")
+    b = _result(tool_name="b", hardware="NVIDIA A100")
+    dash = CompareDashboard(result_a=a, result_b=b)
+    assert dash.is_platform_comparison_mode() is True
+
+
+def test_platform_comparison_mode_not_active_for_same_vendor() -> None:
+    """Platform comparison mode should stay off when vendors match."""
+    a = _result(tool_name="a", hardware="NVIDIA A100")
+    b = _result(tool_name="b", hardware="NVIDIA H100")
+    dash = CompareDashboard(result_a=a, result_b=b)
+    assert dash.is_platform_comparison_mode() is False
+
+
+def test_vendor_color_map_contains_expected_entries() -> None:
+    """Vendor color map should define all required vendor keys."""
+    for key in ["AMD", "NVIDIA", "Intel", "Apple", "Qualcomm", "CPU", "Unknown"]:
+        assert key in VENDOR_COLORS
+
+
+def test_platform_export_filename_format() -> None:
+    """Platform export filename should include both vendors and timestamp."""
+    out = CompareDashboard.platform_export_filename("AMD", "NVIDIA", "20260221_235959")
+    assert out == "amd_vs_nvidia_comparison_20260221_235959.html"
