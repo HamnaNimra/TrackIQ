@@ -3,8 +3,13 @@
 from datetime import datetime
 
 from trackiq_compare.comparator.metric_comparator import MetricComparator
-from trackiq_compare.deps import TrackiqResult
-from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, WorkloadInfo
+from trackiq_compare.deps import (
+    Metrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+)
 
 
 def make_result(
@@ -75,4 +80,3 @@ def test_null_metric_handling_not_comparable() -> None:
     metric = comparison.metrics["communication_overhead_percent"]
     assert metric.comparable is False
     assert metric.winner == "not_comparable"
-
