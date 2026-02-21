@@ -96,7 +96,13 @@ def run_report_html(
                 runs = [run for run in runs if isinstance(run, dict) and run]
                 if runs:
                     has_report_data = True
-                    populate_multi_run_html_report(report, runs, data_source=data_source)
+                    populate_multi_run_html_report(
+                        report,
+                        runs,
+                        data_source=data_source,
+                        include_run_details=True,
+                        chart_engine="plotly",
+                    )
                     export_data = runs
             else:
                 data = normalize_report_input_data(raw_data)
@@ -179,7 +185,12 @@ def run_report_html(
                         report.add_figure(fig, "Loss Comparison Chart", "Step-by-Step Loss Comparison")
                 else:
                     has_report_data = True
-                    populate_standard_html_report(report, data, data_source=data_source)
+                    populate_standard_html_report(
+                        report,
+                        data,
+                        data_source=data_source,
+                        chart_engine="plotly",
+                    )
                     export_data = data
         elif getattr(args, "csv", None):
             has_report_data = True
@@ -189,7 +200,13 @@ def run_report_html(
                 "samples": df.to_dict("records"),
                 "summary": {},
             }
-            populate_standard_html_report(report, csv_data, data_source=data_source, df=df)
+            populate_standard_html_report(
+                report,
+                csv_data,
+                data_source=data_source,
+                df=df,
+                chart_engine="plotly",
+            )
 
         if export_data is not None:
             base = os.path.splitext(os.path.basename(args.output))[0]

@@ -543,7 +543,8 @@ class HTMLReportGenerator:
             card_bg = "#16213e"
             text_color = "#eaeaea"
             border_color = "#0f3460"
-            accent_color = "#e94560"
+            accent_color = "#0ea5e9"
+            accent_secondary = "#14b8a6"
             secondary_color = "#0f3460"
             table_header_bg = "#0f3460"
             table_row_hover = "#1a1a4e"
@@ -552,9 +553,10 @@ class HTMLReportGenerator:
             card_bg = "#ffffff"
             text_color = "#2d3748"
             border_color = "#e2e8f0"
-            accent_color = "#4299e1"
+            accent_color = "#0f6feb"
+            accent_secondary = "#0ea5a4"
             secondary_color = "#edf2f7"
-            table_header_bg = "#4299e1"
+            table_header_bg = "#0f6feb"
             table_row_hover = "#f7fafc"
 
         return f"""
@@ -564,6 +566,7 @@ class HTMLReportGenerator:
             --text-color: {text_color};
             --border-color: {border_color};
             --accent-color: {accent_color};
+            --accent-secondary: {accent_secondary};
             --secondary-color: {secondary_color};
             --table-header-bg: {table_header_bg};
             --table-row-hover: {table_row_hover};
@@ -590,7 +593,7 @@ class HTMLReportGenerator:
 
         /* Header */
         .header {{
-            background: linear-gradient(135deg, var(--accent-color), #805ad5);
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-secondary));
             color: white;
             padding: 40px;
             border-radius: 12px;
@@ -679,9 +682,9 @@ class HTMLReportGenerator:
         }}
 
         .print-btn:hover {{
-            background: #3182ce;
+            background: #0b5ec7;
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(66, 153, 225, 0.4);
+            box-shadow: 0 2px 8px rgba(15, 111, 235, 0.4);
         }}
 
         .print-btn svg {{
@@ -920,7 +923,7 @@ class HTMLReportGenerator:
             }}
             
             .header {{
-                background: linear-gradient(135deg, #4299e1 0%, #805ad5 100%) !important;
+                background: linear-gradient(135deg, #0f6feb 0%, #0ea5a4 100%) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 padding: 25px !important;

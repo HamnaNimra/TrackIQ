@@ -58,6 +58,66 @@ st.set_page_config(
 MAX_UI_AUTO_RUNS = 12
 
 
+def _normalize_max_configs_per_device(value: int | None) -> int | None:
+    """Normalize UI max-config value: non-positive means unlimited."""
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _cap_pairs_with_precision_coverage(
+    pairs: list[tuple[Any, Any]],
+    max_total_runs: int,
+) -> list[tuple[Any, Any]]:
+    """Cap run pairs while preserving precision breadth when possible.
+
+    Picks one run per (device, precision) bucket first, then fills remaining
+    slots in original order. This avoids dropping later precisions when the UI
+    run cap is lower than the full cartesian set.
+    """
+    if max_total_runs <= 0 or len(pairs) <= max_total_runs:
+        return pairs
+
+    buckets: dict[tuple[str, str], list[tuple[Any, Any]]] = {}
+    bucket_order: list[tuple[str, str]] = []
+    for pair in pairs:
+        device, config = pair
+        device_id = str(getattr(device, "device_id", "unknown"))
+        precision = str(getattr(config, "precision", "unknown")).lower()
+        key = (device_id, precision)
+        if key not in buckets:
+            buckets[key] = []
+            bucket_order.append(key)
+        buckets[key].append(pair)
+
+    selected: list[tuple[Any, Any]] = []
+    selected_ids: set[int] = set()
+
+    for key in bucket_order:
+        if len(selected) >= max_total_runs:
+            break
+        candidates = buckets.get(key, [])
+        if not candidates:
+            continue
+        item = candidates.pop(0)
+        selected.append(item)
+        selected_ids.add(id(item))
+
+    if len(selected) < max_total_runs:
+        for item in pairs:
+            if len(selected) >= max_total_runs:
+                break
+            if id(item) in selected_ids:
+                continue
+            selected.append(item)
+
+    return selected
+
+
 def load_json_data(filepath: str) -> dict[str, Any] | None:
     """Load collector export data from JSON file.
 
@@ -341,7 +401,7 @@ def run_auto_benchmarks_ui(
     duration_seconds: int,
     precisions: list[str],
     batch_sizes: list[int],
-    max_configs_per_device: int = 6,
+    max_configs_per_device: int | None = None,
     device_ids_filter: list[str] | None = None,
     progress_callback: Callable[..., None] | None = None,
     max_total_runs: int = MAX_UI_AUTO_RUNS,
@@ -351,16 +411,16 @@ def run_auto_benchmarks_ui(
         from autoperfpy.auto_runner import run_auto_benchmarks
         from autoperfpy.device_config import get_devices_and_configs_auto
 
+        normalized_max_cfg = _normalize_max_configs_per_device(max_configs_per_device)
         pairs = get_devices_and_configs_auto(
             precisions=precisions,
             batch_sizes=batch_sizes,
-            max_configs_per_device=max_configs_per_device,
+            max_configs_per_device=normalized_max_cfg,
             device_ids_filter=device_ids_filter,
         )
         if not pairs:
             return []
-        if max_total_runs > 0 and len(pairs) > max_total_runs:
-            pairs = pairs[:max_total_runs]
+        pairs = _cap_pairs_with_precision_coverage(pairs, max_total_runs)
         return run_auto_benchmarks(
             pairs,
             duration_seconds=float(duration_seconds),
@@ -377,17 +437,18 @@ def estimate_auto_benchmark_plan_ui(
     duration_seconds: int,
     precisions: list[str],
     batch_sizes: list[int],
-    max_configs_per_device: int = 6,
+    max_configs_per_device: int | None = None,
     device_ids_filter: list[str] | None = None,
 ) -> dict[str, int]:
     """Estimate run count and wall-clock time for auto-benchmark UI selections."""
     try:
         from autoperfpy.device_config import get_devices_and_configs_auto
 
+        normalized_max_cfg = _normalize_max_configs_per_device(max_configs_per_device)
         pairs = get_devices_and_configs_auto(
             precisions=precisions,
             batch_sizes=batch_sizes,
-            max_configs_per_device=max_configs_per_device,
+            max_configs_per_device=normalized_max_cfg,
             device_ids_filter=device_ids_filter,
         )
         planned_runs = len(pairs)
@@ -497,9 +558,18 @@ def _generate_report_directly(data: dict[str, Any] | list[dict[str, Any]], repor
     )
 
     if isinstance(data, list):
-        populate_multi_run_html_report(report, data)
+        populate_multi_run_html_report(
+            report,
+            data,
+            include_run_details=True,
+            chart_engine="plotly",
+        )
     else:
-        populate_standard_html_report(report, data)
+        populate_standard_html_report(
+            report,
+            data,
+            chart_engine="plotly",
+        )
 
     # Generate report to temp file
     out_dir = tempfile.mkdtemp(prefix="autoperfpy_report_")
@@ -959,11 +1029,15 @@ def main():
                 key="bench_bs",
             )
             max_cfg = st.number_input(
-                "Max configs per device",
-                min_value=1,
-                max_value=20,
-                value=3,
+                "Max configs per device (0 = all)",
+                min_value=0,
+                max_value=200,
+                value=0,
                 key="bench_max",
+                help=(
+                    "Set 0 to run all selected precision x batch combinations per device. "
+                    "Set a positive value to limit per-device configs."
+                ),
             )
 
             plan = {"planned_runs": 0, "capped_runs": 0, "estimated_seconds": 0}
@@ -1011,7 +1085,7 @@ def main():
                                 duration_seconds=duration_ui,
                                 precisions=precisions_ui or PRECISIONS[:1],
                                 batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
-                                max_configs_per_device=max_cfg,
+                                max_configs_per_device=int(max_cfg),
                                 device_ids_filter=selected_device_ids,
                                 progress_callback=_on_progress,
                                 max_total_runs=MAX_UI_AUTO_RUNS,
@@ -1031,16 +1105,21 @@ def main():
                         st.warning("No results. Check devices and config.")
                 else:
                     with st.spinner("Running benchmark..."):
-                        run_data = run_benchmark_from_ui(
-                            duration_ui,
-                            selected_device_ids[0],
-                            precisions_ui[0] if precisions_ui else PRECISIONS[0],
-                        )
-                    if run_data:
+                        run_results: list[dict[str, Any]] = []
+                        selected_precisions = precisions_ui or PRECISIONS[:1]
+                        for precision in selected_precisions:
+                            run_data = run_benchmark_from_ui(
+                                duration_ui,
+                                selected_device_ids[0],
+                                precision,
+                            )
+                            if run_data:
+                                run_results.append(run_data)
+                    if run_results:
                         if "data_list" not in st.session_state:
                             st.session_state["data_list"] = []
-                        st.session_state["data_list"] = [run_data]
-                        st.success("Benchmark complete. Results loaded below.")
+                        st.session_state["data_list"] = run_results
+                        st.success(f"Completed {len(run_results)} run(s). Results loaded below.")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:

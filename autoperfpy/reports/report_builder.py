@@ -168,6 +168,9 @@ def _add_raw_data_preview_table(
     report: Any,
     report_df: Any | None,
     *,
+    section_name: str = "Raw Data",
+    section_description: str = "Preview of collected samples used to compute summary metrics and charts.",
+    table_title: str | None = None,
     max_rows: int = 120,
 ) -> None:
     """Add a bounded raw-data preview table for report/Streamlit parity."""
@@ -198,16 +201,107 @@ def _add_raw_data_preview_table(
         rows.append([_format_value(sample_row[column]) for column in columns])
 
     if rows:
-        report.add_section(
-            "Raw Data",
-            "Preview of collected samples used to compute summary metrics and charts.",
-        )
+        report.add_section(section_name, section_description)
         report.add_table(
-            f"Sample Preview (first {len(rows)} rows)",
+            table_title or f"Sample Preview (first {len(rows)} rows)",
             columns,
             rows,
-            "Raw Data",
+            section_name,
         )
+
+
+def _add_run_detail_table(
+    report: Any,
+    run: dict[str, Any],
+    run_name: str,
+    merged_summary: dict[str, Any],
+    *,
+    section_name: str,
+) -> None:
+    """Add full metadata/config/summary table for one run."""
+    rows: list[list[str]] = [["run_label", run_name]]
+
+    for field, value in [
+        ("collector_name", run.get("collector_name")),
+        ("profile", run.get("profile")),
+        ("sample_count", merged_summary.get("sample_count")),
+        ("warmup_samples", merged_summary.get("warmup_samples")),
+        ("duration_seconds", merged_summary.get("duration_seconds")),
+    ]:
+        if not _is_missing(value):
+            rows.append([field, _format_value(value)])
+
+    for prefix, payload in [
+        ("platform_metadata", run.get("platform_metadata")),
+        ("inference_config", run.get("inference_config")),
+        ("device_info", run.get("device_info")),
+        ("validation", run.get("validation")),
+        ("summary", merged_summary),
+    ]:
+        if not isinstance(payload, dict) or not payload:
+            continue
+        for key, value in _flatten_mapping(payload, prefix=prefix, max_depth=4):
+            if _is_missing(value):
+                continue
+            rows.append([key, _format_value(value)])
+
+    report.add_table(
+        title=f"Run Detail Fields: {run_name}",
+        headers=["Field", "Value"],
+        rows=rows,
+        section=section_name,
+    )
+
+
+def _add_prefixed_plotly_charts_for_run(
+    report: Any,
+    report_df: Any | None,
+    merged_summary: dict[str, Any],
+    *,
+    run_name: str,
+) -> None:
+    """Add Plotly charts with section names prefixed by run label."""
+    if report_df is None or len(report_df) == 0:
+        return
+
+    try:
+        from autoperfpy.reports import charts as shared_charts
+    except Exception:
+        return
+    if not shared_charts.is_available():
+        return
+
+    sections = shared_charts.build_all_charts(report_df, merged_summary)
+    if not sections:
+        return
+
+    plot_counter = [0]
+
+    def _next_plotly_id() -> str:
+        plot_counter[0] += 1
+        return f"plotly_run_{plot_counter[0]}"
+
+    for section_label, charts in sections.items():
+        section_name = f"{run_name} | {section_label}"
+        report.add_section(section_name, f"{section_label} charts for run {run_name}.")
+        for caption, fig in charts:
+            fig.update_layout(
+                autosize=True,
+                height=380,
+                margin=dict(l=50, r=50, t=50, b=50),
+            )
+            html = fig.to_html(
+                full_html=False,
+                include_plotlyjs=False,
+                div_id=_next_plotly_id(),
+                config={
+                    "responsive": True,
+                    "displayModeBar": True,
+                    "displaylogo": False,
+                    "scrollZoom": True,
+                },
+            )
+            report.add_html_figure(html, caption=caption, section=section_name)
 
 
 def prepare_report_dataframe_and_summary(
@@ -272,6 +366,7 @@ def populate_standard_html_report(
     df: Any | None = None,
     summary: dict[str, Any] | None = None,
     add_charts: bool = True,
+    chart_engine: str = "chartjs",
 ) -> tuple[Any | None, dict[str, Any]]:
     """Populate metadata, summary cards, and charts for benchmark-style reports."""
     from autoperfpy.reports import charts as shared_charts
@@ -363,7 +458,7 @@ def populate_standard_html_report(
     _add_detailed_summary_table(report, merged_summary)
 
     if add_charts and report_df is not None and len(report_df) > 0:
-        shared_charts.add_charts_to_html_report(report, report_df, merged_summary)
+        shared_charts.add_charts_to_html_report(report, report_df, merged_summary, chart_engine=chart_engine)
     _add_raw_data_preview_table(report, report_df)
 
     return report_df, merged_summary
@@ -374,6 +469,8 @@ def populate_multi_run_html_report(
     runs: list[dict[str, Any]],
     *,
     data_source: str | None = None,
+    include_run_details: bool = False,
+    chart_engine: str = "chartjs",
 ) -> None:
     """Populate a consolidated multi-run report view with all run labels."""
     valid_runs = [run for run in runs if isinstance(run, dict) and run]
@@ -440,18 +537,34 @@ def populate_multi_run_html_report(
 
         precision = "-"
         batch_size = "-"
+        streams = "-"
+        warmup_runs = "-"
+        iterations = "-"
+        accelerator = "-"
         if isinstance(inference, dict):
             if not _is_missing(inference.get("precision")):
                 precision = str(inference.get("precision"))
             if inference.get("batch_size") is not None and not _is_missing(inference.get("batch_size")):
                 batch_size = str(inference.get("batch_size"))
+            if inference.get("streams") is not None and not _is_missing(inference.get("streams")):
+                streams = str(inference.get("streams"))
+            if inference.get("warmup_runs") is not None and not _is_missing(inference.get("warmup_runs")):
+                warmup_runs = str(inference.get("warmup_runs"))
+            if inference.get("iterations") is not None and not _is_missing(inference.get("iterations")):
+                iterations = str(inference.get("iterations"))
+            if not _is_missing(inference.get("accelerator")):
+                accelerator = str(inference.get("accelerator"))
 
         overview_rows.append(
             [
                 run_name,
                 device,
+                accelerator,
                 precision,
                 batch_size,
+                streams,
+                warmup_runs,
+                iterations,
                 str(sample_count),
                 duration_display,
                 p99_display,
@@ -482,8 +595,12 @@ def populate_multi_run_html_report(
         [
             "Run Label",
             "Device",
+            "Accelerator",
             "Precision",
             "Batch",
+            "Streams",
+            "Warmup",
+            "Iterations",
             "Samples",
             "Duration (s)",
             "P99 (ms)",
@@ -508,6 +625,32 @@ def populate_multi_run_html_report(
         section="Run Comparison",
         description="Cross-run latency and throughput comparison with summary table.",
     )
+
+    if include_run_details:
+        for idx, run in enumerate(valid_runs):
+            run_name = str(run_names[idx])
+            section_name = f"Run Details: {run_name}"
+            report.add_section(
+                section_name,
+                "Complete metadata and sample coverage for this run (config, summary, raw sample preview, charts).",
+            )
+            report_df, merged_summary = prepare_report_dataframe_and_summary(run)
+            _add_run_detail_table(report, run, run_name, merged_summary, section_name=section_name)
+            _add_raw_data_preview_table(
+                report,
+                report_df,
+                section_name=section_name,
+                section_description="",
+                table_title=f"Raw Sample Preview: {run_name}",
+                max_rows=80,
+            )
+            if str(chart_engine).lower().strip() == "plotly":
+                _add_prefixed_plotly_charts_for_run(
+                    report,
+                    report_df,
+                    merged_summary,
+                    run_name=run_name,
+                )
 
 
 __all__ = [
