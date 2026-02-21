@@ -93,8 +93,15 @@ class MetricTable:
         import streamlit as st
 
         payload = self.to_dict()
-        st.subheader("Metrics")
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};'>Metrics</div>",
+            unsafe_allow_html=True,
+        )
         if payload["mode"] == "single":
+            st.markdown(
+                f"<div style='background:{self.theme.surface_color};height:8px;border-radius:{self.theme.border_radius};margin:4px 0 8px 0;'></div>",
+                unsafe_allow_html=True,
+            )
             rows = [
                 {"Metric": k, "Value": v}
                 for k, v in payload["metrics"].items()
@@ -102,15 +109,25 @@ class MetricTable:
             st.table(rows)
             return
 
+        st.markdown(
+            (
+                f"<div style='margin:4px 0 8px 0;'>"
+                f"<span style='color:{self.theme.pass_color};font-weight:700;'>Result B better</span> | "
+                f"<span style='color:{self.theme.fail_color};font-weight:700;'>Result A better</span> | "
+                f"<span style='color:{self.theme.warning_color};font-weight:700;'>tie</span>"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
         rows = []
         for row in payload["metrics"]:
             winner = row["winner"]
             if winner == "A":
-                winner_text = f":green[Result A]"
+                winner_text = "Result A"
             elif winner == "B":
-                winner_text = f":green[Result B]"
+                winner_text = "Result B"
             elif winner == "tie":
-                winner_text = f":orange[tie]"
+                winner_text = "tie"
             else:
                 winner_text = "N/A"
             rows.append(
@@ -123,4 +140,3 @@ class MetricTable:
                 }
             )
         st.table(rows)
-
