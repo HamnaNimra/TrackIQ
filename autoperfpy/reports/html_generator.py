@@ -560,6 +560,8 @@ class HTMLReportGenerator:
             table_row_hover = "#f7fafc"
 
         return f"""
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
         :root {{
             --bg-color: {bg_color};
             --card-bg: {card_bg};
@@ -570,6 +572,8 @@ class HTMLReportGenerator:
             --secondary-color: {secondary_color};
             --table-header-bg: {table_header_bg};
             --table-row-hover: {table_row_hover};
+            --surface-strong: rgba(255, 255, 255, 0.14);
+            --surface-soft: rgba(255, 255, 255, 0.08);
         }}
 
         * {{
@@ -579,50 +583,166 @@ class HTMLReportGenerator:
         }}
 
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             line-height: 1.6;
+            background-image:
+                radial-gradient(circle at 2% 10%, rgba(15, 111, 235, 0.14) 0%, transparent 35%),
+                radial-gradient(circle at 98% 5%, rgba(14, 165, 164, 0.12) 0%, transparent 30%);
         }}
 
         .container {{
             max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 28px;
         }}
 
         /* Header */
         .header {{
-            background: linear-gradient(135deg, var(--accent-color), var(--accent-secondary));
+            background:
+                linear-gradient(135deg, rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05)),
+                linear-gradient(125deg, var(--accent-color), var(--accent-secondary));
             color: white;
             padding: 40px;
-            border-radius: 12px;
+            border-radius: 18px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .header::after {{
+            content: '';
+            position: absolute;
+            width: 340px;
+            height: 340px;
+            right: -120px;
+            top: -220px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.18);
+            pointer-events: none;
+        }}
+
+        .header-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            position: relative;
+            z-index: 1;
         }}
 
         .header h1 {{
+            font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
             font-size: 2.5rem;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            letter-spacing: 0.01em;
         }}
 
         .header .subtitle {{
             font-size: 1.1rem;
-            opacity: 0.9;
+            opacity: 0.94;
+            max-width: 760px;
         }}
 
         .header .meta {{
-            margin-top: 20px;
+            margin-top: 22px;
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 10px;
+            position: relative;
+            z-index: 1;
         }}
 
         .header .meta-item {{
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 0.9rem;
+            background: var(--surface-soft);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }}
+
+        .header-kpi-grid {{
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+            position: relative;
+            z-index: 1;
+        }}
+
+        .header-kpi-card {{
+            background: var(--surface-strong);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 12px;
+            backdrop-filter: blur(4px);
+            min-height: 72px;
+        }}
+
+        .header-kpi-label {{
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            opacity: 0.84;
+        }}
+
+        .header-kpi-value {{
+            font-size: 1.2rem;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-top: 4px;
+            word-break: break-word;
+        }}
+
+        .platform-strip {{
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: 14px;
+            background: var(--surface-soft);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+        }}
+
+        .platform-strip h3 {{
+            margin: 0 0 10px 0;
+            font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 0.01em;
+        }}
+
+        .platform-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }}
+
+        .platform-card {{
+            background: var(--surface-strong);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 8px 10px;
+        }}
+
+        .platform-card .platform-label {{
+            display: block;
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            opacity: 0.82;
+        }}
+
+        .platform-card .platform-value {{
+            display: block;
+            margin-top: 2px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.25;
+            word-break: break-word;
         }}
 
         /* Navigation */
@@ -1146,6 +1266,148 @@ class HTMLReportGenerator:
             </button>
         </nav>
         """
+
+    def _format_header_value(self, value: Any) -> str:
+        """Format values for compact display in header cards/chips."""
+        if value is None:
+            return ""
+        if isinstance(value, float):
+            if value.is_integer():
+                return str(int(value))
+            return f"{value:.3f}".rstrip("0").rstrip(".")
+        text = str(value).strip()
+        return text if text else ""
+
+    def _metadata_lookup(self) -> dict[str, tuple[str, str]]:
+        """Return lowercase metadata index: lower-key -> (display key, display value)."""
+        lookup: dict[str, tuple[str, str]] = {}
+        for key, value in self.metadata.items():
+            display_key = str(key).strip()
+            display_value = self._format_header_value(value)
+            if not display_key or not display_value:
+                continue
+            lookup[display_key.lower()] = (display_key, display_value)
+        return lookup
+
+    def _build_header_meta_items(self, timestamp: str) -> list[tuple[str, str]]:
+        """Select key metadata chips for the top hero panel."""
+        lookup = self._metadata_lookup()
+        selected: list[tuple[str, str]] = []
+        used: set[str] = set()
+
+        preferred_keys = [
+            "Collector",
+            "Run Label",
+            "Data Source",
+            "Profile",
+            "Device",
+            "Accelerator",
+            "Precision",
+            "Batch Size",
+            "Run Count",
+            "Run Labels",
+        ]
+        for key in preferred_keys:
+            hit = lookup.get(key.lower())
+            if not hit:
+                continue
+            marker = hit[0].lower()
+            if marker in used:
+                continue
+            selected.append(hit)
+            used.add(marker)
+
+        for key, value in self.metadata.items():
+            key_text = str(key).strip()
+            marker = key_text.lower()
+            value_text = self._format_header_value(value)
+            if not key_text or not value_text or marker in used:
+                continue
+            selected.append((key_text, value_text))
+            used.add(marker)
+            if len(selected) >= 10:
+                break
+
+        selected.append(("Generated", timestamp))
+        return selected
+
+    def _build_header_kpis(self) -> list[tuple[str, str]]:
+        """Build compact top KPI cards using the same summary cards as Streamlit report."""
+        if not self.summary_items:
+            return []
+
+        def _render_summary_value(item: dict[str, Any]) -> str:
+            value_text = self._format_header_value(item.get("value"))
+            if not value_text:
+                return ""
+            unit = self._format_header_value(item.get("unit"))
+            return f"{value_text} {unit}".strip()
+
+        by_label: dict[str, dict[str, Any]] = {}
+        for item in self.summary_items:
+            label = self._format_header_value(item.get("label"))
+            if label:
+                by_label[label] = item
+
+        preferred = [
+            "Samples",
+            "Runs",
+            "P99 Latency",
+            "Mean Throughput",
+            "Mean Power",
+            "Duration",
+            "Total Samples",
+        ]
+        cards: list[tuple[str, str]] = []
+        used_labels: set[str] = set()
+        for label in preferred:
+            item = by_label.get(label)
+            if not item:
+                continue
+            value = _render_summary_value(item)
+            if not value:
+                continue
+            cards.append((label, value))
+            used_labels.add(label)
+            if len(cards) >= 6:
+                return cards
+
+        for item in self.summary_items:
+            label = self._format_header_value(item.get("label"))
+            if not label or label in used_labels:
+                continue
+            value = _render_summary_value(item)
+            if not value:
+                continue
+            cards.append((label, value))
+            used_labels.add(label)
+            if len(cards) >= 6:
+                break
+        return cards
+
+    def _build_platform_snapshot(self) -> list[tuple[str, str]]:
+        """Extract platform-oriented metadata fields for the top metadata strip."""
+        lookup = self._metadata_lookup()
+
+        def _pick(*keys: str) -> str:
+            for key in keys:
+                hit = lookup.get(key.lower())
+                if hit:
+                    return hit[1]
+            return ""
+
+        entries = [
+            ("Device", _pick("Device")),
+            ("Accelerator", _pick("Accelerator")),
+            ("GPU", _pick("GPU")),
+            ("CPU", _pick("CPU")),
+            ("Precision", _pick("Precision")),
+            ("Batch", _pick("Batch Size")),
+            ("SoC", _pick("SoC")),
+            ("Power Mode", _pick("Power Mode")),
+            ("OS", _pick("OS")),
+        ]
+        return [(label, value) for label, value in entries if value]
 
     def _generate_summary_html(self) -> str:
         """Generate summary section HTML.
