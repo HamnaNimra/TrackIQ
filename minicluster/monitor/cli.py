@@ -75,12 +75,12 @@ def cmd_monitor_status(args: argparse.Namespace) -> None:
     reader = HealthReader(args.checkpoint)
     checkpoint = reader.read()
     if checkpoint is None:
-        print("CRITICAL anomalies=unknown checkpoint_unavailable")
+        print("CRITICAL")
         sys.exit(1)
     detector = AnomalyDetector()
     anomalies = detector.detect(checkpoint)
     status = _status_from_anomalies(anomalies)
-    print(f"{status} anomalies={len(anomalies)}")
+    print(status)
 
 
 def register_monitor_subcommand(subparsers) -> None:
@@ -108,4 +108,3 @@ def register_monitor_subcommand(subparsers) -> None:
     status = monitor_sub.add_parser("status", help="Print one-line cluster status")
     status.add_argument("--checkpoint", default="./minicluster_results/health.json")
     status.set_defaults(func=cmd_monitor_status)
-
