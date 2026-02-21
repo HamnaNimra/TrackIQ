@@ -25,6 +25,18 @@ def load_trackiq_result(path: PathLike) -> TrackiqResult:
     in_path = Path(path)
     with in_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
+    required = (
+        "tool_name",
+        "tool_version",
+        "timestamp",
+        "platform",
+        "workload",
+        "metrics",
+        "regression",
+    )
+    for key in required:
+        if key not in payload:
+            raise ValueError(f"Missing required field: {key}")
     try:
         result = TrackiqResult.from_dict(payload)
     except KeyError as exc:
