@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -16,13 +17,17 @@ from trackiq_core.ui import (
     DARK_THEME,
     LIGHT_THEME,
     ComparisonTable,
+    DevicePanel,
     LossChart,
     MetricTable,
     PowerGauge,
     RegressionBadge,
+    ResultBrowser,
+    TrackiqDashboard,
     WorkerGrid,
     run_dashboard,
 )
+from trackiq_core.serializer import save_trackiq_result
 
 
 def _result(
@@ -77,6 +82,8 @@ def test_themes_have_no_null_fields() -> None:
     for theme in (DARK_THEME, LIGHT_THEME):
         for key, value in theme.__dict__.items():
             assert value is not None, key
+            if isinstance(value, str):
+                assert value.strip() != "", key
 
 
 def test_metric_table_single_mode_returns_all_metric_fields() -> None:
@@ -161,5 +168,97 @@ def test_run_dashboard_raises_when_no_input_provided() -> None:
 
 def test_components_import_without_streamlit_dependency() -> None:
     """UI component imports should not force import of streamlit."""
-    assert "streamlit" not in sys.modules
+    preloaded = sys.modules.pop("streamlit", None)
+    try:
+        __import__("trackiq_core.ui.components.metric_table")
+        __import__("trackiq_core.ui.components.loss_chart")
+        __import__("trackiq_core.ui.components.regression_badge")
+        __import__("trackiq_core.ui.components.worker_grid")
+        __import__("trackiq_core.ui.components.power_gauge")
+        __import__("trackiq_core.ui.components.comparison_table")
+        __import__("trackiq_core.ui.components.device_panel")
+        __import__("trackiq_core.ui.components.result_browser")
+        assert "streamlit" not in sys.modules
+    finally:
+        if preloaded is not None:
+            sys.modules["streamlit"] = preloaded
 
+
+def test_device_panel_to_dict_has_device_on_any_machine() -> None:
+    """DevicePanel should expose at least one device when detection is available."""
+    from trackiq_core.hardware.devices import get_all_devices
+
+    panel = DevicePanel(devices=get_all_devices())
+    payload = panel.to_dict()
+    assert isinstance(payload["devices"], list)
+    assert len(payload["devices"]) >= 1
+
+
+def test_device_panel_to_dict_handles_empty_devices() -> None:
+    """DevicePanel should handle empty device lists gracefully."""
+    panel = DevicePanel(devices=[])
+    payload = panel.to_dict()
+    assert payload["devices"] == []
+    assert payload["selected_device_index"] is None
+
+
+def test_result_browser_to_dict_empty_when_no_valid_files(tmp_path: Path) -> None:
+    """ResultBrowser should return empty metadata list when no valid files exist."""
+    browser = ResultBrowser(search_paths=[str(tmp_path)])
+    assert browser.to_dict() == []
+
+
+def test_result_browser_to_dict_returns_metadata_for_valid_result(tmp_path: Path) -> None:
+    """ResultBrowser should return metadata for valid TrackiqResult files."""
+    out = tmp_path / "run.json"
+    save_trackiq_result(_result(), out)
+
+    browser = ResultBrowser(search_paths=[str(tmp_path)])
+    rows = browser.to_dict()
+    assert len(rows) == 1
+    assert rows[0]["tool_name"] == "tool_a"
+    assert rows[0]["workload_name"] == "demo"
+    assert rows[0]["path"] == str(out)
+
+
+def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
+    """TrackiqDashboard subclasses should expose device panel and result browser methods."""
+
+    class _Dash(TrackiqDashboard):
+        def render_body(self) -> None:
+            return None
+
+    dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
+    assert hasattr(dash, "render_device_panel")
+    assert hasattr(dash, "render_result_browser")
+
+
+def test_power_gauge_placeholder_with_null_metrics_and_live_device_none() -> None:
+    """PowerGauge to_dict should return placeholder when no benchmark/live power exists."""
+    result = _result(optional_none=True)
+    payload = PowerGauge(
+        metrics=result.metrics, tool_payload=result.tool_payload, live_device=None
+    ).to_dict()
+    assert payload["placeholder"] == "Power profiling not available in this environment."
+
+
+def test_apply_theme_css_contains_font_and_background(monkeypatch: pytest.MonkeyPatch) -> None:
+    """apply_theme should inject CSS containing the configured font and background."""
+    captured = {"css": ""}
+
+    class _FakeStreamlit:
+        @staticmethod
+        def markdown(content, unsafe_allow_html=False):  # noqa: ANN001
+            if unsafe_allow_html:
+                captured["css"] = content
+
+    monkeypatch.setitem(sys.modules, "streamlit", _FakeStreamlit)
+
+    class _Dash(TrackiqDashboard):
+        def render_body(self) -> None:
+            return None
+
+    dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
+    dash.apply_theme(DARK_THEME)
+    assert DARK_THEME.font_family in captured["css"]
+    assert DARK_THEME.background_color in captured["css"]

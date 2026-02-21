@@ -10,6 +10,8 @@ from trackiq_core.ui.components import (
     WorkerGrid,
     PowerGauge,
     ComparisonTable,
+    DevicePanel,
+    ResultBrowser,
 )
 
 __all__ = [
@@ -24,5 +26,6 @@ __all__ = [
     "WorkerGrid",
     "PowerGauge",
     "ComparisonTable",
+    "DevicePanel",
+    "ResultBrowser",
 ]
-

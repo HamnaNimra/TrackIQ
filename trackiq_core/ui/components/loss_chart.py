@@ -37,15 +37,18 @@ class LossChart:
         """Render line chart in Streamlit."""
         import streamlit as st
 
-        st.subheader("Loss Trend")
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};'>Loss Trend</div>",
+            unsafe_allow_html=True,
+        )
         if not self.steps or not self.loss_values:
             st.info("No loss data available.")
             return
 
-        if self.baseline_values and len(self.baseline_values) == len(self.steps):
-            try:
-                import plotly.graph_objects as go
-            except Exception:
+        try:
+            import plotly.graph_objects as go
+        except Exception:
+            if self.baseline_values and len(self.baseline_values) == len(self.steps):
                 st.line_chart(
                     {
                         "loss": self.loss_values,
@@ -53,19 +56,22 @@ class LossChart:
                     }
                 )
                 return
+            st.line_chart({"loss": self.loss_values})
+            return
 
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=self.steps,
+                y=self.loss_values,
+                mode="lines",
+                name="loss",
+                line={"color": self.theme.chart_colors[0]},
+            )
+        )
+        if self.baseline_values and len(self.baseline_values) == len(self.steps):
             upper = [v * (1.0 + self.tolerance) for v in self.baseline_values]
             lower = [v * (1.0 - self.tolerance) for v in self.baseline_values]
-            fig = go.Figure()
-            fig.add_trace(
-                go.Scatter(
-                    x=self.steps,
-                    y=self.loss_values,
-                    mode="lines",
-                    name="loss",
-                    line={"color": self.theme.chart_colors[0]},
-                )
-            )
             fig.add_trace(
                 go.Scatter(
                     x=self.steps,
@@ -85,8 +91,4 @@ class LossChart:
                     name="tolerance_band",
                 )
             )
-            st.plotly_chart(fig, use_container_width=True)
-            return
-
-        st.line_chart({"loss": self.loss_values})
-
+        st.plotly_chart(fig, use_container_width=True)

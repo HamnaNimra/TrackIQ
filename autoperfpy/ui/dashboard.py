@@ -55,4 +55,4 @@ class AutoPerfDashboard(TrackiqDashboard):
                 json.dumps(result.to_dict(), indent=2),
                 language="json",
             )
-
+        self.render_download_section()
