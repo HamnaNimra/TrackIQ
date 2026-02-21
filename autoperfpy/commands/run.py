@@ -140,7 +140,7 @@ def run_auto_benchmarks_cli(
         max_configs_per_device=getattr(args, "max_configs_per_device", 6),
     )
     if not pairs:
-        print("No (device, config) pairs to run.", file=sys.stderr)
+        print("[ERROR] No (device, config) pairs to run.", file=sys.stderr)
         return 1
     duration = float(getattr(args, "duration", None) or 10)
     if not args.quiet:
@@ -200,7 +200,7 @@ def run_manual_single(
     device_id = getattr(args, "device", None) or "cpu_0"
     device = resolve_device_fn(device_id)
     if device is None:
-        print("No device found. Use --device nvidia_0, cpu_0, or 0.", file=sys.stderr)
+        print("[ERROR] No device found. Use --device nvidia_0, cpu_0, or 0.", file=sys.stderr)
         return None
     requested_precision = str(getattr(args, "precision", None) or PRECISION_FP32).lower()
     effective_precision = resolve_precision_for_device(device, requested_precision)
@@ -242,7 +242,7 @@ def run_manual_single(
         if write_result_to_csv(result, csv_path):
             print(f"\n[OK] CSV exported to: {csv_path}")
         else:
-            print("No samples to export as CSV", file=sys.stderr)
+            print("[WARN] No samples to export as CSV", file=sys.stderr)
     return result
 
 
@@ -485,7 +485,6 @@ def run_with_profile(
         if write_result_to_csv(export_data, csv_path):
             print(f"CSV exported to: {csv_path}")
         else:
-            print("No samples to export as CSV", file=sys.stderr)
+            print("[WARN] No samples to export as CSV", file=sys.stderr)
 
     return export
-

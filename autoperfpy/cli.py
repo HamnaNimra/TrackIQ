@@ -175,10 +175,7 @@ Environment Variables:
         "--profile",
         "-p",
         default=None,
-        help=(
-            f"Profile to use ({profile_list_help}). "
-            "If omitted, auto mode runs on all detected devices."
-        ),
+        help=(f"Profile to use ({profile_list_help}). " "If omitted, auto mode runs on all detected devices."),
     )
     run_parser.add_argument(
         "--auto",
@@ -1092,4 +1089,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

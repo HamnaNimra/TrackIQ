@@ -45,7 +45,7 @@ def run_ui(args: Any, *, cli_file: str) -> int:
     except KeyboardInterrupt:
         print("\nDashboard stopped")
     except subprocess.CalledProcessError as exc:
-        print(f"Error launching Streamlit: {exc}", file=sys.stderr)
+        print(f"[ERROR] launching Streamlit failed: {exc}", file=sys.stderr)
         print("\nMake sure Streamlit is installed: pip install streamlit plotly pandas")
         return 1
     except FileNotFoundError:
@@ -56,4 +56,3 @@ def run_ui(args: Any, *, cli_file: str) -> int:
         return 1
 
     return 0
-
