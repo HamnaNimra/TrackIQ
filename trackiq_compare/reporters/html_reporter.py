@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from html import escape
-from typing import List
+from typing import List, Optional
 
 from trackiq_compare.comparator.metric_comparator import ComparisonResult
 from trackiq_compare.comparator.summary_generator import SummaryResult
@@ -103,7 +103,7 @@ class HtmlReporter:
         return output_path
 
     @staticmethod
-    def _fmt(value: float | None, is_percent: bool = False) -> str:
+    def _fmt(value: Optional[float], is_percent: bool = False) -> str:
         if value is None:
             return "N/A"
         if value == float("inf"):
@@ -151,4 +151,3 @@ class HtmlReporter:
         if not diffs:
             return "<p>No platform/framework differences detected.</p>"
         return "<ul>" + "".join(f"<li>{item}</li>" for item in diffs) + "</ul>"
-
