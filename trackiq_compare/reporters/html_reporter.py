@@ -853,7 +853,13 @@ class HtmlReporter:
         return fig.to_html(
             full_html=False,
             include_plotlyjs=include_mode,
-            config={"displayModeBar": False, "responsive": True},
+            config={
+                "displayModeBar": True,
+                "displaylogo": False,
+                "responsive": True,
+                "scrollZoom": True,
+                "doubleClick": "reset",
+            },
         )
 
     @staticmethod
