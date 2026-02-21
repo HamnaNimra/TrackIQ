@@ -29,6 +29,13 @@ class HtmlReporter:
         normalized_rows = self._normalized_metric_delta_rows(comparison)
         family_rows = self._metric_family_delta_rows(normalized_rows, comparison.label_a, comparison.label_b)
         confidence_rows = self._metric_confidence_rows(comparison)
+        visual_overview = self._render_visual_overview(
+            normalized_rows,
+            family_rows,
+            confidence_rows,
+            comparison.label_a,
+            comparison.label_b,
+        )
         platform_diff = self._platform_comparison(result_a, result_b)
         highlighted = self._highlighted_metrics(summary)
         generated = datetime.now(timezone.utc).isoformat()
@@ -132,8 +139,127 @@ class HtmlReporter:
     .confidence-strong {{ color: var(--good); font-weight: 700; }}
     .confidence-insufficient {{ color: var(--warn); font-weight: 700; }}
     .confidence-none {{ color: var(--bad); font-weight: 700; }}
+    .chart-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }}
+    .chart-card {{
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fcfdff;
+    }}
+    .chart-title {{
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 700;
+    }}
+    .chart-sub {{
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .delta-row {{
+      display: grid;
+      grid-template-columns: 1.2fr 2.4fr auto;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+    }}
+    .delta-label {{
+      font-size: 12px;
+      color: #111827;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .delta-value {{
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 58px;
+      text-align: right;
+    }}
+    .delta-track {{
+      position: relative;
+      height: 16px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      background: linear-gradient(to right, #f8fafc 0%, #eef2ff 50%, #f8fafc 100%);
+      overflow: hidden;
+    }}
+    .delta-axis {{
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 100%;
+      background: #94a3b8;
+    }}
+    .delta-segment {{
+      position: absolute;
+      top: 2px;
+      height: 10px;
+      border-radius: 6px;
+    }}
+    .delta-segment.pos {{ background: #22c55e; }}
+    .delta-segment.neg {{ background: #ef4444; }}
+    .delta-segment.neu {{ background: #9ca3af; }}
+    .pie-wrap {{
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 6px;
+    }}
+    .pie-shell {{
+      position: relative;
+      width: 112px;
+      height: 112px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      border: 1px solid #d1d5db;
+    }}
+    .pie-hole {{
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+    }}
+    .legend {{
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 12px;
+    }}
+    .legend li {{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }}
+    .swatch {{
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      display: inline-block;
+      border: 1px solid rgba(15, 23, 42, 0.2);
+    }}
     @media (max-width: 900px) {{
       .grid {{ grid-template-columns: 1fr; }}
+      .chart-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -186,6 +312,12 @@ class HtmlReporter:
           {rows}
         </tbody>
       </table>
+    </section>
+
+    <section class="card">
+      <h2>Visual Overview</h2>
+      <p class="section-note">Consolidated graph views for quick comparison validation.</p>
+      {visual_overview}
     </section>
 
     <section class="card">
@@ -490,6 +622,142 @@ class HtmlReporter:
                 "</tr>"
             )
         return "".join(html_rows)
+
+    def _render_visual_overview(
+        self,
+        normalized_rows: list[dict[str, Any]],
+        family_rows: list[dict[str, Any]],
+        confidence_rows: list[dict[str, Any]],
+        label_a: str,
+        label_b: str,
+    ) -> str:
+        winner_counts = self._winner_counts(normalized_rows, label_a, label_b)
+        confidence_counts = self._confidence_counts(confidence_rows)
+        return (
+            '<div class="chart-grid">'
+            f'<div class="chart-card"><p class="chart-title">Top Normalized Deltas</p>'
+            f'<p class="chart-sub">Right of center favors {escape(label_b)}; left favors {escape(label_a)}.</p>'
+            f"{self._render_delta_graph_rows(normalized_rows, max_items=8)}</div>"
+            f'<div class="chart-card"><p class="chart-title">Metric Family Deltas</p>'
+            '<p class="chart-sub">Family-level signed summary of normalized deltas.</p>'
+            f"{self._render_family_graph_rows(family_rows)}</div>"
+            f'<div class="chart-card"><p class="chart-title">Winner Distribution</p>'
+            '<p class="chart-sub">Metric-level outcome share across comparable metrics.</p>'
+            f"{self._render_pie_chart(winner_counts, [('A', '#ef4444'), ('B', '#22c55e'), ('tie', '#94a3b8'), ('context', '#c084fc')], label_a, label_b)}</div>"
+            f'<div class="chart-card"><p class="chart-title">Confidence Distribution</p>'
+            '<p class="chart-sub">Data-strength breakdown for metric conclusions.</p>'
+            f"{self._render_pie_chart(confidence_counts, [('strong', '#22c55e'), ('insufficient', '#f59e0b'), ('none', '#ef4444')], label_a, label_b)}</div>"
+            "</div>"
+        )
+
+    @staticmethod
+    def _winner_counts(
+        normalized_rows: list[dict[str, Any]],
+        label_a: str,
+        label_b: str,
+    ) -> dict[str, int]:
+        counts = {"A": 0, "B": 0, "tie": 0, "context": 0}
+        for row in normalized_rows:
+            winner = str(row.get("winner", "tie"))
+            if winner == label_a:
+                counts["A"] += 1
+            elif winner == label_b:
+                counts["B"] += 1
+            elif winner == "context":
+                counts["context"] += 1
+            else:
+                counts["tie"] += 1
+        return counts
+
+    @staticmethod
+    def _confidence_counts(confidence_rows: list[dict[str, Any]]) -> dict[str, int]:
+        counts = {"strong": 0, "insufficient": 0, "none": 0}
+        for row in confidence_rows:
+            confidence = str(row.get("confidence", "none"))
+            if confidence in counts:
+                counts[confidence] += 1
+        return counts
+
+    def _render_delta_graph_rows(self, rows: list[dict[str, Any]], max_items: int = 8) -> str:
+        if not rows:
+            return '<p class="section-note">No normalized delta data available.</p>'
+        selected = rows[:max_items]
+        max_abs = max(abs(float(row["normalized_delta_percent"])) for row in selected) or 1.0
+        html_rows: list[str] = []
+        for row in selected:
+            metric = escape(str(row.get("metric", "-")))
+            value = float(row.get("normalized_delta_percent", 0.0))
+            value_text = escape(self._fmt(value, is_percent=True))
+            if value > 0:
+                width = min(50.0, (abs(value) / max_abs) * 50.0)
+                segment = f'<span class="delta-segment pos" style="left:50%;width:{width:.2f}%"></span>'
+            elif value < 0:
+                width = min(50.0, (abs(value) / max_abs) * 50.0)
+                segment = f'<span class="delta-segment neg" style="right:50%;width:{width:.2f}%"></span>'
+            else:
+                segment = '<span class="delta-segment neu" style="left:calc(50% - 1px);width:2px"></span>'
+            html_rows.append(
+                '<div class="delta-row">'
+                f'<div class="delta-label" title="{metric}">{metric}</div>'
+                f'<div class="delta-track"><span class="delta-axis"></span>{segment}</div>'
+                f'<div class="delta-value">{value_text}</div>'
+                "</div>"
+            )
+        return "".join(html_rows)
+
+    def _render_family_graph_rows(self, rows: list[dict[str, Any]]) -> str:
+        if not rows:
+            return '<p class="section-note">No family aggregation data available.</p>'
+        graph_rows = [
+            {"metric": row.get("family", "other"), "normalized_delta_percent": row.get("normalized_delta_percent", 0.0)}
+            for row in rows
+        ]
+        return self._render_delta_graph_rows(graph_rows, max_items=len(graph_rows))
+
+    @staticmethod
+    def _render_pie_chart(
+        counts: dict[str, int],
+        legend_order: list[tuple[str, str]],
+        label_a: str,
+        label_b: str,
+    ) -> str:
+        total = sum(int(v) for v in counts.values())
+        if total <= 0:
+            return '<p class="section-note">No data available for this chart.</p>'
+
+        gradient_parts: list[str] = []
+        legend_rows: list[str] = []
+        degrees = 0.0
+        for key, color in legend_order:
+            count = int(counts.get(key, 0))
+            if count <= 0:
+                continue
+            span = (count / total) * 360.0
+            start = degrees
+            end = degrees + span
+            gradient_parts.append(f"{color} {start:.2f}deg {end:.2f}deg")
+            degrees = end
+            display = key
+            if key == "A":
+                display = label_a
+            elif key == "B":
+                display = label_b
+            legend_rows.append(
+                "<li>"
+                f'<span class="swatch" style="background:{color}"></span>'
+                f"{escape(display)}: {count}"
+                "</li>"
+            )
+
+        gradient_css = ", ".join(gradient_parts) if gradient_parts else "#d1d5db 0deg 360deg"
+        return (
+            '<div class="pie-wrap">'
+            f'<div class="pie-shell" style="background: conic-gradient({gradient_css});">'
+            f'<div class="pie-hole">{total}</div>'
+            "</div>"
+            f'<ul class="legend">{"".join(legend_rows)}</ul>'
+            "</div>"
+        )
 
     @staticmethod
     def _platform_comparison(result_a: TrackiqResult, result_b: TrackiqResult) -> str:
