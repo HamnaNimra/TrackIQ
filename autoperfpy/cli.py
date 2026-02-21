@@ -24,7 +24,7 @@ from autoperfpy.analyzers import (
     VariabilityAnalyzer,
 )
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
-from autoperfpy.monitoring import GPUMemoryMonitor
+from autoperfpy.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from autoperfpy.reporting import (
     PerformanceVisualizer,
     PDFReportGenerator,
@@ -43,6 +43,7 @@ from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
 from trackiq_core.hardware import DeviceProfile, get_all_devices
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
 from trackiq_core.schema import (
+    KVCacheInfo,
     Metrics as TrackiqMetrics,
     PlatformInfo,
     RegressionInfo,
@@ -456,6 +457,11 @@ Environment Variables:
     cache_parser.add_argument(
         "--max-length", type=int, default=2048, help="Max sequence length"
     )
+    cache_parser.add_argument("--num-layers", type=int, default=32)
+    cache_parser.add_argument("--num-heads", type=int, default=32)
+    cache_parser.add_argument("--head-size", type=int, default=128)
+    cache_parser.add_argument("--batch-size", type=int, default=1)
+    cache_parser.add_argument("--precision", choices=["fp16", "fp32"], default="fp16")
 
     # Report commands
     report_parser = subparsers.add_parser("report", help="Generate performance reports")
@@ -687,6 +693,7 @@ def _infer_trackiq_result(
     regression = payload.get("regression", {}) if isinstance(payload, dict) else {}
     platform_metadata = payload.get("platform_metadata", {}) if isinstance(payload, dict) else {}
     inference_cfg = payload.get("inference_config", {}) if isinstance(payload, dict) else {}
+    kv_cache_payload = payload.get("kv_cache", {}) if isinstance(payload, dict) else {}
 
     status = regression.get("status")
     if status not in ("pass", "fail"):
@@ -750,6 +757,20 @@ def _infer_trackiq_result(
             failed_metrics=list(regression.get("failed_metrics", []))
             if isinstance(regression, dict)
             else [],
+        ),
+        kv_cache=(
+            KVCacheInfo(
+                estimated_size_mb=float(kv_cache_payload.get("estimated_size_mb", 0.0)),
+                max_sequence_length=int(kv_cache_payload.get("max_sequence_length", 0)),
+                batch_size=int(kv_cache_payload.get("batch_size", 1)),
+                num_layers=int(kv_cache_payload.get("num_layers", 0)),
+                num_heads=int(kv_cache_payload.get("num_heads", 0)),
+                head_size=int(kv_cache_payload.get("head_size", 0)),
+                precision=str(kv_cache_payload.get("precision", "unknown")),
+                samples=list(kv_cache_payload.get("samples", [])),
+            )
+            if isinstance(kv_cache_payload, dict) and kv_cache_payload
+            else None
         ),
         tool_payload=payload,
     )
@@ -1215,6 +1236,60 @@ def run_monitor_gpu(args, config):
         print(f"  Avg Utilization: {summary['avg_utilization_percent']:.1f}%")
 
     return summary
+
+
+def run_monitor_kv_cache(args, config):
+    """Run KV cache estimation monitor."""
+    monitor = LLMKVCacheMonitor(config)
+    model_config = {
+        "num_layers": args.num_layers,
+        "num_heads": args.num_heads,
+        "head_size": args.head_size,
+        "batch_size": args.batch_size,
+        "precision": args.precision,
+    }
+    max_length = int(args.max_length)
+    step = max(1, max_length // 10)
+    samples = []
+    for seq_len in range(step, max_length + 1, step):
+        size_mb = monitor.estimate_kv_cache_size(seq_len, model_config)
+        samples.append(
+            {
+                "sequence_length": seq_len,
+                "kv_cache_mb": round(float(size_mb), 4),
+                "timestamp": time.time(),
+            }
+        )
+
+    final_size = samples[-1]["kv_cache_mb"] if samples else 0.0
+    print("\nKV Cache Monitor")
+    print("=" * 60)
+    print(f"Precision: {args.precision}")
+    print(f"Model: layers={args.num_layers}, heads={args.num_heads}, head_size={args.head_size}")
+    print(f"Batch size: {args.batch_size}")
+    print(f"Max sequence length: {max_length}")
+    print(f"Estimated KV cache @ max length: {final_size:.2f} MB")
+
+    return {
+        "kv_cache": {
+            "estimated_size_mb": float(final_size),
+            "max_sequence_length": max_length,
+            "batch_size": int(args.batch_size),
+            "num_layers": int(args.num_layers),
+            "num_heads": int(args.num_heads),
+            "head_size": int(args.head_size),
+            "precision": str(args.precision),
+            "samples": samples,
+        },
+        "summary": {
+            "sample_count": len(samples),
+            "latency": {"p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0},
+            "throughput": {"mean_fps": 0.0},
+            "power": {"mean_w": None},
+            "memory": {"mean_percent": 0.0},
+        },
+        "run_label": "kv_cache_monitor",
+    }
 
 
 # Chart building is now in trackiq.reporting.charts
@@ -2272,6 +2347,8 @@ def main():
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
+            elif args.monitor_type == "kv-cache":
+                result = run_monitor_kv_cache(args, config)
         elif args.command == "report":
             if args.report_type == "html":
                 result = run_report_html(args, config)
