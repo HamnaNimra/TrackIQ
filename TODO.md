@@ -1,4 +1,4 @@
-# TrackIQ & AutoPerfPy TODO
+﻿# TrackIQ & AutoPerfPy TODO
 
 ## High Priority
 
@@ -91,3 +91,4 @@ Keep as lower priority since current structure works well.
 - ✓ Merged autoperf_app into autoperfpy
 - ✓ Created backward-compatible wrappers
 - ✓ Resolved Config duplication - autoperfpy.config.Config now extends trackiq_core.configs.Config
+

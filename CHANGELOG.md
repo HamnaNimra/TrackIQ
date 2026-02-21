@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -399,3 +399,4 @@ pytest tests/
 **Last Updated**: 2024-01-28
 
 For detailed information, see the individual documentation files listed above.
+
