@@ -170,9 +170,16 @@ Acceptance criteria:
 - Multi-run comparison supports at least 5 runs x 8 workers without UI failure.
 - New visuals are covered by unit/integration tests with deterministic fixtures.
 
-### 4.3) Compare visualization expansion `[P1] [OPEN]`
+### 4.3) Compare visualization expansion `[P1] [IN PROGRESS]`
 
 Problem: `trackiq-compare` has core pairwise bars/tables, but needs richer comparison visuals for platform-level decision making and clearer regression storytelling.
+
+Progress update:
+
+1. Implemented in dashboard MVP:
+   - normalized metric delta chart
+   - metric-family delta waterfall
+   - metric availability/confidence matrix
 
 Tasks:
 

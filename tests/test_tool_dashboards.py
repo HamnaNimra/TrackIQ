@@ -150,3 +150,42 @@ def test_platform_export_filename_format() -> None:
     """Platform export filename should include both vendors and timestamp."""
     out = CompareDashboard.platform_export_filename("AMD", "NVIDIA", "20260221_235959")
     assert out == "amd_vs_nvidia_comparison_20260221_235959.html"
+
+
+def test_compare_dashboard_family_delta_rows_show_directional_advantage() -> None:
+    """Normalized family deltas should indicate which side has the advantage."""
+    left = _result(tool_name="left", hardware="HW-A")
+    right = _result(tool_name="right", hardware="HW-B")
+    right.metrics.throughput_samples_per_sec = 130.0  # better for right
+    right.metrics.performance_per_watt = 1.8  # better for right
+    right.metrics.latency_p99_ms = 10.0  # worse for right
+    right.metrics.latency_p95_ms = 8.0  # worse for right
+    right.metrics.latency_p50_ms = 6.0  # worse for right
+    right.metrics.power_consumption_watts = 70.0  # better for right (lower)
+
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    rows = dash._competitive_metric_rows()
+    families = {row["family"]: row for row in dash._metric_family_delta_rows(rows)}
+
+    assert "performance" in families
+    assert "latency" in families
+    assert "efficiency" in families
+    assert float(families["performance"]["normalized_delta_percent"]) > 0
+    assert float(families["latency"]["normalized_delta_percent"]) < 0
+    assert float(families["efficiency"]["normalized_delta_percent"]) > 0
+
+
+def test_compare_dashboard_confidence_rows_reflect_missing_metrics() -> None:
+    """Confidence rows should flag missing values as insufficient."""
+    left = _result(tool_name="left", hardware="HW-A")
+    right = _result(tool_name="right", hardware="HW-B")
+    right.metrics.communication_overhead_percent = 3.2
+    left.metrics.communication_overhead_percent = None
+    right.metrics.power_consumption_watts = None
+
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    confidence_rows = {row["metric"]: row for row in dash._metric_confidence_rows()}
+
+    assert confidence_rows["throughput_samples_per_sec"]["confidence"] == "strong"
+    assert confidence_rows["communication_overhead_percent"]["confidence"] == "insufficient"
+    assert confidence_rows["power_consumption_watts"]["confidence"] == "insufficient"

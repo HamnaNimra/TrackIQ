@@ -110,11 +110,11 @@ class CompareDashboard(TrackiqDashboard):
         vendor_a, vendor_b = self._vendors()
         return vendor_a != vendor_b
 
-    def _competitive_metric_rows(self) -> list[dict[str, Any]]:
+    def _competitive_metric_specs(self) -> list[tuple[str, float | None, float | None, str, int]]:
+        """Return metric comparison specs: (name, a_val, b_val, direction, weight)."""
         metrics_a = self.result_a.metrics
         metrics_b = self.result_b.metrics
-        rows: list[dict[str, Any]] = []
-        candidates = [
+        return [
             ("performance_per_watt", metrics_a.performance_per_watt, metrics_b.performance_per_watt, "high", 2),
             (
                 "throughput_samples_per_sec",
@@ -123,13 +123,15 @@ class CompareDashboard(TrackiqDashboard):
                 "high",
                 1,
             ),
-            ("latency_p99_ms", metrics_a.latency_p99_ms, metrics_b.latency_p99_ms, "low", 1),
+            ("latency_p50_ms", metrics_a.latency_p50_ms, metrics_b.latency_p50_ms, "low", 1),
+            ("latency_p95_ms", metrics_a.latency_p95_ms, metrics_b.latency_p95_ms, "low", 1),
+            ("latency_p99_ms", metrics_a.latency_p99_ms, metrics_b.latency_p99_ms, "low", 2),
             (
-                "memory_utilization_percent",
-                metrics_a.memory_utilization_percent,
-                metrics_b.memory_utilization_percent,
-                "context",
-                0,
+                "power_consumption_watts",
+                metrics_a.power_consumption_watts,
+                metrics_b.power_consumption_watts,
+                "low",
+                1,
             ),
             (
                 "communication_overhead_percent",
@@ -138,8 +140,18 @@ class CompareDashboard(TrackiqDashboard):
                 "low",
                 1,
             ),
+            (
+                "memory_utilization_percent",
+                metrics_a.memory_utilization_percent,
+                metrics_b.memory_utilization_percent,
+                "context",
+                0,
+            ),
         ]
-        for name, a_val, b_val, direction, weight in candidates:
+
+    def _competitive_metric_rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for name, a_val, b_val, direction, weight in self._competitive_metric_specs():
             if a_val is None or b_val is None:
                 continue
             if a_val == 0:
@@ -167,6 +179,90 @@ class CompareDashboard(TrackiqDashboard):
             )
         return rows
 
+    @staticmethod
+    def _metric_family(metric_name: str) -> str:
+        """Map canonical metric name to a display family for grouped visuals."""
+        if metric_name.startswith("latency_"):
+            return "latency"
+        if metric_name in {"throughput_samples_per_sec", "performance_per_watt"}:
+            return "performance"
+        if metric_name == "power_consumption_watts":
+            return "efficiency"
+        if metric_name == "memory_utilization_percent":
+            return "memory"
+        if metric_name == "communication_overhead_percent":
+            return "communication"
+        return "other"
+
+    def _normalized_delta_percent_for_row(self, row: dict[str, Any]) -> float | None:
+        """Return signed delta where positive means B is better, negative means A is better."""
+        delta = row.get("delta_percent")
+        direction = str(row.get("direction", "context"))
+        try:
+            delta_value = float(delta)
+        except (TypeError, ValueError):
+            return None
+        if delta_value == float("inf"):
+            return None
+        if direction == "high":
+            return delta_value
+        if direction == "low":
+            return -delta_value
+        return 0.0
+
+    def _metric_family_delta_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Aggregate normalized deltas by metric family."""
+        buckets: dict[str, list[float]] = {}
+        for row in rows:
+            if str(row.get("direction", "context")) == "context":
+                continue
+            normalized = self._normalized_delta_percent_for_row(row)
+            if normalized is None:
+                continue
+            family = self._metric_family(str(row.get("metric", "other")))
+            buckets.setdefault(family, []).append(normalized)
+
+        aggregated: list[dict[str, Any]] = []
+        for family, values in buckets.items():
+            if not values:
+                continue
+            mean_delta = sum(values) / len(values)
+            winner = self.label_b if mean_delta > 0 else self.label_a if mean_delta < 0 else "tie"
+            aggregated.append(
+                {
+                    "family": family,
+                    "normalized_delta_percent": mean_delta,
+                    "metric_count": len(values),
+                    "winner": winner,
+                }
+            )
+        aggregated.sort(key=lambda item: abs(float(item["normalized_delta_percent"])), reverse=True)
+        return aggregated
+
+    def _metric_confidence_rows(self) -> list[dict[str, Any]]:
+        """Return per-metric data availability and confidence signals."""
+        confidence_rows: list[dict[str, Any]] = []
+        for name, a_val, b_val, direction, _weight in self._competitive_metric_specs():
+            a_available = a_val is not None
+            b_available = b_val is not None
+            if a_available and b_available:
+                confidence = "strong"
+            elif a_available or b_available:
+                confidence = "insufficient"
+            else:
+                confidence = "none"
+            confidence_rows.append(
+                {
+                    "metric": name,
+                    "family": self._metric_family(name),
+                    "a_available": a_available,
+                    "b_available": b_available,
+                    "direction": direction,
+                    "confidence": confidence,
+                }
+            )
+        return confidence_rows
+
     def _competitive_verdict(self, rows: list[dict[str, Any]]) -> str:
         score_a = 0
         score_b = 0
@@ -192,7 +288,7 @@ class CompareDashboard(TrackiqDashboard):
         return (
             f"Overall winner: {overall}. "
             f"Weighted score ({self.label_a}={score_a}, {self.label_b}={score_b}), "
-            f"with performance_per_watt weighted 2x. " + " | ".join(details)
+            f"with high-impact metrics weighted 2x. " + " | ".join(details)
         )
 
     def _render_platform_comparison_mode(self) -> None:
@@ -310,6 +406,14 @@ class CompareDashboard(TrackiqDashboard):
                 "a": [float(row["a"]) for row in plot_rows],
                 "b": [float(row["b"]) for row in plot_rows],
                 "delta_percent": [float(row.get("delta_percent", 0.0)) for row in plot_rows],
+                "normalized_delta_percent": [
+                    (
+                        float(self._normalized_delta_percent_for_row(row))
+                        if self._normalized_delta_percent_for_row(row) is not None
+                        else 0.0
+                    )
+                    for row in plot_rows
+                ],
             }
         )
         long_df = df.melt(
@@ -366,6 +470,70 @@ class CompareDashboard(TrackiqDashboard):
             yaxis_title="Score",
         )
         st.plotly_chart(fig_score, use_container_width=True)
+
+        # Normalized deltas (positive => B advantage, negative => A advantage)
+        st.markdown("### Normalized Metric Deltas")
+        fig_norm = px.bar(
+            df.sort_values("normalized_delta_percent"),
+            x="metric",
+            y="normalized_delta_percent",
+            title=f"Normalized Delta ({self.label_b} advantage is positive)",
+            labels={"metric": "Metric", "normalized_delta_percent": "Normalized Delta (%)"},
+            color="normalized_delta_percent",
+            color_continuous_scale="RdYlGn",
+        )
+        fig_norm.update_layout(xaxis_tickangle=-25)
+        fig_norm.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+        st.plotly_chart(fig_norm, use_container_width=True)
+
+        # Waterfall-style family summary
+        family_rows = self._metric_family_delta_rows(rows)
+        if family_rows:
+            family_df = pd.DataFrame(family_rows)
+            fig_family = px.bar(
+                family_df.sort_values("normalized_delta_percent"),
+                x="family",
+                y="normalized_delta_percent",
+                title="Metric Family Delta Waterfall",
+                labels={"family": "Family", "normalized_delta_percent": "Normalized Delta (%)"},
+                color="normalized_delta_percent",
+                color_continuous_scale="RdYlGn",
+                hover_data={"metric_count": True, "winner": True},
+            )
+            fig_family.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+            st.plotly_chart(fig_family, use_container_width=True)
+
+        # Confidence matrix
+        confidence_rows = self._metric_confidence_rows()
+        if confidence_rows:
+            confidence_df = pd.DataFrame(confidence_rows)
+            z_data = [
+                [1 if bool(row["a_available"]) else 0, 1 if bool(row["b_available"]) else 0]
+                for row in confidence_rows
+            ]
+            fig_conf = go.Figure(
+                data=go.Heatmap(
+                    z=z_data,
+                    x=[self.label_a, self.label_b],
+                    y=[str(row["metric"]) for row in confidence_rows],
+                    colorscale=[[0.0, "#ef4444"], [1.0, "#22c55e"]],
+                    zmin=0,
+                    zmax=1,
+                    showscale=False,
+                )
+            )
+            fig_conf.update_layout(
+                title="Metric Availability Confidence Matrix",
+                xaxis_title="Result",
+                yaxis_title="Metric",
+            )
+            st.plotly_chart(fig_conf, use_container_width=True)
+
+            st.dataframe(
+                confidence_df[["metric", "family", "confidence"]],
+                use_container_width=True,
+                hide_index=True,
+            )
 
     def build_components(self) -> dict[str, object]:
         """Build testable comparison dashboard components."""
