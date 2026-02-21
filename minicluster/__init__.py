@@ -12,10 +12,12 @@ __author__ = "Hamna Nimra"
 __description__ = "Local distributed training validation tool for AI workloads"
 
 from minicluster.runner import (
+    EmbeddingWorkload,
     RunConfig,
     RunMetrics,
     SimpleMLP,
     StepMetrics,
+    TransformerWorkload,
     load_metrics,
     run_distributed,
     save_metrics,
@@ -35,6 +37,8 @@ __all__ = [
     "RunMetrics",
     "StepMetrics",
     "SimpleMLP",
+    "TransformerWorkload",
+    "EmbeddingWorkload",
     "run_distributed",
     "train_single_process",
     "train_distributed",

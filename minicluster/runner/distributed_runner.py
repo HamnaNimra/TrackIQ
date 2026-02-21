@@ -239,6 +239,52 @@ def create_synthetic_dataset(
     )
 
 
+def _train_single_process_custom_workload(config: RunConfig) -> list[float]:
+    """Train synthetic non-MLP workloads for a fixed number of steps."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+
+    from minicluster.runner.workloads import EmbeddingWorkload, TransformerWorkload
+
+    torch.manual_seed(config.seed)
+    criterion = nn.MSELoss()
+
+    losses: list[float] = []
+    if config.workload == "transformer":
+        model = TransformerWorkload()
+        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+        for _ in range(config.num_steps):
+            x_batch = torch.randn(config.batch_size, 32, 256)
+            y_batch = torch.randn(config.batch_size, 1)
+            optimizer.zero_grad()
+            output = model(x_batch)
+            loss = criterion(output, y_batch)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+        return losses
+
+    if config.workload == "embedding":
+        model = EmbeddingWorkload()
+        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+        bag_size = 16
+        for _ in range(config.num_steps):
+            total_indices = config.batch_size * bag_size
+            indices = torch.randint(0, 10_000, (total_indices,), dtype=torch.long)
+            offsets = torch.arange(0, total_indices, bag_size, dtype=torch.long)
+            y_batch = torch.randn(config.batch_size, 1)
+            optimizer.zero_grad()
+            output = model(indices, offsets)
+            loss = criterion(output, y_batch)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+        return losses
+
+    return _train_single_process_impl(config.to_core())
+
+
 def train_single_process(config: RunConfig, health_checkpoint_path: str | None = None) -> RunMetrics:
     """Train in single-process mode using trackiq_core implementation.
 
@@ -254,9 +300,9 @@ def train_single_process(config: RunConfig, health_checkpoint_path: str | None =
 
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
-    # Call trackiq_core implementation
+    # Call trackiq_core implementation for MLP, local synthetic loops for other workloads.
     start = time.time()
-    losses = _train_single_process_impl(config.to_core())
+    losses = _train_single_process_custom_workload(config)
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -315,7 +361,7 @@ def train_distributed(
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg)
+    losses = _train_multi_process_impl(core_cfg) if config.workload == "mlp" else _train_single_process_custom_workload(config)
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -365,7 +411,7 @@ def run_distributed(config: RunConfig, health_checkpoint_path: str | None = None
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg)
+    losses = _train_multi_process_impl(core_cfg) if config.workload == "mlp" else _train_single_process_custom_workload(config)
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
