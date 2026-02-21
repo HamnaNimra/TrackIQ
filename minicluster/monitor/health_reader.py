@@ -6,9 +6,10 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
-from minicluster.runner.distributed_runner import HealthCheckpoint, WorkerSnapshot
+if TYPE_CHECKING:
+    from minicluster.runner.distributed_runner import HealthCheckpoint
 
 
 class HealthReader:
@@ -28,6 +29,8 @@ class HealthReader:
 
     def read(self) -> Optional[HealthCheckpoint]:
         """Read current checkpoint file, returning None when unavailable."""
+        from minicluster.runner.distributed_runner import HealthCheckpoint, WorkerSnapshot
+
         path = Path(self.checkpoint_path)
         if not path.exists():
             time.sleep(0.05)
@@ -83,4 +86,3 @@ class HealthReader:
         if Path(self.checkpoint_path).exists():
             return False
         return (time.time() - self._start_time) >= self.timeout_seconds
-
