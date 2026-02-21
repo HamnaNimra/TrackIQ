@@ -27,7 +27,7 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import streamlit as st
 
@@ -52,6 +52,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+MAX_UI_AUTO_RUNS = 12
 
 
 def load_json_data(filepath: str) -> Optional[Dict[str, Any]]:
@@ -357,6 +359,8 @@ def run_auto_benchmarks_ui(
     batch_sizes: List[int],
     max_configs_per_device: int = 6,
     device_ids_filter: Optional[List[str]] = None,
+    progress_callback: Optional[Callable[..., None]] = None,
+    max_total_runs: int = MAX_UI_AUTO_RUNS,
 ) -> List[Dict[str, Any]]:
     """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
     try:
@@ -371,14 +375,46 @@ def run_auto_benchmarks_ui(
         )
         if not pairs:
             return []
+        if max_total_runs > 0 and len(pairs) > max_total_runs:
+            pairs = pairs[:max_total_runs]
         return run_auto_benchmarks(
             pairs,
             duration_seconds=float(duration_seconds),
             sample_interval_seconds=0.2,
             quiet=True,
+            progress_callback=progress_callback,
+            enable_power=False,
         )
     except Exception:
         return []
+
+
+def estimate_auto_benchmark_plan_ui(
+    duration_seconds: int,
+    precisions: List[str],
+    batch_sizes: List[int],
+    max_configs_per_device: int = 6,
+    device_ids_filter: Optional[List[str]] = None,
+) -> Dict[str, int]:
+    """Estimate run count and wall-clock time for auto-benchmark UI selections."""
+    try:
+        from autoperfpy.device_config import get_devices_and_configs_auto
+
+        pairs = get_devices_and_configs_auto(
+            precisions=precisions,
+            batch_sizes=batch_sizes,
+            max_configs_per_device=max_configs_per_device,
+            device_ids_filter=device_ids_filter,
+        )
+        planned_runs = len(pairs)
+        capped_runs = min(planned_runs, MAX_UI_AUTO_RUNS)
+        return {
+            "planned_runs": planned_runs,
+            "capped_runs": capped_runs,
+            "estimated_seconds": int(capped_runs * max(1, int(duration_seconds))),
+        }
+    except Exception:
+        return {"planned_runs": 0, "capped_runs": 0, "estimated_seconds": 0}
 
 
 def run_benchmark_from_ui(
@@ -413,6 +449,7 @@ def run_benchmark_from_ui(
         duration_seconds=float(duration_seconds),
         sample_interval_seconds=0.2,
         quiet=True,
+        enable_power=False,
     )
     return result
 
@@ -968,7 +1005,7 @@ def main():
                 selected_labels = st.multiselect(
                     "Devices (select one or more)",
                     options=device_labels,
-                    default=device_labels,
+                    default=device_labels[:1],
                     key="bench_devices",
                     help="Select at least one device. Same as CLI: autoperfpy run --device <id>",
                 )
@@ -992,7 +1029,7 @@ def main():
                 "Duration (seconds)",
                 min_value=1,
                 max_value=300,
-                value=10,
+                value=5,
                 key="bench_dur",
             )
             precisions_ui = st.multiselect(
@@ -1011,22 +1048,62 @@ def main():
                 "Max configs per device",
                 min_value=1,
                 max_value=20,
-                value=6,
+                value=3,
                 key="bench_max",
             )
+
+            plan = {"planned_runs": 0, "capped_runs": 0, "estimated_seconds": 0}
+            if selected_device_ids:
+                plan = estimate_auto_benchmark_plan_ui(
+                    duration_seconds=int(duration_ui),
+                    precisions=precisions_ui or PRECISIONS[:1],
+                    batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
+                    max_configs_per_device=int(max_cfg),
+                    device_ids_filter=selected_device_ids,
+                )
+                if plan["planned_runs"] > 0:
+                    st.caption(
+                        "Planned runs: "
+                        f"{plan['planned_runs']} (running first {plan['capped_runs']}) | "
+                        f"Estimated runtime: ~{plan['estimated_seconds']}s"
+                    )
+                    if plan["planned_runs"] > MAX_UI_AUTO_RUNS:
+                        st.info(
+                            f"UI run cap is {MAX_UI_AUTO_RUNS} to keep execution responsive. "
+                            "Narrow devices/configs to target specific runs."
+                        )
 
             if st.button("Run benchmark"):
                 if not selected_device_ids:
                     st.warning("Select at least one device.")
                 elif detected:
-                    with st.spinner("Running benchmarks..."):
-                        results = run_auto_benchmarks_ui(
-                            duration_seconds=duration_ui,
-                            precisions=precisions_ui or PRECISIONS[:1],
-                            batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
-                            max_configs_per_device=max_cfg,
-                            device_ids_filter=selected_device_ids,
-                        )
+                    if plan["capped_runs"] == 0:
+                        st.warning("No valid benchmark configurations for selected inputs.")
+                        results = []
+                    else:
+                        progress = st.progress(0.0)
+                        status = st.empty()
+                        status.caption("Preparing runs...")
+
+                        def _on_progress(i, total, device, config):
+                            progress.progress(min(1.0, i / max(total, 1)))
+                            status.caption(
+                                f"Run {i}/{total}: {device.device_name} ({device.device_id}) "
+                                f"precision={config.precision} batch={config.batch_size}"
+                            )
+
+                        with st.spinner("Running benchmarks..."):
+                            results = run_auto_benchmarks_ui(
+                                duration_seconds=duration_ui,
+                                precisions=precisions_ui or PRECISIONS[:1],
+                                batch_sizes=batch_sizes_ui or DEFAULT_BATCH_SIZES[:1],
+                                max_configs_per_device=max_cfg,
+                                device_ids_filter=selected_device_ids,
+                                progress_callback=_on_progress,
+                                max_total_runs=MAX_UI_AUTO_RUNS,
+                            )
+                        progress.empty()
+                        status.empty()
                     if results:
                         if "data_list" not in st.session_state:
                             st.session_state["data_list"] = []
