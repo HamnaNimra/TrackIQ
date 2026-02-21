@@ -51,6 +51,15 @@ def run_compare(args: argparse.Namespace) -> int:
         regression_threshold_percent=args.regression_threshold
     ).generate(comparison)
 
+    if result_a.workload.workload_type != result_b.workload.workload_type:
+        workload_warning = (
+            "Workload types differ "
+            f"({result_a.workload.workload_type} vs {result_b.workload.workload_type}). "
+            "Interpret metric winners cautiously for cross-workload comparisons."
+        )
+        print(f"[WARN] {workload_warning}")
+        summary.text = f"{workload_warning} {summary.text}"
+
     TerminalReporter(tolerance_percent=args.tolerance).render(comparison, summary)
 
     if args.html:
