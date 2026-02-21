@@ -256,6 +256,22 @@ Acceptance criteria:
 - Measurable reduction in unused-code lint findings.
 - Changelog note describing removed deprecated/stale paths.
 
+### 16.2) Optional debug harness replacements `[P2] [OPEN]`
+
+Problem: dead standalone debug scripts were removed; a maintained replacement may still be useful.
+
+Tasks:
+
+1. Add a supported chart-debug harness under `scripts/` (or `tests/fixtures`) for synthetic sample generation and chart smoke checks.
+2. Add a maintained report-debug command that exercises `autoperfpy report html/pdf` using canonical fixture inputs.
+3. Add an optional `distributed-validator` smoke CLI wrapper (or documented pytest command) for quick local checks.
+4. Decide whether `autoperfpy/cli/utils.py` compatibility wrappers should be retained or removed in a future breaking-change window.
+
+Acceptance criteria:
+
+- Debug workflows are reachable via documented commands (not ad-hoc root scripts).
+- No orphan/one-off debug scripts at repository root.
+
 ---
 
 ## Repository Quality Standards
@@ -317,4 +333,3 @@ Tasks:
 3. `[P1]` Start LLM schema integration (`ttft_ms`, KV metrics) behind additive fields.
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
-
