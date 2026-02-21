@@ -110,6 +110,11 @@ class CompareDashboard(TrackiqDashboard):
             detect_platform_vendor(self.result_b.platform.hardware_name),
         )
 
+    @staticmethod
+    def platform_export_filename(vendor_a: str, vendor_b: str, timestamp: str) -> str:
+        """Build platform comparison export filename."""
+        return f"{vendor_a.lower()}_vs_{vendor_b.lower()}_comparison_{timestamp}.html"
+
     def is_platform_comparison_mode(self) -> bool:
         """Return True when both results are from different detected vendors."""
         vendor_a, vendor_b = self._vendors()
@@ -226,7 +231,7 @@ class CompareDashboard(TrackiqDashboard):
             st.write(self._competitive_verdict(rows))
 
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            filename = f"{vendor_a.lower()}_vs_{vendor_b.lower()}_comparison_{timestamp}.html"
+            filename = self.platform_export_filename(vendor_a, vendor_b, timestamp)
             html = (
                 "<!doctype html><html><head><meta charset='utf-8'><title>Platform Comparison</title></head><body>"
                 f"<h1>{vendor_a} vs {vendor_b} Performance Comparison</h1>"
