@@ -148,7 +148,111 @@ def populate_standard_html_report(
     return report_df, merged_summary
 
 
+def populate_multi_run_html_report(
+    report: Any,
+    runs: list[dict[str, Any]],
+    *,
+    data_source: str | None = None,
+) -> None:
+    """Populate a consolidated multi-run report view with all run labels."""
+    valid_runs = [run for run in runs if isinstance(run, dict) and run]
+    if not valid_runs:
+        return
+
+    run_names = [run.get("run_label") or run.get("collector_name") or f"Run {idx + 1}" for idx, run in enumerate(valid_runs)]
+
+    if data_source:
+        report.add_metadata("Data Source", data_source)
+    report.add_metadata("Run Count", str(len(valid_runs)))
+    report.add_metadata("Run Labels", ", ".join(str(name) for name in run_names))
+
+    total_samples = 0
+    best_run_name = None
+    best_run_throughput = None
+    overview_rows: list[list[str]] = []
+    for idx, run in enumerate(valid_runs):
+        run_name = str(run_names[idx])
+        summary = run.get("summary", {}) if isinstance(run, dict) else {}
+        latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
+        throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
+        power = summary.get("power", {}) if isinstance(summary, dict) else {}
+        platform = run.get("platform_metadata", {}) if isinstance(run, dict) else {}
+        inference = run.get("inference_config", {}) if isinstance(run, dict) else {}
+
+        samples = summary.get("sample_count") if isinstance(summary, dict) else None
+        try:
+            sample_count = int(samples) if samples is not None else int(len(run.get("samples", [])))
+        except (TypeError, ValueError):
+            sample_count = int(len(run.get("samples", [])))
+        total_samples += sample_count
+
+        try:
+            mean_fps = float(throughput.get("mean_fps")) if throughput.get("mean_fps") is not None else None
+        except (TypeError, ValueError):
+            mean_fps = None
+
+        if mean_fps is not None and (best_run_throughput is None or mean_fps > best_run_throughput):
+            best_run_throughput = mean_fps
+            best_run_name = run_name
+
+        p99_value = latency.get("p99_ms") if isinstance(latency, dict) else None
+        p99_display = f"{float(p99_value):.2f}" if isinstance(p99_value, (int, float)) else "-"
+        thr_display = f"{mean_fps:.2f}" if mean_fps is not None else "-"
+        pwr_value = power.get("mean_w") if isinstance(power, dict) else None
+        pwr_display = f"{float(pwr_value):.2f}" if isinstance(pwr_value, (int, float)) else "-"
+
+        device = ""
+        if isinstance(platform, dict):
+            device = str(platform.get("device_name") or "")
+        if _is_missing(device) and isinstance(inference, dict):
+            device = str(inference.get("accelerator") or "")
+        if _is_missing(device):
+            device = "-"
+
+        precision = "-"
+        batch_size = "-"
+        if isinstance(inference, dict):
+            if not _is_missing(inference.get("precision")):
+                precision = str(inference.get("precision"))
+            if inference.get("batch_size") is not None and not _is_missing(inference.get("batch_size")):
+                batch_size = str(inference.get("batch_size"))
+
+        overview_rows.append(
+            [
+                run_name,
+                device,
+                precision,
+                batch_size,
+                str(sample_count),
+                p99_display,
+                thr_display,
+                pwr_display,
+            ]
+        )
+
+    report.add_summary_item("Runs", len(valid_runs), "", "neutral")
+    report.add_summary_item("Total Samples", total_samples, "", "neutral")
+    if best_run_name is not None and best_run_throughput is not None:
+        report.add_summary_item("Best Throughput Run", best_run_name, "", "good")
+        report.add_summary_item("Best Throughput", f"{best_run_throughput:.2f}", "FPS", "good")
+
+    report.add_section("Run Overview", "All run labels and key metrics in one consolidated table.")
+    report.add_table(
+        "Run Overview Table",
+        ["Run Label", "Device", "Precision", "Batch", "Samples", "P99 (ms)", "Mean Throughput (FPS)", "Mean Power (W)"],
+        overview_rows,
+        "Run Overview",
+    )
+    report.add_multi_run_comparison(
+        valid_runs,
+        run_names=[str(name) for name in run_names],
+        section="Run Comparison",
+        description="Cross-run latency and throughput comparison with summary table.",
+    )
+
+
 __all__ = [
     "prepare_report_dataframe_and_summary",
     "populate_standard_html_report",
+    "populate_multi_run_html_report",
 ]

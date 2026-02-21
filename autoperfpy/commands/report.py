@@ -13,6 +13,37 @@ from trackiq_core.reporting import PDF_BACKEND_AUTO, PdfBackendError
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 
 
+def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
+    """Write consolidated CSV rows for multiple runs."""
+    rows: list[tuple[Any, ...]] = []
+    for idx, run in enumerate(runs):
+        if not isinstance(run, dict):
+            continue
+        run_label = run.get("run_label") or run.get("collector_name") or f"run_{idx + 1}"
+        batch_size = run.get("inference_config", {}).get("batch_size", 1) if isinstance(run.get("inference_config"), dict) else 1
+        samples = run.get("samples", [])
+        if not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            ts = sample.get("timestamp", 0)
+            metrics = sample.get("metrics", sample) if isinstance(sample, dict) else {}
+            if not isinstance(metrics, dict):
+                continue
+            latency = metrics.get("latency_ms", 0)
+            power = metrics.get("power_w", 0)
+            throughput = (1000.0 / latency) if isinstance(latency, (int, float)) and latency else 0
+            rows.append((ts, run_label, "default", batch_size, latency, power, throughput))
+    if not rows:
+        return False
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("timestamp,run_label,workload,batch_size,latency_ms,power_w,throughput\n")
+        for row in rows:
+            handle.write(",".join(str(value) for value in row) + "\n")
+    return True
+
+
 def run_report_html(
     args: Any,
     config: Any,
@@ -26,7 +57,10 @@ def run_report_html(
     """Generate HTML report."""
     del config
     import pandas as pd
-    from autoperfpy.reports.report_builder import populate_standard_html_report
+    from autoperfpy.reports.report_builder import (
+        populate_multi_run_html_report,
+        populate_standard_html_report,
+    )
 
     json_path_to_cleanup = None
     if not getattr(args, "csv", None) and not getattr(args, "json", None):
@@ -48,89 +82,102 @@ def run_report_html(
         data_source = getattr(args, "csv", None) or getattr(args, "json", None) or "Sample Data"
 
         has_report_data = False
-        export_data: dict[str, Any] | None = None
+        export_data: Any | None = None
 
         if getattr(args, "json", None):
             with open(args.json, encoding="utf-8") as handle:
-                data = normalize_report_input_data(json.load(handle))
+                raw_data = json.load(handle)
 
-            if "comparisons" in data and "summary" in data and "config" in data:
-                has_report_data = True
-                report.add_metadata("Data Source", data_source)
-                report.add_metadata("Validation Type", "Distributed Training")
-                config_data = data["config"]
-                report.add_metadata("Training Steps", str(config_data.get("num_steps", 0)))
-                report.add_metadata("Processes", str(config_data.get("num_processes", 1)))
-                report.add_metadata("Loss Tolerance", str(config_data.get("loss_tolerance", 0.01)))
-
-                summary = data["summary"]
-                report.add_summary_item("Total Steps", summary["total_steps"], "", "neutral")
-                report.add_summary_item(
-                    "Passed Steps",
-                    summary["passed_steps"],
-                    "",
-                    "good" if summary["passed_steps"] > 0 else "neutral",
-                )
-                report.add_summary_item(
-                    "Failed Steps",
-                    summary["failed_steps"],
-                    "",
-                    "critical" if summary["failed_steps"] > 0 else "neutral",
-                )
-                report.add_summary_item(
-                    "Pass Rate",
-                    f"{summary['pass_rate']:.1%}",
-                    "",
-                    "good" if summary["overall_pass"] else "critical",
-                )
-                status = "good" if summary["overall_pass"] else "critical"
-                report.add_summary_item("Overall Status", "PASS" if summary["overall_pass"] else "FAIL", "", status)
-
-                report.add_section("Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses")
-                comparisons = data["comparisons"]
-                table_data = []
-                for comparison in comparisons:
-                    step = comparison["step"]
-                    single_loss = comparison["single_process_loss"]
-                    multi_loss = comparison["multi_process_loss"]
-                    delta = comparison["absolute_delta"]
-                    rel_delta = comparison["relative_delta"]
-                    passed = comparison["passed"]
-                    status_icon = "PASS" if passed else "FAIL"
-                    table_data.append(
-                        [
-                            str(step),
-                            f"{single_loss:.6f}",
-                            f"{multi_loss:.6f}",
-                            f"{delta:.6f}",
-                            f"{rel_delta:.4f}",
-                            status_icon,
-                        ]
-                    )
-
-                headers = ["Step", "Single Loss", "Multi Loss", "Abs Delta", "Rel Delta", "Status"]
-                report.add_table("Loss Comparison", headers, table_data, "Step-by-Step Loss Comparison")
-
-                if len(comparisons) > 1:
-                    import matplotlib.pyplot as plt
-
-                    steps = [comparison["step"] for comparison in comparisons]
-                    single_losses = [comparison["single_process_loss"] for comparison in comparisons]
-                    multi_losses = [comparison["multi_process_loss"] for comparison in comparisons]
-
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.plot(steps, single_losses, label="Single Process", marker="o")
-                    ax.plot(steps, multi_losses, label="Multi Process", marker="s")
-                    ax.set_xlabel("Training Step")
-                    ax.set_ylabel("Loss")
-                    ax.set_title("Loss Comparison: Single vs Multi Process")
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    report.add_figure(fig, "Loss Comparison Chart", "Step-by-Step Loss Comparison")
+            if isinstance(raw_data, list):
+                runs = [normalize_report_input_data(item) for item in raw_data]
+                runs = [run for run in runs if isinstance(run, dict) and run]
+                if runs:
+                    has_report_data = True
+                    populate_multi_run_html_report(report, runs, data_source=data_source)
+                    export_data = runs
             else:
-                has_report_data = True
-                populate_standard_html_report(report, data, data_source=data_source)
-                export_data = data
+                data = normalize_report_input_data(raw_data)
+
+                if "comparisons" in data and "summary" in data and "config" in data:
+                    has_report_data = True
+                    report.add_metadata("Data Source", data_source)
+                    report.add_metadata("Validation Type", "Distributed Training")
+                    config_data = data["config"]
+                    report.add_metadata("Training Steps", str(config_data.get("num_steps", 0)))
+                    report.add_metadata("Processes", str(config_data.get("num_processes", 1)))
+                    report.add_metadata("Loss Tolerance", str(config_data.get("loss_tolerance", 0.01)))
+
+                    summary = data["summary"]
+                    report.add_summary_item("Total Steps", summary["total_steps"], "", "neutral")
+                    report.add_summary_item(
+                        "Passed Steps",
+                        summary["passed_steps"],
+                        "",
+                        "good" if summary["passed_steps"] > 0 else "neutral",
+                    )
+                    report.add_summary_item(
+                        "Failed Steps",
+                        summary["failed_steps"],
+                        "",
+                        "critical" if summary["failed_steps"] > 0 else "neutral",
+                    )
+                    report.add_summary_item(
+                        "Pass Rate",
+                        f"{summary['pass_rate']:.1%}",
+                        "",
+                        "good" if summary["overall_pass"] else "critical",
+                    )
+                    status = "good" if summary["overall_pass"] else "critical"
+                    report.add_summary_item("Overall Status", "PASS" if summary["overall_pass"] else "FAIL", "", status)
+
+                    report.add_section(
+                        "Step-by-Step Loss Comparison",
+                        "Comparison of single-process vs multi-process losses",
+                    )
+                    comparisons = data["comparisons"]
+                    table_data = []
+                    for comparison in comparisons:
+                        step = comparison["step"]
+                        single_loss = comparison["single_process_loss"]
+                        multi_loss = comparison["multi_process_loss"]
+                        delta = comparison["absolute_delta"]
+                        rel_delta = comparison["relative_delta"]
+                        passed = comparison["passed"]
+                        status_icon = "PASS" if passed else "FAIL"
+                        table_data.append(
+                            [
+                                str(step),
+                                f"{single_loss:.6f}",
+                                f"{multi_loss:.6f}",
+                                f"{delta:.6f}",
+                                f"{rel_delta:.4f}",
+                                status_icon,
+                            ]
+                        )
+
+                    headers = ["Step", "Single Loss", "Multi Loss", "Abs Delta", "Rel Delta", "Status"]
+                    report.add_table("Loss Comparison", headers, table_data, "Step-by-Step Loss Comparison")
+
+                    if len(comparisons) > 1:
+                        import matplotlib.pyplot as plt
+
+                        steps = [comparison["step"] for comparison in comparisons]
+                        single_losses = [comparison["single_process_loss"] for comparison in comparisons]
+                        multi_losses = [comparison["multi_process_loss"] for comparison in comparisons]
+
+                        fig, ax = plt.subplots(figsize=(10, 6))
+                        ax.plot(steps, single_losses, label="Single Process", marker="o")
+                        ax.plot(steps, multi_losses, label="Multi Process", marker="s")
+                        ax.set_xlabel("Training Step")
+                        ax.set_ylabel("Loss")
+                        ax.set_title("Loss Comparison: Single vs Multi Process")
+                        ax.legend()
+                        ax.grid(True, alpha=0.3)
+                        report.add_figure(fig, "Loss Comparison Chart", "Step-by-Step Loss Comparison")
+                else:
+                    has_report_data = True
+                    populate_standard_html_report(report, data, data_source=data_source)
+                    export_data = data
         elif getattr(args, "csv", None):
             has_report_data = True
             df = pd.read_csv(args.csv)
@@ -154,7 +201,12 @@ def run_report_html(
                 workload_type="inference",
             )
             print(f"[OK] JSON exported to: {json_out}")
-            if write_result_to_csv(export_data, csv_out):
+            csv_written = False
+            if isinstance(export_data, list):
+                csv_written = _write_multi_run_csv(export_data, csv_out)
+            elif isinstance(export_data, dict):
+                csv_written = write_result_to_csv(export_data, csv_out)
+            if csv_written:
                 print(f"[OK] CSV exported to: {csv_out}")
 
         if not has_report_data:

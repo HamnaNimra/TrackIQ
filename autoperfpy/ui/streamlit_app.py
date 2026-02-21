@@ -460,7 +460,7 @@ def _run_synthetic_fallback_ui(duration_seconds: int, device: str, precision: st
     return data
 
 
-def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -> tuple:
+def _generate_report_directly(data: dict[str, Any] | list[dict[str, Any]], report_type: str = "HTML") -> tuple:
     """Generate HTML report directly without using CLI subprocess.
 
     The HTML report includes a 'Print / Save as PDF' button that users can
@@ -474,13 +474,20 @@ def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -
         Tuple of (report_bytes, filename) or (None, None) on failure
     """
     from autoperfpy.reports import HTMLReportGenerator
-    from autoperfpy.reports.report_builder import populate_standard_html_report
+    from autoperfpy.reports.report_builder import (
+        populate_multi_run_html_report,
+        populate_standard_html_report,
+    )
 
     del report_type
-    samples = data.get("samples", [])
-
-    if not samples:
-        return None, None
+    if isinstance(data, dict):
+        samples = data.get("samples", [])
+        if not samples:
+            return None, None
+    else:
+        valid_runs = [run for run in data if isinstance(run, dict) and run]
+        if not valid_runs:
+            return None, None
 
     # Create report generator
     report = HTMLReportGenerator(
@@ -489,7 +496,10 @@ def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -
         theme="light",
     )
 
-    populate_standard_html_report(report, data)
+    if isinstance(data, list):
+        populate_multi_run_html_report(report, data)
+    else:
+        populate_standard_html_report(report, data)
 
     # Generate report to temp file
     out_dir = tempfile.mkdtemp(prefix="autoperfpy_report_")
@@ -1087,7 +1097,7 @@ def main():
             if st.button("Generate HTML Report"):
                 data_for_report = None
                 if report_analyze_source == "Use current data above" and data_list:
-                    data_for_report = data_list[0]
+                    data_for_report = data_list if len(data_list) > 1 else data_list[0]
                 elif report_analyze_source == "Run quick benchmark":
                     with st.spinner("Running quick benchmark..."):
                         data_for_report = run_benchmark_from_ui(ra_duration, ra_device_id, "fp32")

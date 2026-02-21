@@ -4,6 +4,7 @@ import pytest
 
 from autoperfpy.reporting import HTMLReportGenerator
 from autoperfpy.reports.report_builder import (
+    populate_multi_run_html_report,
     populate_standard_html_report,
     prepare_report_dataframe_and_summary,
 )
@@ -103,3 +104,43 @@ def test_prepare_report_dataframe_and_summary_keeps_existing_values() -> None:
     assert summary["latency"]["p99_ms"] == 999.0
     assert summary["latency"]["p50_ms"] > 0
     assert summary["sample_count"] == 2
+
+
+def test_populate_multi_run_html_report_includes_all_run_labels() -> None:
+    """Multi-run report should include every run label in overview metadata/table."""
+    report = HTMLReportGenerator()
+    runs = [
+        {
+            "run_label": "cpu_0_fp32_bs1",
+            "platform_metadata": {"device_name": "CPU"},
+            "inference_config": {"precision": "fp32", "batch_size": 1},
+            "summary": {
+                "sample_count": 10,
+                "latency": {"p99_ms": 24.0},
+                "throughput": {"mean_fps": 40.0},
+                "power": {"mean_w": 55.0},
+            },
+        },
+        {
+            "run_label": "nvidia_0_fp16_bs4",
+            "platform_metadata": {"device_name": "NVIDIA"},
+            "inference_config": {"precision": "fp16", "batch_size": 4},
+            "summary": {
+                "sample_count": 12,
+                "latency": {"p99_ms": 12.0},
+                "throughput": {"mean_fps": 90.0},
+                "power": {"mean_w": 110.0},
+            },
+        },
+    ]
+
+    populate_multi_run_html_report(report, runs, data_source="unit-test-multi")
+
+    assert report.metadata["Data Source"] == "unit-test-multi"
+    assert report.metadata["Run Count"] == "2"
+    assert "cpu_0_fp32_bs1" in report.metadata["Run Labels"]
+    assert "nvidia_0_fp16_bs4" in report.metadata["Run Labels"]
+    table = next(item for item in report.tables if item["title"] == "Run Overview Table")
+    labels = {row[0] for row in table["rows"]}
+    assert "cpu_0_fp32_bs1" in labels
+    assert "nvidia_0_fp16_bs4" in labels
