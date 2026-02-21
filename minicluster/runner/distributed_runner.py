@@ -409,11 +409,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
             status="pass",
             failed_metrics=[],
         ),
-        tool_payload=(
-            metrics.power_tool_payload
-            if isinstance(metrics.power_tool_payload, dict)
-            else metrics_dict
-        ),
+        tool_payload=metrics_dict,
     )
     save_trackiq_result(result, output_path)
 
