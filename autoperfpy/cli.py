@@ -42,6 +42,7 @@ from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
 from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
 from trackiq_core.hardware import DeviceProfile, get_all_devices
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError
 from trackiq_core.schema import (
     KVCacheInfo,
     Metrics as TrackiqMetrics,
@@ -571,6 +572,15 @@ Environment Variables:
         "--title", default="Performance Analysis Report", help="Report title"
     )
     pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
+    pdf_parser.add_argument(
+        "--pdf-backend",
+        choices=list(PDF_BACKENDS),
+        default=PDF_BACKEND_AUTO,
+        help=(
+            "PDF backend strategy (default: auto). "
+            "auto uses weasyprint primary with matplotlib fallback."
+        ),
+    )
 
     # UI command (Streamlit dashboard)
     ui_parser = subparsers.add_parser(
