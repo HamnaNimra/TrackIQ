@@ -58,6 +58,7 @@ def run_report_html(
     """Generate HTML report."""
     del config
     import pandas as pd
+
     from autoperfpy.reporting import HTMLReportGenerator
     from autoperfpy.reports.report_builder import (
         populate_multi_run_html_report,
@@ -245,6 +246,7 @@ def run_report_pdf(
     """Generate PDF report (same content as HTML, converted to PDF)."""
     del config
     import pandas as pd
+
     from autoperfpy.reporting import PDFReportGenerator
 
     json_path_to_cleanup = None

@@ -14,6 +14,17 @@ from typing import Any
 
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
 from autoperfpy.config import ConfigManager
+from autoperfpy.device_config import (
+    DEFAULT_WARMUP_RUNS,
+    PRECISION_BF16,
+    PRECISION_FP16,
+    PRECISION_FP32,
+    PRECISION_INT4,
+    PRECISION_INT8,
+    PRECISIONS,
+    InferenceConfig,
+    resolve_device,
+)
 from autoperfpy.profiles import ProfileValidationError
 from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
 from trackiq_core.hardware import DeviceProfile
@@ -30,18 +41,6 @@ from trackiq_core.schema import (
 )
 from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
-
-from autoperfpy.device_config import (
-    DEFAULT_WARMUP_RUNS,
-    PRECISION_BF16,
-    PRECISION_FP16,
-    PRECISION_FP32,
-    PRECISION_INT4,
-    PRECISION_INT8,
-    PRECISIONS,
-    InferenceConfig,
-    resolve_device,
-)
 
 
 def setup_parser() -> argparse.ArgumentParser:

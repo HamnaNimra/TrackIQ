@@ -19,6 +19,17 @@ from trackiq_compare.deps import (
 from trackiq_compare.reporters import HtmlReporter, TerminalReporter
 
 
+def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
+    """Print help for a specific top-level subcommand."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            subparser = action.choices.get(command)
+            if subparser is not None:
+                subparser.print_help()
+                return
+    parser.print_help()
+
+
 def _metrics_for_baseline(result) -> dict[str, float]:
     """Extract numeric metrics suitable for trackiq_core baseline comparison."""
     metrics = {}
@@ -220,7 +231,7 @@ def main(argv=None) -> int:
         parser.print_help()
         return 0
     if args.command == "report" and not getattr(args, "report_type", None):
-        parser.parse_args(["report", "-h"])
+        _print_subcommand_help(parser, "report")
         return 1
     return int(args.func(args))
 

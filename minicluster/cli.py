@@ -24,6 +24,17 @@ from trackiq_core.reporting import (
 from trackiq_core.serializer import load_trackiq_result
 
 
+def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
+    """Print help text for a specific top-level subcommand."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            subparser = action.choices.get(command)
+            if subparser is not None:
+                subparser.print_help()
+                return
+    parser.print_help()
+
+
 def setup_run_parser(subparsers):
     """Setup 'minicluster run' subcommand."""
     parser = subparsers.add_parser(
@@ -585,15 +596,15 @@ def main():
 
     if args.command == "baseline":
         if not args.baseline_cmd:
-            parser.parse_args([args.command, "-h"])
+            _print_subcommand_help(parser, args.command)
             sys.exit(1)
     if args.command == "report":
         if not getattr(args, "report_cmd", None):
-            parser.parse_args([args.command, "-h"])
+            _print_subcommand_help(parser, args.command)
             sys.exit(1)
     if args.command == "monitor":
         if not getattr(args, "monitor_cmd", None):
-            parser.parse_args([args.command, "-h"])
+            _print_subcommand_help(parser, args.command)
             sys.exit(1)
 
     # Execute the selected command
