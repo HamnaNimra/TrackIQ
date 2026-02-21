@@ -20,6 +20,8 @@ def make_result(
     mem: float = 60.0,
     comm=None,
     power=None,
+    energy=None,
+    perf_per_watt=None,
 ) -> TrackiqResult:
     """Create a TrackiqResult for tests."""
     return TrackiqResult(
@@ -46,6 +48,8 @@ def make_result(
             memory_utilization_percent=mem,
             communication_overhead_percent=comm,
             power_consumption_watts=power,
+            energy_per_step_joules=energy,
+            performance_per_watt=perf_per_watt,
         ),
         regression=RegressionInfo(
             baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
@@ -80,3 +84,25 @@ def test_null_metric_handling_not_comparable() -> None:
     metric = comparison.metrics["communication_overhead_percent"]
     assert metric.comparable is False
     assert metric.winner == "not_comparable"
+
+
+def test_power_metric_winner_logic() -> None:
+    """Power and energy should be lower-is-better; perf/watt higher-is-better."""
+    result_a = make_result(power=220.0, energy=9.0, perf_per_watt=1.5)
+    result_b = make_result(power=180.0, energy=7.0, perf_per_watt=2.0)
+    comparison = MetricComparator("A", "B").compare(result_a, result_b)
+
+    assert comparison.metrics["power_consumption_watts"].winner == "B"
+    assert comparison.metrics["energy_per_step_joules"].winner == "B"
+    assert comparison.metrics["performance_per_watt"].winner == "B"
+
+
+def test_power_metrics_skipped_when_both_results_have_nulls() -> None:
+    """All-null power metrics should be omitted from comparison output."""
+    result_a = make_result(power=None, energy=None, perf_per_watt=None)
+    result_b = make_result(power=None, energy=None, perf_per_watt=None)
+    comparison = MetricComparator("A", "B").compare(result_a, result_b)
+
+    assert "power_consumption_watts" not in comparison.metrics
+    assert "energy_per_step_joules" not in comparison.metrics
+    assert "performance_per_watt" not in comparison.metrics
