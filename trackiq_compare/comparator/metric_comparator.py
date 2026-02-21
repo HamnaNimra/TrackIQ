@@ -13,6 +13,13 @@ LOWER_IS_BETTER_METRICS = {
     "memory_utilization_percent",
     "communication_overhead_percent",
     "power_consumption_watts",
+    "energy_per_step_joules",
+}
+
+POWER_METRIC_FIELDS = {
+    "power_consumption_watts",
+    "energy_per_step_joules",
+    "performance_per_watt",
 }
 
 
@@ -62,6 +69,13 @@ class MetricComparator:
         metrics_a = asdict(result_a.metrics)
         metrics_b = asdict(result_b.metrics)
         all_metric_names = sorted(set(metrics_a.keys()) | set(metrics_b.keys()))
+        if all(
+            metrics_a.get(name) is None and metrics_b.get(name) is None
+            for name in POWER_METRIC_FIELDS
+        ):
+            all_metric_names = [
+                name for name in all_metric_names if name not in POWER_METRIC_FIELDS
+            ]
 
         output = ComparisonResult(label_a=self.label_a, label_b=self.label_b)
 
@@ -117,4 +131,3 @@ class MetricComparator:
             winner=winner,
             winner_margin_percent=margin,
         )
-
