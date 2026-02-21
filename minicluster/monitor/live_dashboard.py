@@ -9,8 +9,8 @@ from typing import Any, Dict, List
 
 from minicluster.monitor.anomaly_detector import AnomalyDetector
 from minicluster.monitor.health_reader import HealthReader
-from minicluster.runner.distributed_runner import Metrics
 from trackiq_core.schema import (
+    Metrics,
     PlatformInfo,
     RegressionInfo,
     TrackiqResult,
@@ -190,4 +190,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
