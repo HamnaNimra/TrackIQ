@@ -1,4 +1,5 @@
 """Unified dashboard launcher for AutoPerfPy, MiniCluster, and trackiq-compare."""
+
 # Cluster Health Dashboard — the single-pane view for a MiniCluster validation run.
 # In production, replace static JSON inputs with a live telemetry sink (PostgreSQL or OpenSearch)
 # and refresh on a configurable interval.
@@ -503,7 +504,9 @@ def _render_cluster_health_page(
             )
 
         if records:
-            baseline_candidates = [row for row in records if row["workers"] == 1 and isinstance(row["throughput"], float)]
+            baseline_candidates = [
+                row for row in records if row["workers"] == 1 and isinstance(row["throughput"], float)
+            ]
             baseline_thr = baseline_candidates[0]["throughput"] if baseline_candidates else None
             if baseline_thr is None:
                 sorted_records = sorted(records, key=lambda row: row["workers"])
@@ -1256,7 +1259,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             result_payload = _extract_minicluster_payload(_load_json_dict(result_path, "Result"))
             fault_payload = _load_json_dict(fault_path, "Fault report") if fault_path else None
-            scaling_payloads = [_load_json_dict(path, "Scaling run") for path in scaling_paths] if scaling_paths else None
+            scaling_payloads = (
+                [_load_json_dict(path, "Scaling run") for path in scaling_paths] if scaling_paths else None
+            )
             _render_cluster_health_page(
                 result_payload=result_payload,
                 fault_report_payload=fault_payload,
