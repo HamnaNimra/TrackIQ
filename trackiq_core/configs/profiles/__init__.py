@@ -8,6 +8,7 @@ from .profiles import (
     register_profile,
     get_profile_info,
     validate_profile_collector,
+    validate_profile_precision,
 )
 from trackiq_core.utils.errors import ProfileValidationError
 
@@ -19,5 +20,6 @@ __all__ = [
     "register_profile",
     "get_profile_info",
     "validate_profile_collector",
+    "validate_profile_precision",
     "ProfileValidationError",
 ]

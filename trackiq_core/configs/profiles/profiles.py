@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from enum import Enum
 
+from trackiq_core.inference import PRECISIONS
 from trackiq_core.utils.errors import ProfileValidationError
 
 
@@ -57,6 +58,7 @@ class Profile:
     collector_config: Dict[str, Any] = field(default_factory=dict)
     analysis_config: Dict[str, Any] = field(default_factory=dict)
     tags: List[str] = field(default_factory=list)
+    supported_precisions: List[str] = field(default_factory=lambda: list(PRECISIONS))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert profile to dictionary format."""
@@ -93,11 +95,17 @@ class Profile:
             "collector_config": self.collector_config,
             "analysis_config": self.analysis_config,
             "tags": self.tags,
+            "supported_precisions": list(self.supported_precisions),
         }
 
     def validate_collector(self, collector_type: CollectorType) -> bool:
         """Check if a collector type is supported by this profile."""
         return collector_type in self.supported_collectors
+
+    def validate_precision(self, precision: str) -> bool:
+        """Check if requested precision is supported by this profile."""
+        normalized = str(precision or "").strip().lower()
+        return normalized in {str(item).strip().lower() for item in self.supported_precisions}
 
     def get_synthetic_config(self) -> Dict[str, Any]:
         """Get configuration for SyntheticCollector based on profile."""
@@ -155,4 +163,15 @@ def validate_profile_collector(profile: Profile, collector_type: CollectorType) 
         raise ProfileValidationError(
             f"Collector '{collector_type.value}' is not supported by profile '{profile.name}'. "
             f"Supported collectors: {supported}"
+        )
+
+
+def validate_profile_precision(profile: Profile, precision: str) -> None:
+    """Validate that a precision is compatible with a profile."""
+    normalized = str(precision or "").strip().lower()
+    if not profile.validate_precision(normalized):
+        supported = [str(item).strip().lower() for item in profile.supported_precisions]
+        raise ProfileValidationError(
+            f"Precision '{normalized}' is not supported by profile '{profile.name}'. "
+            f"Supported precisions: {supported}"
         )
