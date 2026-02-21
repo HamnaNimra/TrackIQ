@@ -6,6 +6,7 @@ Extends trackiq_core.configs.Config with automotive-specific defaults and proper
 from typing import Any
 
 from trackiq_core.configs.config import Config as TrackIQConfig
+from trackiq_core.configs.config import ConfigManager as TrackIQConfigManager
 
 from .defaults import (
     DEFAULT_CONFIG,
@@ -61,15 +62,15 @@ class Config(TrackIQConfig):
         return self.config.get("process")
 
 
-class ConfigManager:
+class ConfigManager(TrackIQConfigManager):
     """Manages loading and saving configuration files.
 
     Wraps trackiq_core.configs.ConfigManager to return AutoPerfPy Config instances
     with automotive defaults.
     """
 
-    @staticmethod
-    def load_yaml(filepath: str) -> Config:
+    @classmethod
+    def load_yaml(cls, filepath: str) -> Config:
         """Load configuration from YAML file.
 
         Args:
@@ -78,13 +79,11 @@ class ConfigManager:
         Returns:
             Config object with automotive defaults
         """
-        from trackiq_core.configs.config_io import load_yaml_file
+        loaded = TrackIQConfigManager.load_yaml(filepath)
+        return Config(loaded.to_dict())
 
-        config_dict = load_yaml_file(filepath)
-        return Config(config_dict or {})
-
-    @staticmethod
-    def load_json(filepath: str) -> Config:
+    @classmethod
+    def load_json(cls, filepath: str) -> Config:
         """Load configuration from JSON file.
 
         Args:
@@ -93,37 +92,11 @@ class ConfigManager:
         Returns:
             Config object with automotive defaults
         """
-        from trackiq_core.configs.config_io import load_json_file
+        loaded = TrackIQConfigManager.load_json(filepath)
+        return Config(loaded.to_dict())
 
-        config_dict = load_json_file(filepath)
-        return Config(config_dict or {})
-
-    @staticmethod
-    def save_yaml(config: Config, filepath: str) -> None:
-        """Save configuration to YAML file.
-
-        Args:
-            config: Config object to save
-            filepath: Output YAML file path
-        """
-        from trackiq_core.configs.config import ConfigManager as TrackIQConfigManager
-
-        TrackIQConfigManager.save_yaml(config, filepath)
-
-    @staticmethod
-    def save_json(config: Config, filepath: str) -> None:
-        """Save configuration to JSON file.
-
-        Args:
-            config: Config object to save
-            filepath: Output JSON file path
-        """
-        from trackiq_core.configs.config import ConfigManager as TrackIQConfigManager
-
-        TrackIQConfigManager.save_json(config, filepath)
-
-    @staticmethod
-    def load_or_default(filepath: str | None = None) -> Config:
+    @classmethod
+    def load_or_default(cls, filepath: str | None = None) -> Config:
         """Load configuration from file or return automotive defaults.
 
         Args:
@@ -136,7 +109,7 @@ class ConfigManager:
 
         if filepath and os.path.exists(filepath):
             if filepath.endswith(".yaml") or filepath.endswith(".yml"):
-                return ConfigManager.load_yaml(filepath)
+                return cls.load_yaml(filepath)
             elif filepath.endswith(".json"):
-                return ConfigManager.load_json(filepath)
+                return cls.load_json(filepath)
         return Config()
