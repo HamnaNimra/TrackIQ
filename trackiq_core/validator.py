@@ -96,8 +96,10 @@ def validate_trackiq_result(data: dict[str, Any]) -> None:
     for key in ["ttft_ms", "tokens_per_sec", "decode_tpt_ms"]:
         if key in metrics and metrics[key] is not None and not isinstance(metrics[key], (int, float)):
             raise TypeError(f"Field 'metrics.{key}' must be number or null")
-    if "scaling_efficiency_pct" in metrics and metrics["scaling_efficiency_pct"] is not None and not isinstance(
-        metrics["scaling_efficiency_pct"], (int, float)
+    if (
+        "scaling_efficiency_pct" in metrics
+        and metrics["scaling_efficiency_pct"] is not None
+        and not isinstance(metrics["scaling_efficiency_pct"], (int, float))
     ):
         raise TypeError("Field 'metrics.scaling_efficiency_pct' must be number or null")
 
