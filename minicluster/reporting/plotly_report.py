@@ -94,11 +94,7 @@ def generate_cluster_heatmap(results: list[dict], metric: str, output_path: str)
 
     hover_text = [
         [
-            (
-                f"Worker ID: {worker_id}<br>"
-                f"{metric}: {value:.6f}<br>"
-                f"Straggler: {'YES' if is_straggler else 'NO'}"
-            )
+            (f"Worker ID: {worker_id}<br>" f"{metric}: {value:.6f}<br>" f"Straggler: {'YES' if is_straggler else 'NO'}")
             for worker_id, value, is_straggler in zip(worker_ids, values, straggler_flags)
         ]
     ]
@@ -288,7 +284,9 @@ def generate_fault_timeline(fault_report: dict, output_path: str) -> None:
         col=1,
     )
 
-    detected_count = int(fault_report.get("num_detected", sum(1 for e in results if isinstance(e, dict) and e.get("was_detected"))))
+    detected_count = int(
+        fault_report.get("num_detected", sum(1 for e in results if isinstance(e, dict) and e.get("was_detected")))
+    )
     fault_count = int(fault_report.get("num_faults", len(results)))
 
     # This visualization proves your monitoring stack catches the three production failure modes:
@@ -372,4 +370,3 @@ def load_worker_results_from_dir(results_dir: str, metric: str) -> list[dict[str
 
     entries.sort(key=lambda item: int(item["worker_id"]))
     return entries
-
