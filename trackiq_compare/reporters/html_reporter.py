@@ -646,6 +646,186 @@ class HtmlReporter:
         label_a: str,
         label_b: str,
     ) -> str:
+        if PLOTLY_AVAILABLE:
+            return self._render_plotly_visual_overview(
+                normalized_rows=normalized_rows,
+                family_rows=family_rows,
+                confidence_rows=confidence_rows,
+                label_a=label_a,
+                label_b=label_b,
+            )
+        return self._render_static_visual_overview(
+            normalized_rows=normalized_rows,
+            family_rows=family_rows,
+            confidence_rows=confidence_rows,
+            label_a=label_a,
+            label_b=label_b,
+        )
+
+    def _render_plotly_visual_overview(
+        self,
+        normalized_rows: list[dict[str, Any]],
+        family_rows: list[dict[str, Any]],
+        confidence_rows: list[dict[str, Any]],
+        label_a: str,
+        label_b: str,
+    ) -> str:
+        if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
+            return self._render_static_visual_overview(
+                normalized_rows=normalized_rows,
+                family_rows=family_rows,
+                confidence_rows=confidence_rows,
+                label_a=label_a,
+                label_b=label_b,
+            )
+
+        winner_counts = self._winner_counts(normalized_rows, label_a, label_b)
+        confidence_counts = self._confidence_counts(confidence_rows)
+
+        top_rows = sorted(
+            normalized_rows,
+            key=lambda item: abs(float(item.get("normalized_delta_percent", 0.0))),
+            reverse=True,
+        )[:10]
+        top_metrics = [str(row.get("metric", "-")) for row in top_rows][::-1]
+        top_values = [float(row.get("normalized_delta_percent", 0.0)) for row in top_rows][::-1]
+        top_colors = ["#22c55e" if value > 0 else "#ef4444" if value < 0 else "#9ca3af" for value in top_values]
+        fig_delta = go.Figure(
+            data=[
+                go.Bar(
+                    x=top_values,
+                    y=top_metrics,
+                    orientation="h",
+                    marker_color=top_colors,
+                )
+            ]
+        )
+        fig_delta.add_vline(x=0, line_dash="dash", line_color="#6b7280")
+        fig_delta.update_layout(
+            title=f"Top Normalized Deltas ({label_b} positive)",
+            template="plotly_white",
+            height=360,
+            margin=dict(l=40, r=16, t=48, b=36),
+            xaxis_title="Normalized Delta (%)",
+            yaxis_title="Metric",
+        )
+
+        fam_labels = [str(row.get("family", "other")) for row in family_rows][::-1]
+        fam_values = [float(row.get("normalized_delta_percent", 0.0)) for row in family_rows][::-1]
+        fam_colors = ["#22c55e" if value > 0 else "#ef4444" if value < 0 else "#9ca3af" for value in fam_values]
+        fig_family = go.Figure(
+            data=[
+                go.Bar(
+                    x=fam_values,
+                    y=fam_labels,
+                    orientation="h",
+                    marker_color=fam_colors,
+                )
+            ]
+        )
+        fig_family.add_vline(x=0, line_dash="dash", line_color="#6b7280")
+        fig_family.update_layout(
+            title="Metric Family Deltas",
+            template="plotly_white",
+            height=360,
+            margin=dict(l=40, r=16, t=48, b=36),
+            xaxis_title="Normalized Delta (%)",
+            yaxis_title="Family",
+        )
+
+        winner_labels: list[str] = []
+        winner_values: list[int] = []
+        winner_colors: list[str] = []
+        for key, color, name in [
+            ("A", "#ef4444", label_a),
+            ("B", "#22c55e", label_b),
+            ("tie", "#94a3b8", "tie"),
+            ("context", "#c084fc", "context"),
+        ]:
+            count = int(winner_counts.get(key, 0))
+            if count <= 0:
+                continue
+            winner_labels.append(name)
+            winner_values.append(count)
+            winner_colors.append(color)
+        fig_winner = go.Figure(
+            data=[
+                go.Pie(
+                    labels=winner_labels,
+                    values=winner_values,
+                    marker=dict(colors=winner_colors),
+                    hole=0.45,
+                    textinfo="label+percent",
+                )
+            ]
+        )
+        fig_winner.update_layout(
+            title="Winner Distribution",
+            template="plotly_white",
+            height=360,
+            margin=dict(l=16, r=16, t=48, b=16),
+        )
+
+        conf_labels: list[str] = []
+        conf_values: list[int] = []
+        conf_colors: list[str] = []
+        for key, color in [
+            ("strong", "#22c55e"),
+            ("insufficient", "#f59e0b"),
+            ("none", "#ef4444"),
+        ]:
+            count = int(confidence_counts.get(key, 0))
+            if count <= 0:
+                continue
+            conf_labels.append(key)
+            conf_values.append(count)
+            conf_colors.append(color)
+        fig_conf = go.Figure(
+            data=[
+                go.Pie(
+                    labels=conf_labels,
+                    values=conf_values,
+                    marker=dict(colors=conf_colors),
+                    hole=0.45,
+                    textinfo="label+percent",
+                )
+            ]
+        )
+        fig_conf.update_layout(
+            title="Confidence Distribution",
+            template="plotly_white",
+            height=360,
+            margin=dict(l=16, r=16, t=48, b=16),
+        )
+
+        include_js = True
+        cards: list[str] = []
+        for title, subtitle, fig in [
+            ("Top Normalized Deltas", f"Positive favors {label_b}; negative favors {label_a}.", fig_delta),
+            ("Metric Family Deltas", "Family-level signed summary of normalized deltas.", fig_family),
+            ("Winner Distribution", "Metric-level outcome share across comparable metrics.", fig_winner),
+            ("Confidence Distribution", "Data-strength breakdown for metric conclusions.", fig_conf),
+        ]:
+            fig_html = self._fig_to_html(fig, include_plotlyjs=include_js)
+            include_js = False
+            cards.append(
+                '<div class="chart-card">'
+                f'<p class="chart-title">{escape(title)}</p>'
+                f'<p class="chart-sub">{escape(subtitle)}</p>'
+                f'<div class="figure-html">{fig_html}</div>'
+                "</div>"
+            )
+
+        return f'<div class="chart-grid">{"".join(cards)}</div>'
+
+    def _render_static_visual_overview(
+        self,
+        normalized_rows: list[dict[str, Any]],
+        family_rows: list[dict[str, Any]],
+        confidence_rows: list[dict[str, Any]],
+        label_a: str,
+        label_b: str,
+    ) -> str:
         winner_counts = self._winner_counts(normalized_rows, label_a, label_b)
         confidence_counts = self._confidence_counts(confidence_rows)
         return (
@@ -663,6 +843,17 @@ class HtmlReporter:
             '<p class="chart-sub">Data-strength breakdown for metric conclusions.</p>'
             f"{self._render_pie_chart(confidence_counts, [('strong', '#22c55e'), ('insufficient', '#f59e0b'), ('none', '#ef4444')], label_a, label_b)}</div>"
             "</div>"
+        )
+
+    @staticmethod
+    def _fig_to_html(fig: Any, *, include_plotlyjs: bool) -> str:
+        if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
+            return "<p>Plotly is unavailable.</p>"
+        include_mode: str | bool = "inline" if include_plotlyjs else False
+        return fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_mode,
+            config={"displayModeBar": False, "responsive": True},
         )
 
     @staticmethod

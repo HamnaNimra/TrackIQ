@@ -7,6 +7,14 @@ from typing import Any
 
 from minicluster.deps import ensure_parent_dir
 
+try:
+    import plotly.graph_objects as go
+
+    PLOTLY_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency fallback
+    go = None
+    PLOTLY_AVAILABLE = False
+
 
 class MiniClusterHtmlReporter:
     """Render MiniCluster result HTML, including consolidated multi-run visuals."""
@@ -250,6 +258,8 @@ class MiniClusterHtmlReporter:
   .kpi p { margin: 0; font-size: 22px; font-weight: 700; color: #0f172a; }
   .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .chart-full { margin-top: 12px; }
+  .figure-html { width: 100%; min-height: 320px; }
+  .figure-html .plotly-graph-div { width: 100% !important; }
   .pie-wrap { display: flex; align-items: center; gap: 14px; }
   .pie-shell {
     width: 118px;
