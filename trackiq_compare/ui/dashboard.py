@@ -524,8 +524,7 @@ class CompareDashboard(TrackiqDashboard):
         if confidence_rows:
             confidence_df = pd.DataFrame(confidence_rows)
             z_data = [
-                [1 if bool(row["a_available"]) else 0, 1 if bool(row["b_available"]) else 0]
-                for row in confidence_rows
+                [1 if bool(row["a_available"]) else 0, 1 if bool(row["b_available"]) else 0] for row in confidence_rows
             ]
             fig_conf = go.Figure(
                 data=go.Heatmap(

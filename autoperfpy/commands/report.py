@@ -19,7 +19,9 @@ def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
         if not isinstance(run, dict):
             continue
         run_label = run.get("run_label") or run.get("collector_name") or f"run_{idx + 1}"
-        batch_size = run.get("inference_config", {}).get("batch_size", 1) if isinstance(run.get("inference_config"), dict) else 1
+        batch_size = (
+            run.get("inference_config", {}).get("batch_size", 1) if isinstance(run.get("inference_config"), dict) else 1
+        )
         samples = run.get("samples", [])
         if not isinstance(samples, list):
             continue

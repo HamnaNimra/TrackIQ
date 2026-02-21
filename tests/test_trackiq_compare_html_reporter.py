@@ -88,8 +88,8 @@ def test_compare_html_report_includes_visualization_parity_sections(tmp_path) ->
     assert "Winner Distribution" in html
     assert "Confidence Distribution" in html
     assert ("plotly-graph-div" in html) or ("conic-gradient(" in html)
-    assert ("displayModeBar\": true" in html) or ("conic-gradient(" in html)
-    assert ("scrollZoom\": true" in html) or ("conic-gradient(" in html)
+    assert ('displayModeBar": true' in html) or ("conic-gradient(" in html)
+    assert ('scrollZoom": true' in html) or ("conic-gradient(" in html)
     assert "Normalized Metric Deltas" in html
     assert "Metric Family Delta Waterfall" in html
     assert "Metric Availability Confidence Matrix" in html

@@ -127,7 +127,9 @@ class MiniClusterHtmlReporter:
         run_data = [self._run_data(result, default_label=f"run-{idx + 1}") for idx, result in enumerate(results)]
         table_rows = self._consolidated_rows(run_data)
         if PLOTLY_AVAILABLE:
-            throughput_chart, loss_chart, runtime_chart, winner_chart, overlay_chart = self._multi_plotly_charts(run_data)
+            throughput_chart, loss_chart, runtime_chart, winner_chart, overlay_chart = self._multi_plotly_charts(
+                run_data
+            )
         else:
             throughput_chart = self._bar_chart_svg(
                 [run["label"] for run in run_data],
@@ -306,7 +308,9 @@ class MiniClusterHtmlReporter:
         """Build Plotly chart fragments for single-run report."""
         if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
             return (
-                self._line_chart_svg(run["step_points"], title="Loss by Step", y_label="Loss", color="#dc2626", show_points=True),
+                self._line_chart_svg(
+                    run["step_points"], title="Loss by Step", y_label="Loss", color="#dc2626", show_points=True
+                ),
                 self._line_chart_svg(
                     run["throughput_points"],
                     title="Throughput by Step",
@@ -390,7 +394,11 @@ class MiniClusterHtmlReporter:
                 show_points=True,
             )
 
-        timing_rows = [(step, compute, allreduce) for step, compute, allreduce in run["timing_points"] if compute is not None and allreduce is not None]
+        timing_rows = [
+            (step, compute, allreduce)
+            for step, compute, allreduce in run["timing_points"]
+            if compute is not None and allreduce is not None
+        ]
         if timing_rows:
             timing_x = [float(step) for step, _, _ in timing_rows]
             compute_vals = [float(compute) for _, compute, _ in timing_rows]
@@ -445,11 +453,37 @@ class MiniClusterHtmlReporter:
         if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
             labels = [run["label"] for run in run_data]
             return (
-                self._bar_chart_svg(labels, [run["throughput"] for run in run_data], title="Throughput by Config", y_label="Samples/sec", color="#2563eb"),
-                self._bar_chart_svg(labels, [run["final_loss"] for run in run_data], title="Final Loss by Config (lower is better)", y_label="Loss", color="#dc2626"),
-                self._bar_chart_svg(labels, [run["total_time_sec"] for run in run_data], title="Total Runtime by Config", y_label="Seconds", color="#0891b2"),
-                self._pie_div(self._winner_share(run_data), title="Key-Metric Winner Share", labels={run["label"]: run["label"] for run in run_data}),
-                self._multi_line_chart_svg([(run["label"], run["step_points"]) for run in run_data], title="Loss Curves Overlay", y_label="Loss"),
+                self._bar_chart_svg(
+                    labels,
+                    [run["throughput"] for run in run_data],
+                    title="Throughput by Config",
+                    y_label="Samples/sec",
+                    color="#2563eb",
+                ),
+                self._bar_chart_svg(
+                    labels,
+                    [run["final_loss"] for run in run_data],
+                    title="Final Loss by Config (lower is better)",
+                    y_label="Loss",
+                    color="#dc2626",
+                ),
+                self._bar_chart_svg(
+                    labels,
+                    [run["total_time_sec"] for run in run_data],
+                    title="Total Runtime by Config",
+                    y_label="Seconds",
+                    color="#0891b2",
+                ),
+                self._pie_div(
+                    self._winner_share(run_data),
+                    title="Key-Metric Winner Share",
+                    labels={run["label"]: run["label"] for run in run_data},
+                ),
+                self._multi_line_chart_svg(
+                    [(run["label"], run["step_points"]) for run in run_data],
+                    title="Loss Curves Overlay",
+                    y_label="Loss",
+                ),
             )
 
         labels = [str(run["label"]) for run in run_data]
@@ -584,10 +618,7 @@ class MiniClusterHtmlReporter:
 
     @staticmethod
     def _wrap_plotly_chart(title: str, figure_html: str) -> str:
-        return (
-            f"<h3>{escape(title)}</h3>"
-            f"<div class='figure-html'>{figure_html}</div>"
-        )
+        return f"<h3>{escape(title)}</h3><div class='figure-html'>{figure_html}</div>"
 
     @staticmethod
     def _fig_to_html(fig: Any, *, include_plotlyjs: bool) -> str:
@@ -617,7 +648,9 @@ class MiniClusterHtmlReporter:
             ("Temperature (C)", result.metrics.temperature_celsius),
             ("Communication Overhead (%)", result.metrics.communication_overhead_percent),
         ]
-        return "".join(f"<tr><th>{escape(name)}</th><td>{escape(self._fmt(value))}</td></tr>" for name, value in metrics)
+        return "".join(
+            f"<tr><th>{escape(name)}</th><td>{escape(self._fmt(value))}</td></tr>" for name, value in metrics
+        )
 
     def _config_rows(self, config: dict[str, Any]) -> str:
         keys = [
@@ -721,7 +754,9 @@ class MiniClusterHtmlReporter:
         if loss_candidates:
             scores[min(loss_candidates, key=lambda item: item[1])[0]] += 1
 
-        runtime_candidates = [(run["label"], run["total_time_sec"]) for run in runs if run["total_time_sec"] is not None]
+        runtime_candidates = [
+            (run["label"], run["total_time_sec"]) for run in runs if run["total_time_sec"] is not None
+        ]
         if runtime_candidates:
             scores[min(runtime_candidates, key=lambda item: item[1])[0]] += 1
 
@@ -877,14 +912,16 @@ class MiniClusterHtmlReporter:
             parts.append(
                 f"<polyline points='{' '.join(coords)}' fill='none' stroke='{color}' stroke-width='2' opacity='0.9'/>"
             )
-            legend_rows.append(
-                f"<li><span class='swatch' style='background:{color}'></span>{escape(label)}</li>"
-            )
+            legend_rows.append(f"<li><span class='swatch' style='background:{color}'></span>{escape(label)}</li>")
         parts.append("</svg>")
         return "".join(parts) + f"<ul class='legend'>{''.join(legend_rows)}</ul>"
 
     def _stacked_timing_svg(self, points: list[tuple[float, float | None, float | None]], *, title: str) -> str:
-        usable = [(step, compute, allreduce) for step, compute, allreduce in points if compute is not None and allreduce is not None]
+        usable = [
+            (step, compute, allreduce)
+            for step, compute, allreduce in points
+            if compute is not None and allreduce is not None
+        ]
         if not usable:
             return f"<p>No timing data available for {escape(title)}.</p>"
 

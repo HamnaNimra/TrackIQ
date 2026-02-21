@@ -482,11 +482,7 @@ class HtmlReporter:
             winner = (
                 comparison.label_b
                 if normalized > 0
-                else comparison.label_a
-                if normalized < 0
-                else "context"
-                if direction == "context"
-                else "tie"
+                else comparison.label_a if normalized < 0 else "context" if direction == "context" else "tie"
             )
             rows.append(
                 {
@@ -559,11 +555,7 @@ class HtmlReporter:
         else:
             width_pct = min(100.0, (abs(value) / max_abs) * 100.0)
         fill_class = "positive" if value > 0 else "negative" if value < 0 else "neutral"
-        return (
-            '<div class="bar-shell">'
-            f'<div class="bar-fill {fill_class}" style="width:{width_pct:.2f}%"></div>'
-            "</div>"
-        )
+        return f'<div class="bar-shell"><div class="bar-fill {fill_class}" style="width:{width_pct:.2f}%"></div></div>'
 
     def _render_normalized_rows(self, rows: list[dict[str, Any]], label_a: str, label_b: str) -> str:
         if not rows:
@@ -623,8 +615,16 @@ class HtmlReporter:
             return '<tr><td colspan="6">No metric availability data available.</td></tr>'
         html_rows: list[str] = []
         for row in rows:
-            a_html = '<span class="matrix-yes">yes</span>' if bool(row["a_available"]) else '<span class="matrix-no">no</span>'
-            b_html = '<span class="matrix-yes">yes</span>' if bool(row["b_available"]) else '<span class="matrix-no">no</span>'
+            a_html = (
+                '<span class="matrix-yes">yes</span>'
+                if bool(row["a_available"])
+                else '<span class="matrix-no">no</span>'
+            )
+            b_html = (
+                '<span class="matrix-yes">yes</span>'
+                if bool(row["b_available"])
+                else '<span class="matrix-no">no</span>'
+            )
             confidence = str(row["confidence"])
             html_rows.append(
                 "<tr>"
@@ -633,7 +633,7 @@ class HtmlReporter:
                 f"<td>{a_html}</td>"
                 f"<td>{b_html}</td>"
                 f"<td>{escape(str(row['direction']))}</td>"
-                f"<td><span class=\"confidence-{escape(confidence)}\">{escape(confidence)}</span></td>"
+                f'<td><span class="confidence-{escape(confidence)}">{escape(confidence)}</span></td>'
                 "</tr>"
             )
         return "".join(html_rows)
@@ -955,10 +955,7 @@ class HtmlReporter:
             elif key == "B":
                 display = label_b
             legend_rows.append(
-                "<li>"
-                f'<span class="swatch" style="background:{color}"></span>'
-                f"{escape(display)}: {count}"
-                "</li>"
+                f'<li><span class="swatch" style="background:{color}"></span>{escape(display)}: {count}</li>'
             )
 
         gradient_css = ", ".join(gradient_parts) if gradient_parts else "#d1d5db 0deg 360deg"

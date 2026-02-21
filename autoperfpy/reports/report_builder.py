@@ -159,7 +159,9 @@ def populate_multi_run_html_report(
     if not valid_runs:
         return
 
-    run_names = [run.get("run_label") or run.get("collector_name") or f"Run {idx + 1}" for idx, run in enumerate(valid_runs)]
+    run_names = [
+        run.get("run_label") or run.get("collector_name") or f"Run {idx + 1}" for idx, run in enumerate(valid_runs)
+    ]
 
     if data_source:
         report.add_metadata("Data Source", data_source)
