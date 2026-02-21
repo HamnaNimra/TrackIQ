@@ -12,7 +12,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from trackiq_core.collectors import SyntheticCollector
+from trackiq_core.hardware.devices import DeviceProfile, DEVICE_TYPE_CPU
+from trackiq_core.inference import InferenceConfig
+from trackiq_core.power_profiler import SimulatedPowerReader
 from autoperfpy.runners import BenchmarkRunner
+from autoperfpy.auto_runner import run_single_benchmark
+from autoperfpy.cli import _infer_trackiq_result
 from autoperfpy.reports import HTMLReportGenerator, PerformanceVisualizer
 
 try:
@@ -142,3 +147,35 @@ def test_html_report_with_chartjs_from_benchmark(tmp_path):
     assert "Benchmark Chart.js Report" in content
     assert "chart.js" in content.lower() or "jsdelivr" in content.lower()
     assert "latency" in content.lower() or "summary-statistics" in content
+
+
+def test_autoperfpy_power_profiler_integration_full_session(monkeypatch):
+    """AutoPerfPy run should populate canonical TrackiqResult power metrics."""
+    monkeypatch.setattr(
+        "autoperfpy.auto_runner.detect_power_source",
+        lambda: SimulatedPowerReader(tdp_watts=120.0),
+    )
+    device = DeviceProfile(
+        device_id="cpu_0",
+        device_type=DEVICE_TYPE_CPU,
+        device_name="Test CPU",
+        index=0,
+    )
+    config = InferenceConfig(
+        precision="fp32",
+        batch_size=2,
+        accelerator="cpu_0",
+        warmup_runs=1,
+        iterations=10,
+    )
+    payload = run_single_benchmark(
+        device=device,
+        config=config,
+        duration_seconds=0.25,
+        sample_interval_seconds=0.05,
+        quiet=True,
+        enable_power=True,
+    )
+    result = _infer_trackiq_result(payload)
+    assert result.metrics.power_consumption_watts is not None
+    assert result.metrics.performance_per_watt is not None

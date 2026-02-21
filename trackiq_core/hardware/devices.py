@@ -8,14 +8,23 @@ to collectors; trackiq does not depend on any specific collector.
 """
 
 from dataclasses import dataclass, field
+import json
+import platform
+import subprocess
+import sys
 from typing import Any, Dict, List
-import pynvml  # provided by nvidia-ml-py
+try:
+    import pynvml  # provided by nvidia-ml-py
+except Exception:  # pragma: no cover - optional dependency
+    pynvml = None
 
 
 # Device type constants (generic; apps map these to collectors)
 DEVICE_TYPE_NVIDIA_GPU = "NVIDIA_GPU"
+DEVICE_TYPE_AMD_GPU = "AMD_GPU"
 DEVICE_TYPE_INTEL_GPU = "INTEL_GPU"
 DEVICE_TYPE_CPU = "CPU"
+DEVICE_TYPE_APPLE_SILICON = "Apple_Silicon"
 # Tegrastats-capable embedded / automotive platforms (Jetson, DRIVE Orin/Thor, etc.)
 DEVICE_TYPE_NVIDIA_JETSON = "NVIDIA_Jetson"
 DEVICE_TYPE_NVIDIA_DRIVE = "NVIDIA_Drive"
@@ -101,7 +110,8 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
     cuda_version = ""
 
     try:
-
+        if pynvml is None:
+            raise ImportError("pynvml unavailable")
         pynvml.nvmlInit()
         try:
             driver_version = pynvml.nvmlSystemGetDriverVersion()
@@ -169,6 +179,150 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
     except Exception:
         pass
 
+    return devices
+
+
+def detect_amd_gpus() -> List[DeviceProfile]:
+    """Detect AMD GPUs via `rocm-smi` JSON output with plain-text fallback."""
+    devices: List[DeviceProfile] = []
+    cpu_model = _get_cpu_info()
+    os_info = _get_os_info()
+
+    def _rocm_version() -> str:
+        try:
+            out = subprocess.run(
+                ["rocm-smi", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+            return (out.stdout or out.stderr or "").strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return ""
+
+    rocm_version = _rocm_version()
+
+    try:
+        result = subprocess.run(
+            ["rocm-smi", "--showallinfo", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        raw = (result.stdout or "").strip()
+        if raw:
+            payload = json.loads(raw)
+            if isinstance(payload, dict):
+                for idx, (_, data) in enumerate(payload.items()):
+                    if not isinstance(data, dict):
+                        continue
+                    name = ""
+                    for key, value in data.items():
+                        low = key.lower()
+                        if "product" in low or "card series" in low or "gpu" in low:
+                            name = str(value).strip()
+                            if name:
+                                break
+                    gpu_name = name or f"AMD GPU {idx}"
+                    devices.append(
+                        DeviceProfile(
+                            device_id=f"amd_{idx}",
+                            device_type=DEVICE_TYPE_AMD_GPU,
+                            device_name=gpu_name,
+                            gpu_model=gpu_name,
+                            cpu_model=cpu_model,
+                            soc="",
+                            power_mode="",
+                            index=idx,
+                            metadata={
+                                "os": os_info,
+                                "rocm_version": rocm_version,
+                            },
+                        )
+                    )
+            if devices:
+                return devices
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return []
+    except Exception:
+        pass
+
+    try:
+        fallback = subprocess.run(
+            ["rocm-smi", "--showproductname"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        lines = [line.strip() for line in (fallback.stdout or "").splitlines() if line.strip()]
+        for idx, line in enumerate(lines):
+            if "card series" not in line.lower() and "product name" not in line.lower():
+                continue
+            parts = line.split(":", 1)
+            gpu_name = parts[1].strip() if len(parts) == 2 else line
+            devices.append(
+                DeviceProfile(
+                    device_id=f"amd_{idx}",
+                    device_type=DEVICE_TYPE_AMD_GPU,
+                    device_name=gpu_name,
+                    gpu_model=gpu_name,
+                    cpu_model=cpu_model,
+                    soc="",
+                    power_mode="",
+                    index=idx,
+                    metadata={
+                        "os": os_info,
+                        "rocm_version": rocm_version,
+                    },
+                )
+            )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    except Exception:
+        pass
+    return devices
+
+
+def detect_apple_silicon() -> List[DeviceProfile]:
+    """Detect Apple Silicon platform and expose it as a single device profile."""
+    devices: List[DeviceProfile] = []
+    machine = (platform.machine() or "").lower()
+    if sys.platform != "darwin" or "arm" not in machine:
+        return devices
+
+    chip_name = "Apple Silicon"
+    try:
+        out = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        raw = (out.stdout or "").strip()
+        if raw:
+            chip_name = raw
+    except Exception:
+        pass
+
+    cpu_model = _get_cpu_info()
+    os_info = _get_os_info()
+    devices.append(
+        DeviceProfile(
+            device_id="apple_0",
+            device_type=DEVICE_TYPE_APPLE_SILICON,
+            device_name=chip_name,
+            gpu_model=chip_name,
+            cpu_model=cpu_model,
+            soc=chip_name,
+            power_mode="",
+            index=0,
+            metadata={"os": os_info},
+        )
+    )
     return devices
 
 
@@ -280,6 +434,8 @@ def detect_tegrastats_platforms() -> List[DeviceProfile]:
 
 def get_all_devices(
     include_nvidia: bool = True,
+    include_amd: bool = True,
+    include_apple: bool = True,
     include_intel: bool = True,
     include_cpu: bool = True,
     include_tegrastats: bool = True,
@@ -291,12 +447,17 @@ def get_all_devices(
     result: List[DeviceProfile] = []
     if include_nvidia:
         result.extend(detect_nvidia_gpus())
+    if include_amd:
+        result.extend(detect_amd_gpus())
+    if include_apple:
+        result.extend(detect_apple_silicon())
     if include_tegrastats:
         result.extend(detect_tegrastats_platforms())
     if include_intel:
         result.extend(detect_intel_gpus())
-    if include_cpu:
-        result.append(detect_cpu())
+    # CPU is always included as the baseline platform.
+    _ = include_cpu
+    result.append(detect_cpu())
     return result
 
 

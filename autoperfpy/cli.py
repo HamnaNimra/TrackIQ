@@ -6,11 +6,13 @@ commands for profiles, tegrastats analysis, and DNN pipeline analysis.
 import argparse
 import json
 import os
+import platform as _platform
 import sys
 import tempfile
 import time
+from datetime import datetime
 from turtle import st
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from autoperfpy.config import ConfigManager
 from autoperfpy.analyzers import (
@@ -22,7 +24,7 @@ from autoperfpy.analyzers import (
     VariabilityAnalyzer,
 )
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
-from autoperfpy.monitoring import GPUMemoryMonitor
+from autoperfpy.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from autoperfpy.reporting import (
     PerformanceVisualizer,
     PDFReportGenerator,
@@ -40,6 +42,16 @@ from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
 from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
 from trackiq_core.hardware import DeviceProfile, get_all_devices
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from trackiq_core.schema import (
+    KVCacheInfo,
+    Metrics as TrackiqMetrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+)
+from trackiq_core.serializer import save_trackiq_result
+from trackiq_core.power_profiler import PowerProfiler, detect_power_source
 import numpy as np
 import matplotlib
 
@@ -247,6 +259,11 @@ Environment Variables:
         default=6,
         help="Auto mode: max (precision x batch) configs per device (default: 6)",
     )
+    run_parser.add_argument(
+        "--no-power",
+        action="store_true",
+        help="Disable power profiling for run commands",
+    )
 
     # Compare command (uses trackiq comparison module)
     compare_parser = subparsers.add_parser(
@@ -440,6 +457,11 @@ Environment Variables:
     cache_parser.add_argument(
         "--max-length", type=int, default=2048, help="Max sequence length"
     )
+    cache_parser.add_argument("--num-layers", type=int, default=32)
+    cache_parser.add_argument("--num-heads", type=int, default=32)
+    cache_parser.add_argument("--head-size", type=int, default=128)
+    cache_parser.add_argument("--batch-size", type=int, default=1)
+    cache_parser.add_argument("--precision", choices=["fp16", "fp32"], default="fp16")
 
     # Report commands
     report_parser = subparsers.add_parser("report", help="Generate performance reports")
@@ -617,8 +639,13 @@ def _run_default_benchmark(
             path_csv = None
     fd_json, path_json = tempfile.mkstemp(suffix=".json", prefix="autoperfpy_")
     try:
-        with os.fdopen(fd_json, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2)
+        os.close(fd_json)
+        _save_trackiq_wrapped_json(
+            path_json,
+            result,
+            workload_name="default_benchmark",
+            workload_type="inference",
+        )
     except Exception:
         if path_json and os.path.exists(path_json):
             try:
@@ -634,6 +661,170 @@ def _output_path(args, filename: str) -> str:
     out_dir = getattr(args, "output_dir", None) or "output"
     os.makedirs(out_dir, exist_ok=True)
     return os.path.join(out_dir, os.path.basename(filename))
+
+
+def _safe_torch_version() -> str:
+    """Best-effort PyTorch version lookup."""
+    try:
+        import torch
+
+        return str(torch.__version__)
+    except Exception:
+        return "unknown"
+
+
+def _infer_trackiq_result(
+    payload: dict,
+    workload_name: str = "autoperfpy_run",
+    workload_type: str = "inference",
+) -> TrackiqResult:
+    """Convert autoperfpy payload to canonical TrackiqResult."""
+    summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+    latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
+    throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
+    power = summary.get("power", {}) if isinstance(summary, dict) else {}
+    memory = summary.get("memory", {}) if isinstance(summary, dict) else {}
+    power_profile = payload.get("power_profile", {}) if isinstance(payload, dict) else {}
+    power_profile_summary = (
+        power_profile.get("summary", {})
+        if isinstance(power_profile, dict)
+        else {}
+    )
+    regression = payload.get("regression", {}) if isinstance(payload, dict) else {}
+    platform_metadata = payload.get("platform_metadata", {}) if isinstance(payload, dict) else {}
+    inference_cfg = payload.get("inference_config", {}) if isinstance(payload, dict) else {}
+    kv_cache_payload = payload.get("kv_cache", {}) if isinstance(payload, dict) else {}
+
+    status = regression.get("status")
+    if status not in ("pass", "fail"):
+        status = "fail" if payload.get("has_regressions") else "pass"
+
+    return TrackiqResult(
+        tool_name="autoperfpy",
+        tool_version="1.0",
+        timestamp=datetime.utcnow(),
+        platform=PlatformInfo(
+            hardware_name=str(
+                platform_metadata.get("device_name")
+                or payload.get("collector_name")
+                or "unknown"
+            ),
+            os=str(platform_metadata.get("os") or f"{_platform.system()} {_platform.release()}"),
+            framework="pytorch",
+            framework_version=_safe_torch_version(),
+        ),
+        workload=WorkloadInfo(
+            name=str(payload.get("run_label") or workload_name),
+            workload_type="training" if workload_type == "training" else "inference",
+            batch_size=int(inference_cfg.get("batch_size", 1)),
+            steps=int(summary.get("sample_count", len(payload.get("samples", [])))),
+        ),
+        metrics=TrackiqMetrics(
+            throughput_samples_per_sec=float(throughput.get("mean_fps", 0.0)),
+            latency_p50_ms=float(latency.get("p50_ms", 0.0)),
+            latency_p95_ms=float(latency.get("p95_ms", 0.0)),
+            latency_p99_ms=float(latency.get("p99_ms", 0.0)),
+            memory_utilization_percent=float(memory.get("mean_percent", 0.0)),
+            communication_overhead_percent=None,
+            power_consumption_watts=(
+                float(power.get("mean_w")) if power.get("mean_w") is not None else None
+            ),
+            energy_per_step_joules=(
+                (
+                    float(power_profile_summary.get("total_energy_joules"))
+                    / max(1, int(summary.get("sample_count", len(payload.get("samples", [])))))
+                )
+                if power_profile_summary.get("total_energy_joules") is not None
+                else None
+            ),
+            performance_per_watt=(
+                float(power_profile_summary.get("performance_per_watt"))
+                if power_profile_summary.get("performance_per_watt") is not None
+                else None
+            ),
+            temperature_celsius=(
+                float(power_profile_summary.get("mean_temperature_celsius"))
+                if power_profile_summary.get("mean_temperature_celsius") is not None
+                else None
+            ),
+        ),
+        regression=RegressionInfo(
+            baseline_id=regression.get("baseline") if isinstance(regression, dict) else None,
+            delta_percent=float(regression.get("delta_percent", 0.0))
+            if isinstance(regression, dict)
+            else 0.0,
+            status=status,
+            failed_metrics=list(regression.get("failed_metrics", []))
+            if isinstance(regression, dict)
+            else [],
+        ),
+        kv_cache=(
+            KVCacheInfo(
+                estimated_size_mb=float(kv_cache_payload.get("estimated_size_mb", 0.0)),
+                max_sequence_length=int(kv_cache_payload.get("max_sequence_length", 0)),
+                batch_size=int(kv_cache_payload.get("batch_size", 1)),
+                num_layers=int(kv_cache_payload.get("num_layers", 0)),
+                num_heads=int(kv_cache_payload.get("num_heads", 0)),
+                head_size=int(kv_cache_payload.get("head_size", 0)),
+                precision=str(kv_cache_payload.get("precision", "unknown")),
+                samples=list(kv_cache_payload.get("samples", [])),
+            )
+            if isinstance(kv_cache_payload, dict) and kv_cache_payload
+            else None
+        ),
+        tool_payload=payload,
+    )
+
+
+def _save_trackiq_wrapped_json(
+    path: str,
+    payload: object,
+    workload_name: str = "autoperfpy_run",
+    workload_type: str = "inference",
+) -> None:
+    """Save payload wrapped as TrackiqResult JSON."""
+    if isinstance(payload, list):
+        wrapped = [
+            _infer_trackiq_result(
+                p if isinstance(p, dict) else {"tool_payload": p},
+                workload_name=workload_name,
+                workload_type=workload_type,
+            ).to_dict()
+            for p in payload
+        ]
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(wrapped, handle, indent=2)
+        return
+
+    if isinstance(payload, dict):
+        result = _infer_trackiq_result(
+            payload, workload_name=workload_name, workload_type=workload_type
+        )
+    else:
+        result = _infer_trackiq_result(
+            {"tool_payload": payload},
+            workload_name=workload_name,
+            workload_type=workload_type,
+        )
+    save_trackiq_result(result, path)
+
+
+def _normalize_report_input_data(data: object) -> Dict[str, Any]:
+    """Normalize report JSON inputs to legacy benchmark payload shape.
+
+    Report generation historically consumed raw benchmark exports where fields
+    like ``summary`` and ``samples`` lived at the top level. Newer outputs may
+    be wrapped as canonical ``TrackiqResult`` objects with benchmark data in
+    ``tool_payload``.
+    """
+    if isinstance(data, dict) and isinstance(data.get("tool_payload"), dict):
+        payload = dict(data["tool_payload"])
+        if "collector_name" not in payload and data.get("tool_name"):
+            payload["collector_name"] = str(data.get("tool_name"))
+        return payload
+    if isinstance(data, dict):
+        return data
+    return {}
 
 
 def _write_result_to_csv(result: dict, path: str) -> bool:
@@ -1020,8 +1211,12 @@ def run_benchmark_distributed(args, config):
     # Save output if requested
     if getattr(args, "output", None):
         output_path = _output_path(args, args.output)
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+        _save_trackiq_wrapped_json(
+            output_path,
+            results,
+            workload_name="distributed_validation",
+            workload_type="training",
+        )
         print(f"\n[OK] Results saved to: {output_path}")
 
     return results
@@ -1059,6 +1254,60 @@ def run_monitor_gpu(args, config):
         print(f"  Avg Utilization: {summary['avg_utilization_percent']:.1f}%")
 
     return summary
+
+
+def run_monitor_kv_cache(args, config):
+    """Run KV cache estimation monitor."""
+    monitor = LLMKVCacheMonitor(config)
+    model_config = {
+        "num_layers": args.num_layers,
+        "num_heads": args.num_heads,
+        "head_size": args.head_size,
+        "batch_size": args.batch_size,
+        "precision": args.precision,
+    }
+    max_length = int(args.max_length)
+    step = max(1, max_length // 10)
+    samples = []
+    for seq_len in range(step, max_length + 1, step):
+        size_mb = monitor.estimate_kv_cache_size(seq_len, model_config)
+        samples.append(
+            {
+                "sequence_length": seq_len,
+                "kv_cache_mb": round(float(size_mb), 4),
+                "timestamp": time.time(),
+            }
+        )
+
+    final_size = samples[-1]["kv_cache_mb"] if samples else 0.0
+    print("\nKV Cache Monitor")
+    print("=" * 60)
+    print(f"Precision: {args.precision}")
+    print(f"Model: layers={args.num_layers}, heads={args.num_heads}, head_size={args.head_size}")
+    print(f"Batch size: {args.batch_size}")
+    print(f"Max sequence length: {max_length}")
+    print(f"Estimated KV cache @ max length: {final_size:.2f} MB")
+
+    return {
+        "kv_cache": {
+            "estimated_size_mb": float(final_size),
+            "max_sequence_length": max_length,
+            "batch_size": int(args.batch_size),
+            "num_layers": int(args.num_layers),
+            "num_heads": int(args.num_heads),
+            "head_size": int(args.head_size),
+            "precision": str(args.precision),
+            "samples": samples,
+        },
+        "summary": {
+            "sample_count": len(samples),
+            "latency": {"p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0},
+            "throughput": {"mean_fps": 0.0},
+            "power": {"mean_w": None},
+            "memory": {"mean_percent": 0.0},
+        },
+        "run_label": "kv_cache_monitor",
+    }
 
 
 # Chart building is now in trackiq.reporting.charts
@@ -1103,7 +1352,7 @@ def run_report_html(args, config):
         if getattr(args, "json", None):
             # Load benchmark export JSON (from autoperfpy run --export)
             with open(args.json, encoding="utf-8") as f:
-                data = json.load(f)
+                data = _normalize_report_input_data(json.load(f))
 
             # Check if this is distributed validation data
             if "comparisons" in data and "summary" in data and "config" in data:
@@ -1258,8 +1507,12 @@ def run_report_html(args, config):
                 csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
                 json_out = _output_path(args, json_out)
                 csv_out = _output_path(args, csv_out)
-                with open(json_out, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
+                _save_trackiq_wrapped_json(
+                    json_out,
+                    data,
+                    workload_name="html_report_data",
+                    workload_type="inference",
+                )
                 print(f"[OK] JSON exported to: {json_out}")
                 if _write_result_to_csv(data, csv_out):
                     print(f"[OK] CSV exported to: {csv_out}")
@@ -1495,7 +1748,7 @@ def run_report_pdf(args, config):
 
         if getattr(args, "json", None):
             with open(args.json, encoding="utf-8") as f:
-                data = json.load(f)
+                data = _normalize_report_input_data(json.load(f))
             samples = data.get("samples", [])
             summary = data.get("summary", {})
             report.add_metadata("Collector", data.get("collector_name", "-"))
@@ -1531,8 +1784,12 @@ def run_report_pdf(args, config):
             csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
             json_out = _output_path(args, json_out)
             csv_out = _output_path(args, csv_out)
-            with open(json_out, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            _save_trackiq_wrapped_json(
+                json_out,
+                data,
+                workload_name="pdf_report_data",
+                workload_type="inference",
+            )
             print(f"[OK] JSON exported to: {json_out}")
             if _write_result_to_csv(data, csv_out):
                 print(f"[OK] CSV exported to: {csv_out}")
@@ -1768,6 +2025,9 @@ def run_with_profile(args, _config):
         print(f"Device: {_device or 'default'} | Precision: {_precision}")
 
     # Run collection
+    profiler = None if getattr(args, "no_power", False) else PowerProfiler(detect_power_source())
+    if profiler is not None:
+        profiler.start_session()
     collector.start()
     sample_count = 0
     sample_interval = profile.sample_interval_ms / 1000.0  # Convert to seconds
@@ -1777,6 +2037,8 @@ def run_with_profile(args, _config):
         while time.time() - start_time < duration and sample_count < iterations:
             timestamp = time.time()
             metrics = collector.sample(timestamp)
+            if profiler is not None and metrics:
+                profiler.record_step(sample_count, float(metrics.get("throughput_fps", 0.0) or 0.0))
 
             if not args.quiet and metrics:
                 warmup_marker = "[WARMUP]" if metrics.get("is_warmup") else ""
@@ -1798,10 +2060,18 @@ def run_with_profile(args, _config):
         print("\nCollection interrupted by user")
 
     collector.stop()
+    if profiler is not None:
+        profiler.end_session()
 
     # Export and analyze results
     export = collector.export()
     summary = export.summary
+    if profiler is not None:
+        profile_payload = profiler.to_tool_payload().get("power_profile", {})
+        profile_summary = profile_payload.get("summary", {})
+        summary.setdefault("power", {})
+        summary["power"]["mean_w"] = profile_summary.get("mean_power_watts")
+        summary["power"]["peak_w"] = profile_summary.get("peak_power_watts")
 
     # Check against profile thresholds
     latency_p99 = summary.get("latency", {}).get("p99_ms", 0)
@@ -1854,6 +2124,8 @@ def run_with_profile(args, _config):
     if args.export:
         export_path = _output_path(args, args.export)
         export_data = export.to_dict()
+        if profiler is not None:
+            export_data["power_profile"] = profiler.to_tool_payload().get("power_profile")
         export_data["profile"] = profile.name
         export_data["validation"] = {
             "latency_pass": latency_pass,
@@ -1861,8 +2133,12 @@ def run_with_profile(args, _config):
             "power_pass": power_pass,
             "overall_pass": overall_pass,
         }
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(export_data, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path,
+            export_data,
+            workload_name=f"profile_{profile.name}",
+            workload_type="inference",
+        )
         print(f"\nResults exported to: {export_path}")
 
     if getattr(args, "export_csv", None):
@@ -1937,6 +2213,7 @@ def run_auto_benchmarks_cli(args) -> int:
         duration_seconds=duration,
         sample_interval_seconds=0.2,
         quiet=args.quiet,
+        enable_power=not getattr(args, "no_power", False),
         progress_callback=(
             None
             if args.quiet
@@ -1947,8 +2224,9 @@ def run_auto_benchmarks_cli(args) -> int:
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path, results, workload_name="auto_run_batch", workload_type="inference"
+        )
         print(f"\n[OK] Exported {len(results)} runs to {export_path}")
     if getattr(args, "export_csv", None):
         base = (
@@ -2004,11 +2282,13 @@ def run_manual_single(args):
         duration_seconds=duration,
         sample_interval_seconds=0.2,
         quiet=args.quiet,
+        enable_power=not getattr(args, "no_power", False),
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        with open(export_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2)
+        _save_trackiq_wrapped_json(
+            export_path, result, workload_name="manual_run", workload_type="inference"
+        )
         print(f"\n[OK] Exported to {export_path}")
     if getattr(args, "export_csv", None):
         csv_path = _output_path(args, args.export_csv)
@@ -2085,6 +2365,8 @@ def main():
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
+            elif args.monitor_type == "kv-cache":
+                result = run_monitor_kv_cache(args, config)
         elif args.command == "report":
             if args.report_type == "html":
                 result = run_report_html(args, config)
@@ -2104,11 +2386,10 @@ def main():
     # Save output if requested (report html/pdf already write to output dir; do not overwrite)
     if args.output and result and getattr(args, "command", None) != "report":
         out_path = _output_path(args, args.output)
-        with open(out_path, "w", encoding="utf-8") as f:
-            if hasattr(result, "to_dict"):
-                json.dump(result.to_dict(), f, indent=2)
-            else:
-                json.dump(result, f, indent=2)
+        if hasattr(result, "to_dict"):
+            _save_trackiq_wrapped_json(out_path, result.to_dict())
+        else:
+            _save_trackiq_wrapped_json(out_path, result)
         print(f"\n[OK] Results saved to {out_path}")
 
     return 0

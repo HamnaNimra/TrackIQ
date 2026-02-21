@@ -1,6 +1,6 @@
 """AutoPerfPy - Comprehensive Performance Analysis Toolkit."""
 
-__version__ = "0.1.0"
+__version__ = "1.0"
 __author__ = "Hamna Nimra"
 __description__ = "Performance analysis and benchmarking toolkit for NVIDIA platforms"
 

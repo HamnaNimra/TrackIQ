@@ -1,6 +1,6 @@
-# 📚 Core Concepts Guide
+﻿# Core Concepts Guide
 
-This document explains key performance engineering concepts used throughout AutoPerfPy.
+This document explains key performance engineering concepts used across the TrackIQ repository, including autoperfpy and trackiq_core workflows.
 
 ## Table of Contents
 0. [Architecture: trackiq vs autoperfpy](#architecture-trackiq-vs-autoperfpy)
@@ -20,8 +20,8 @@ This document explains key performance engineering concepts used throughout Auto
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  autoperfpy (app layer)                                          │
-│  CLI • Streamlit UI • TensorRT/automotive benchmarks • profiles  │
-│  DNN pipeline • Tegrastats analyzers                             │
+│  CLI * Streamlit UI * TensorRT/automotive benchmarks * profiles  │
+│  DNN pipeline * Tegrastats analyzers                             │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │ imports
 ┌───────────────────────────────▼─────────────────────────────────┐
@@ -31,7 +31,7 @@ This document explains key performance engineering concepts used throughout Auto
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-- **Collectors**: Plugins that gather metrics (synthetic, psutil, NVML, Tegrastats in app). Each implements `start()`, `sample(timestamp)`, `stop()`, `export()` → `CollectorExport`.
+- **Collectors**: Plugins that gather metrics (synthetic, psutil, NVML, Tegrastats in app). Each implements `start()`, `sample(timestamp)`, `stop()`, `export()` -> `CollectorExport`.
 - **Runner**: `BenchmarkRunner` runs a collector for a fixed duration and sample interval, returns `CollectorExport` (samples + summary).
 - **Results schema**: `CollectorExport` (collector_name, start_time, end_time, samples, summary, config); `AnalysisResult` (name, timestamp, metrics). Summary is nested (e.g. `latency.p99_ms`, `throughput.mean_fps`).
 - **Comparison logic**: `trackiq.compare` provides `RegressionDetector`, `RegressionThreshold`, `MetricComparison`. Save baselines, compare current run to baseline, detect regressions by threshold (e.g. latency +5%, throughput -5%). Used by `autoperfpy compare`.
@@ -57,7 +57,7 @@ Request ─────────────────────> Respons
 | Type | Description | Example |
 |------|-------------|---------|
 | **Inference Latency** | Time to run the ML model | 25ms for YOLO detection |
-| **End-to-End Latency** | Full pipeline time (input → output) | 30ms (25ms inference + 5ms preprocessing) |
+| **End-to-End Latency** | Full pipeline time (input -> output) | 30ms (25ms inference + 5ms preprocessing) |
 | **Time-to-First-Token** | Latency before first output appears | 800ms for LLM |
 | **Time-per-Token** | Latency to generate each additional token | 50ms per token for LLM |
 
@@ -107,10 +107,10 @@ P99 = 45ms   # 99 requests faster, 1 slower
 
 ```
 Scenario A: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
-Average: 25ms, P99: 29ms → Consistent performance ✓
+Average: 25ms, P99: 29ms -> Consistent performance [OK]
 
 Scenario B: [5, 5, 5, 5, 5, 5, 5, 5, 5, 1005]
-Average: 105ms, P99: 1005ms → Unpredictable spikes ✗
+Average: 105ms, P99: 1005ms -> Unpredictable spikes ✗
 ```
 
 **Lesson**: Always look at P99 to catch problems with percentiles!
@@ -153,7 +153,7 @@ Input: [Image1, Image2, ..., Image16]
   ├─ Processing: 5ms × 16 = 80ms (computation amortized)
   └─ Total: 81ms for 16 images = 5.06ms per image
   
-Throughput: 1/0.00506 = 197 images/sec ✓ (higher!)
+Throughput: 1/0.00506 = 197 images/sec [OK] (higher!)
 
 BUT per-image latency in batch: 81ms (image waits for batch!) ✗
 ```
@@ -164,11 +164,11 @@ BUT per-image latency in batch: 81ms (image waits for batch!) ✗
          Latency
             ↑
             │      Small batch: Low latency, low throughput
-            │      •
+            │      *
             │        \
             │         \____  Large batch: High throughput, high latency
-            │              •
-            └────────────────────→ Throughput
+            │              *
+            └────────────────────-> Throughput
 ```
 
 ### Choosing Batch Size
@@ -331,3 +331,6 @@ AutoPerfPy produces report artifacts in HTML/PDF along with JSON/CSV exports:
 ---
 
 **Now you understand the core concepts! Check the examples in [README.md](README.md) to see them in action.** 🚀
+
+
+

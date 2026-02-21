@@ -108,6 +108,9 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
     # Initialize process group
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '12345'
+    # Some Windows/CPU PyTorch builds do not include libuv support.
+    # Force the TCPStore path to avoid "use_libuv was requested" runtime failures.
+    os.environ.setdefault("USE_LIBUV", "0")
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
     # Set device (CPU for Gloo)

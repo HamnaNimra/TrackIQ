@@ -196,7 +196,7 @@ class TestDistributedValidator:
 class TestCLIntegration:
     """Tests for CLI integration."""
 
-    @patch('trackiq_core.distributed_validator.DistributedValidator')
+    @patch('autoperfpy.cli.DistributedValidator')
     def test_cli_run_benchmark_distributed(self, mock_validator_class):
         """Test CLI integration for distributed benchmark."""
         from autoperfpy.cli import run_benchmark_distributed

@@ -15,6 +15,17 @@ Provides:
 from trackiq_core.utils.dict_utils import safe_get
 from trackiq_core.utils.stats import percentile, stats_from_values
 from trackiq_core.hardware.env import command_available, nvidia_smi_available
+from trackiq_core.hardware import (
+    DEVICE_TYPE_AMD_GPU,
+    DEVICE_TYPE_APPLE_SILICON,
+    detect_amd_gpus,
+    detect_apple_silicon,
+    get_amd_gpu_metrics,
+    get_intel_gpu_metrics,
+    get_apple_silicon_metrics,
+    get_cpu_metrics,
+    query_rocm_smi,
+)
 from trackiq_core.configs.config_io import (
     load_yaml_file,
     load_json_file,
@@ -52,6 +63,33 @@ from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchma
 
 # Distributed validation
 from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from trackiq_core.schema import (
+    TrackiqResult,
+    PlatformInfo,
+    WorkloadInfo,
+    Metrics,
+    RegressionInfo,
+    KVCacheInfo,
+)
+from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
+from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
+
+# UI layer
+from trackiq_core.ui import (
+    TrackiqDashboard,
+    TrackiqTheme,
+    DARK_THEME,
+    LIGHT_THEME,
+    run_dashboard,
+    MetricTable,
+    LossChart,
+    RegressionBadge,
+    WorkerGrid,
+    PowerGauge,
+    ComparisonTable,
+    DevicePanel,
+    ResultBrowser,
+)
 
 __all__ = [
     # Utils
@@ -60,6 +98,15 @@ __all__ = [
     "stats_from_values",
     "command_available",
     "nvidia_smi_available",
+    "DEVICE_TYPE_AMD_GPU",
+    "DEVICE_TYPE_APPLE_SILICON",
+    "detect_amd_gpus",
+    "detect_apple_silicon",
+    "get_amd_gpu_metrics",
+    "get_intel_gpu_metrics",
+    "get_apple_silicon_metrics",
+    "get_cpu_metrics",
+    "query_rocm_smi",
     # Config I/O
     "load_yaml_file",
     "load_json_file",
@@ -92,4 +139,29 @@ __all__ = [
     # Distributed validation
     "DistributedValidator",
     "DistributedValidationConfig",
+    # Canonical result schema
+    "TrackiqResult",
+    "PlatformInfo",
+    "WorkloadInfo",
+    "Metrics",
+    "RegressionInfo",
+    "KVCacheInfo",
+    "save_trackiq_result",
+    "load_trackiq_result",
+    "validate_trackiq_result",
+    "validate_trackiq_result_obj",
+    # UI layer
+    "TrackiqDashboard",
+    "TrackiqTheme",
+    "DARK_THEME",
+    "LIGHT_THEME",
+    "run_dashboard",
+    "MetricTable",
+    "LossChart",
+    "RegressionBadge",
+    "WorkerGrid",
+    "PowerGauge",
+    "ComparisonTable",
+    "DevicePanel",
+    "ResultBrowser",
 ]

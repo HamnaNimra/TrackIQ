@@ -1,7 +1,7 @@
-.PHONY: help install install-test install-dev test test-verbose test-coverage test-fast clean lint format regression-example
+.PHONY: help install install-test install-dev test test-verbose test-coverage test-fast test-specific clean lint format regression-example
 
 help:
-	@echo "AutoPerfPy Development Commands"
+	@echo "TrackIQ Development Commands"
 	@echo "================================"
 	@echo ""
 	@echo "Installation:"
@@ -41,7 +41,7 @@ test-verbose:
 	pytest tests/ -v
 
 test-coverage:
-	pytest tests/ --cov=autoperfpy --cov-report=html --cov-report=term-missing
+	pytest tests/ --cov=autoperfpy --cov=trackiq_core --cov=minicluster --cov=trackiq_compare --cov-report=html --cov-report=term-missing --cov-report=xml
 	@echo ""
 	@echo "Coverage report generated in htmlcov/index.html"
 
@@ -63,11 +63,11 @@ test-specific:
 	endif
 
 lint:
-	flake8 autoperfpy tests --max-line-length=100 --ignore=E501,W503 || true
+	flake8 autoperfpy trackiq_core minicluster trackiq_compare tests --max-line-length=120 --ignore=E501,W503 || true
 
 format:
-	black autoperfpy tests
-	isort autoperfpy tests
+	black autoperfpy trackiq_core minicluster trackiq_compare tests
+	isort autoperfpy trackiq_core minicluster trackiq_compare tests
 
 regression-example:
 	python examples/regression_detection_example.py
@@ -79,5 +79,5 @@ clean:
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .coverage htmlcov .mypy_cache .tox
-	rm -rf .autoperfpy/baselines
-	@echo "✅ Cleaned up test artifacts"
+	rm -rf .trackiq/baselines
+	@echo "Cleaned up test artifacts"

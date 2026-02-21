@@ -12,12 +12,12 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.12"
 
     - name: Install dependencies
       run: |
@@ -27,8 +27,8 @@ jobs:
 
     - name: Run Bandit
       run: |
-        bandit -r autoperfpy -f json -o bandit-report.json || true
-        bandit -r autoperfpy
+        bandit -r autoperfpy trackiq_core minicluster trackiq_compare -f json -o bandit-report.json || true
+        bandit -r autoperfpy trackiq_core minicluster trackiq_compare
       continue-on-error: true
 
     - name: Run Safety

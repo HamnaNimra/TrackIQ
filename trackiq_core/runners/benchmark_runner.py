@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from trackiq_core.collectors import CollectorBase, CollectorExport, SyntheticCollector
 from trackiq_core.hardware.devices import DeviceProfile, get_platform_metadata_for_device
 from trackiq_core.inference import InferenceConfig
+from trackiq_core.power_profiler import PowerProfiler
 
 
 class BenchmarkRunner:
@@ -22,6 +23,7 @@ class BenchmarkRunner:
         duration_seconds: float,
         sample_interval_seconds: float = 0.1,
         quiet: bool = False,
+        power_profiler: Optional[PowerProfiler] = None,
     ):
         """Initialize benchmark runner.
 
@@ -35,6 +37,7 @@ class BenchmarkRunner:
         self.duration_seconds = duration_seconds
         self.sample_interval_seconds = sample_interval_seconds
         self.quiet = quiet
+        self.power_profiler = power_profiler
 
     def run(self) -> CollectorExport:
         """Run collection for duration_seconds, sampling at sample_interval_seconds.
@@ -45,11 +48,16 @@ class BenchmarkRunner:
         self.collector.start()
         start = time.time()
         sample_count = 0
+        if self.power_profiler is not None:
+            self.power_profiler.start_session()
 
         try:
             while time.time() - start < self.duration_seconds:
                 ts = time.time()
                 metrics = self.collector.sample(ts)
+                if self.power_profiler is not None and metrics:
+                    throughput = float(metrics.get("throughput_fps", 0.0) or 0.0)
+                    self.power_profiler.record_step(sample_count, throughput)
                 if not self.quiet and metrics:
                     warmup = metrics.get("is_warmup", False)
                     latency = metrics.get("latency_ms", 0)
@@ -67,6 +75,8 @@ class BenchmarkRunner:
                 print("\nCollection interrupted by user")
 
         self.collector.stop()
+        if self.power_profiler is not None:
+            self.power_profiler.end_session()
         return self.collector.export()
 
 
@@ -109,6 +119,7 @@ def run_single_benchmark(
     duration_seconds: float = 10.0,
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
+    power_profiler: Optional[PowerProfiler] = None,
 ) -> Dict[str, Any]:
     """Run one benchmark for (device, config) and return result dict.
 
@@ -135,6 +146,7 @@ def run_single_benchmark(
         duration_seconds=duration_seconds,
         sample_interval_seconds=sample_interval_seconds,
         quiet=quiet,
+        power_profiler=power_profiler,
     )
     export = runner.run()
     result = export.to_dict()
@@ -151,6 +163,7 @@ def run_auto_benchmarks(
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
     progress_callback: Optional[Callable[..., None]] = None,
+    power_profiler_factory: Optional[Callable[[], Optional[PowerProfiler]]] = None,
 ) -> List[Dict[str, Any]]:
     """Run benchmarks sequentially for each (device, config).
 
@@ -180,6 +193,9 @@ def run_auto_benchmarks(
                 duration_seconds=duration_seconds,
                 sample_interval_seconds=sample_interval_seconds,
                 quiet=quiet,
+                power_profiler=(
+                    power_profiler_factory() if power_profiler_factory else None
+                ),
             )
             results.append(res)
         except Exception as e:
