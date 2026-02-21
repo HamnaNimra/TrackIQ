@@ -6,11 +6,11 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
 import json
-from typing import List, Union
+from typing import List, Optional, Union
 
 from trackiq_core.hardware.devices import get_all_devices
 from trackiq_core.schema import TrackiqResult
-from trackiq_core.ui.components import DevicePanel, ResultBrowser
+from trackiq_core.ui.components import DevicePanel, ResultBrowser, RunHistoryLoader, TrendChart
 from trackiq_core.ui.theme import DARK_THEME, LIGHT_THEME, TrackiqTheme
 
 
@@ -82,6 +82,18 @@ class TrackiqDashboard(ABC):
 
         with st.expander("Load Result", expanded=False):
             ResultBrowser(theme=self.theme).render()
+
+    def render_trend_section(
+        self,
+        history_dir: str,
+        metric_names: Optional[List[str]] = None,
+        min_runs: int = 2,
+    ) -> None:
+        """Render metric trends from a directory of TrackiqResult files."""
+        history = RunHistoryLoader(history_dir=history_dir).load()
+        if len(history) < min_runs:
+            return
+        TrendChart(results=history, metric_names=metric_names, theme=self.theme).render()
 
     def _build_html_report(self, result: TrackiqResult) -> str:
         """Build a lightweight self-contained HTML report for a single result."""

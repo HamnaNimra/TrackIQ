@@ -290,6 +290,7 @@ def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
     dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
     assert hasattr(dash, "render_device_panel")
     assert hasattr(dash, "render_result_browser")
+    assert hasattr(dash, "render_trend_section")
     assert hasattr(dash, "render_download_section")
 
 
