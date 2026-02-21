@@ -32,6 +32,13 @@ from autoperfpy.commands.monitor import (
     run_monitor_gpu as _cmd_run_monitor_gpu,
     run_monitor_kv_cache as _cmd_run_monitor_kv_cache,
 )
+from autoperfpy.commands.run import (
+    run_auto_benchmarks_cli as _cmd_run_auto_benchmarks_cli,
+    run_devices_list as _cmd_run_devices_list,
+    run_manual_single as _cmd_run_manual_single,
+    run_profiles as _cmd_run_profiles,
+    run_with_profile as _cmd_run_with_profile,
+)
 from autoperfpy.collectors import SyntheticCollector
 from autoperfpy.config import ConfigManager
 from autoperfpy.profiles import (

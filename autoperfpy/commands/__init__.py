@@ -10,6 +10,13 @@ from autoperfpy.commands.analyze import (
 )
 from autoperfpy.commands.benchmark import run_benchmark_batching, run_benchmark_llm
 from autoperfpy.commands.monitor import run_monitor_gpu, run_monitor_kv_cache
+from autoperfpy.commands.run import (
+    run_auto_benchmarks_cli,
+    run_devices_list,
+    run_manual_single,
+    run_profiles,
+    run_with_profile,
+)
 
 __all__ = [
     "run_analyze_latency",
@@ -22,4 +29,9 @@ __all__ = [
     "run_benchmark_llm",
     "run_monitor_gpu",
     "run_monitor_kv_cache",
+    "run_profiles",
+    "run_with_profile",
+    "run_devices_list",
+    "run_auto_benchmarks_cli",
+    "run_manual_single",
 ]
