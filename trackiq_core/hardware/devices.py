@@ -9,7 +9,10 @@ to collectors; trackiq does not depend on any specific collector.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-import pynvml  # provided by nvidia-ml-py
+try:
+    import pynvml  # provided by nvidia-ml-py
+except Exception:  # pragma: no cover - optional dependency
+    pynvml = None
 
 
 # Device type constants (generic; apps map these to collectors)
@@ -101,7 +104,8 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
     cuda_version = ""
 
     try:
-
+        if pynvml is None:
+            raise ImportError("pynvml unavailable")
         pynvml.nvmlInit()
         try:
             driver_version = pynvml.nvmlSystemGetDriverVersion()
