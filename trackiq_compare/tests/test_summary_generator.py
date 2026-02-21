@@ -67,7 +67,19 @@ def test_cli_run_subcommand_executes_without_errors(tmp_path) -> None:
     path_b = tmp_path / "b.json"
     save_trackiq_result(_result(100.0, 15.0), path_a)
     save_trackiq_result(_result(102.0, 14.0), path_b)
-    rc = cli_main(["run", str(path_a), str(path_b), "--label-a", "A", "--label-b", "B"])
+    rc = cli_main(
+        [
+            "run",
+            str(path_a),
+            str(path_b),
+            "--label-a",
+            "A",
+            "--label-b",
+            "B",
+            "--variance-threshold",
+            "25.0",
+        ]
+    )
     assert rc == 0
 
 

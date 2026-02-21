@@ -605,6 +605,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                 step=0.5,
                 key="trackiq_unified_compare_regression_threshold",
             )
+            variance_threshold = st.sidebar.slider(
+                "Variance Threshold (%)",
+                min_value=1.0,
+                max_value=200.0,
+                value=25.0,
+                step=1.0,
+                key="trackiq_unified_compare_variance_threshold",
+            )
 
             if st.sidebar.button("Load Comparison", use_container_width=True):
                 if not result_a_path or not Path(result_a_path).exists():
@@ -617,6 +625,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     st.session_state["trackiq_unified_compare_label_a"] = label_a
                     st.session_state["trackiq_unified_compare_label_b"] = label_b
                     st.session_state["trackiq_unified_compare_regression_threshold"] = float(regression_threshold)
+                    st.session_state["trackiq_unified_compare_variance_threshold"] = float(variance_threshold)
 
             result_a = st.session_state.get("trackiq_unified_compare_a")
             result_b = st.session_state.get("trackiq_unified_compare_b")
@@ -633,6 +642,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                     st.session_state.get(
                         "trackiq_unified_compare_regression_threshold",
                         regression_threshold,
+                    )
+                ),
+                variance_threshold_percent=float(
+                    st.session_state.get(
+                        "trackiq_unified_compare_variance_threshold",
+                        variance_threshold,
                     )
                 ),
             )

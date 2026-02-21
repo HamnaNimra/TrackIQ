@@ -25,6 +25,7 @@ def make_result(
     ttft=None,
     tokens_per_sec=None,
     decode_tpt=None,
+    tool_payload=None,
 ) -> TrackiqResult:
     """Create a TrackiqResult for tests."""
     return TrackiqResult(
@@ -58,6 +59,7 @@ def make_result(
             decode_tpt_ms=decode_tpt,
         ),
         regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
+        tool_payload=tool_payload,
     )
 
 
@@ -121,3 +123,40 @@ def test_llm_metric_winner_logic() -> None:
     assert comparison.metrics["ttft_ms"].winner == "B"
     assert comparison.metrics["tokens_per_sec"].winner == "B"
     assert comparison.metrics["decode_tpt_ms"].winner == "B"
+
+
+def test_variance_regression_finding_added_when_allreduce_stddev_degrades() -> None:
+    """Comparator should emit consistency finding when B all-reduce variance regresses."""
+    a = make_result(
+        tool_payload={
+            "steps": [
+                {"allreduce_time_ms": 10.0},
+                {"allreduce_time_ms": 10.1},
+                {"allreduce_time_ms": 9.9},
+                {"allreduce_time_ms": 10.2},
+            ]
+        }
+    )
+    b = make_result(
+        tool_payload={
+            "steps": [
+                {"allreduce_time_ms": 5.0},
+                {"allreduce_time_ms": 16.0},
+                {"allreduce_time_ms": 8.0},
+                {"allreduce_time_ms": 20.0},
+            ]
+        }
+    )
+    comparison = MetricComparator("A", "B", variance_threshold_percent=25.0).compare(a, b)
+    assert len(comparison.consistency_findings) == 1
+    finding = comparison.consistency_findings[0]
+    assert finding.code == "VARIANCE_REGRESSION"
+    assert finding.label == "All-Reduce Consistency Degraded"
+
+
+def test_variance_regression_skipped_when_step_allreduce_data_missing() -> None:
+    """Comparator should skip consistency check when per-step allreduce data is absent."""
+    a = make_result(tool_payload={"steps": [{"loss": 1.0}, {"loss": 0.9}]})
+    b = make_result(tool_payload={"steps": [{"loss": 1.2}, {"loss": 1.1}]})
+    comparison = MetricComparator("A", "B", variance_threshold_percent=25.0).compare(a, b)
+    assert comparison.consistency_findings == []

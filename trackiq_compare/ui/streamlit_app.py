@@ -118,13 +118,15 @@ def main() -> None:
         regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold))
     ).generate(comp)
     top = summary.largest_deltas[:3]
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Overall Winner", summary.overall_winner)
     with col2:
         st.metric("Comparable Metrics", len(comp.comparable_metrics))
     with col3:
         st.metric("Flagged Regressions", len(summary.flagged_regressions))
+    with col4:
+        st.metric("Consistency Findings", len(comp.consistency_findings))
     if top:
         st.caption(
             "Top deltas: "
