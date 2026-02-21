@@ -86,6 +86,14 @@ def test_trackiq_result_validation_fails_on_missing_required_field() -> None:
         validate_trackiq_result(payload)
 
 
+def test_trackiq_result_validation_fails_on_invalid_llm_metric_type() -> None:
+    """Validator should reject non-numeric LLM metric field values."""
+    payload = _sample_result().to_dict()
+    payload["metrics"]["ttft_ms"] = "fast"
+    with pytest.raises(TypeError, match="metrics.ttft_ms"):
+        validate_trackiq_result(payload)
+
+
 def test_trackiq_result_null_handling_for_optional_fields(tmp_path) -> None:
     """Optional nullable fields should be preserved through save/load."""
     path = tmp_path / "trackiq_result_nulls.json"
@@ -121,6 +129,19 @@ def test_new_power_fields_round_trip_through_dict_conversion() -> None:
     assert loaded.metrics.energy_per_step_joules == 12.5
     assert loaded.metrics.performance_per_watt == 3.2
     assert loaded.metrics.temperature_celsius == 71.4
+
+
+def test_new_llm_fields_round_trip_through_dict_conversion() -> None:
+    """Optional LLM fields should round-trip via to_dict/from_dict."""
+    source = _sample_result()
+    source.metrics.ttft_ms = 812.4
+    source.metrics.tokens_per_sec = 26.8
+    source.metrics.decode_tpt_ms = 37.3
+
+    loaded = TrackiqResult.from_dict(source.to_dict())
+    assert loaded.metrics.ttft_ms == 812.4
+    assert loaded.metrics.tokens_per_sec == 26.8
+    assert loaded.metrics.decode_tpt_ms == 37.3
 
 
 def test_kv_cache_round_trip_through_dict_conversion() -> None:
@@ -160,6 +181,20 @@ def test_kv_cache_from_tool_payload_backcompat() -> None:
     loaded = TrackiqResult.from_dict(payload)
     assert loaded.kv_cache is not None
     assert loaded.kv_cache.estimated_size_mb == 512.0
+
+
+def test_llm_metrics_from_tool_payload_backcompat() -> None:
+    """from_dict should backfill LLM metrics from tool_payload for legacy payloads."""
+    payload = _sample_result().to_dict()
+    payload["tool_payload"] = {
+        "ttft_p50": 750.0,
+        "throughput_tokens_per_sec": 31.5,
+        "tpt_p50": 28.4,
+    }
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.metrics.ttft_ms == 750.0
+    assert loaded.metrics.tokens_per_sec == 31.5
+    assert loaded.metrics.decode_tpt_ms == 28.4
 
 
 def test_save_trackiq_result_enforces_schema_contract(tmp_path) -> None:

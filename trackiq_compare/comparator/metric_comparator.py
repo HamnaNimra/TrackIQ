@@ -10,6 +10,8 @@ LOWER_IS_BETTER_METRICS = {
     "latency_p50_ms",
     "latency_p95_ms",
     "latency_p99_ms",
+    "ttft_ms",
+    "decode_tpt_ms",
     "memory_utilization_percent",
     "communication_overhead_percent",
     "power_consumption_watts",

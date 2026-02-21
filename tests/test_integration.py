@@ -179,3 +179,19 @@ def test_autoperfpy_power_profiler_integration_full_session(monkeypatch):
     result = _infer_trackiq_result(payload)
     assert result.metrics.power_consumption_watts is not None
     assert result.metrics.performance_per_watt is not None
+
+
+def test_infer_trackiq_result_backfills_llm_metrics_from_payload() -> None:
+    """LLM benchmark payloads should populate canonical LLM metric fields."""
+    payload = {
+        "run_label": "llm_latency",
+        "ttft_p50": 820.0,
+        "ttft_p95": 990.0,
+        "ttft_p99": 1100.0,
+        "tpt_p50": 35.0,
+        "throughput_tokens_per_sec": 28.2,
+    }
+    result = _infer_trackiq_result(payload)
+    assert result.metrics.ttft_ms == 820.0
+    assert result.metrics.tokens_per_sec == 28.2
+    assert result.metrics.decode_tpt_ms == 35.0

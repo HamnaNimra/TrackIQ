@@ -92,6 +92,9 @@ def validate_trackiq_result(data: Dict[str, Any]) -> None:
         metrics["power_consumption_watts"], (int, float)
     ):
         raise TypeError("Field 'metrics.power_consumption_watts' must be number or null")
+    for key in ["ttft_ms", "tokens_per_sec", "decode_tpt_ms"]:
+        if key in metrics and metrics[key] is not None and not isinstance(metrics[key], (int, float)):
+            raise TypeError(f"Field 'metrics.{key}' must be number or null")
 
     regression = data["regression"]
     if not isinstance(regression, dict):

@@ -9,7 +9,12 @@ from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
 
 
-LOWER_IS_BETTER = {"power_consumption_watts", "energy_per_step_joules"}
+LOWER_IS_BETTER = {
+    "power_consumption_watts",
+    "energy_per_step_joules",
+    "ttft_ms",
+    "decode_tpt_ms",
+}
 
 
 class MetricTable:

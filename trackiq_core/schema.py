@@ -47,6 +47,9 @@ class Metrics:
     energy_per_step_joules: Optional[float] = None
     performance_per_watt: Optional[float] = None
     temperature_celsius: Optional[float] = None
+    ttft_ms: Optional[float] = None
+    tokens_per_sec: Optional[float] = None
+    decode_tpt_ms: Optional[float] = None
 
 
 @dataclass
@@ -97,6 +100,25 @@ class TrackiqResult:
     tool_payload: Optional[Dict[str, Any]] = None
     schema_version: str = "1.1.0"
 
+    def __post_init__(self) -> None:
+        """Backfill LLM metrics from tool payload when canonical fields are absent."""
+        if not isinstance(self.tool_payload, dict):
+            return
+        payload = self.tool_payload
+
+        if self.metrics.ttft_ms is None:
+            self.metrics.ttft_ms = _coerce_optional_float(
+                payload.get("ttft_ms", payload.get("ttft_p50"))
+            )
+        if self.metrics.tokens_per_sec is None:
+            self.metrics.tokens_per_sec = _coerce_optional_float(
+                payload.get("tokens_per_sec", payload.get("throughput_tokens_per_sec"))
+            )
+        if self.metrics.decode_tpt_ms is None:
+            self.metrics.decode_tpt_ms = _coerce_optional_float(
+                payload.get("decode_tpt_ms", payload.get("tpt_p50"))
+            )
+
     def to_dict(self) -> Dict[str, object]:
         """Convert to JSON-serializable dictionary."""
         payload = asdict(self)
@@ -117,6 +139,9 @@ class TrackiqResult:
         metrics_payload.setdefault("energy_per_step_joules", None)
         metrics_payload.setdefault("performance_per_watt", None)
         metrics_payload.setdefault("temperature_celsius", None)
+        metrics_payload.setdefault("ttft_ms", None)
+        metrics_payload.setdefault("tokens_per_sec", None)
+        metrics_payload.setdefault("decode_tpt_ms", None)
 
         kv_cache_payload = payload.get("kv_cache")
         if kv_cache_payload is None and isinstance(payload.get("tool_payload"), dict):
@@ -135,3 +160,13 @@ class TrackiqResult:
             tool_payload=payload.get("tool_payload"),
             schema_version=str(payload.get("schema_version", "1.0.0")),
         )
+
+
+def _coerce_optional_float(value: object) -> Optional[float]:
+    """Return float(value) when possible, otherwise None."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
