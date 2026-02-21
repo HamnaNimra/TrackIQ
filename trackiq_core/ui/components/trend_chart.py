@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
@@ -29,7 +30,7 @@ class RunHistoryLoader:
                 results.append(load_trackiq_result(json_path))
             except Exception:
                 continue
-        results.sort(key=lambda item: item.timestamp)
+        results.sort(key=lambda item: _timestamp_sort_key(item.timestamp))
         return results
 
 
@@ -54,7 +55,7 @@ class TrendChart:
         metric_names: Optional[Iterable[str]] = None,
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
-        self.results = sorted(list(results), key=lambda item: item.timestamp)
+        self.results = sorted(list(results), key=lambda item: _timestamp_sort_key(item.timestamp))
         self.metric_names = list(metric_names) if metric_names is not None else list(self.DEFAULT_METRICS)
         self.theme = theme
 
@@ -110,3 +111,9 @@ class TrendChart:
             rows = [{"timestamp": item["timestamp"], label: item["value"]} for item in points]
             st.line_chart(rows, x="timestamp", y=label)
 
+
+def _timestamp_sort_key(value: datetime) -> float:
+    """Normalize naive/aware timestamps to UTC epoch for stable sorting."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).timestamp()
+    return value.astimezone(timezone.utc).timestamp()

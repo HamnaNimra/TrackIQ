@@ -71,6 +71,7 @@ def main() -> None:
         seed = st.number_input("Seed", min_value=0, max_value=2_147_483_647, value=42, step=1)
         tdp_watts = st.number_input("TDP Watts", min_value=10.0, max_value=1000.0, value=150.0, step=1.0)
         run_clicked = st.button("Run MiniCluster", use_container_width=True)
+        quick_clicked = st.button("Quick Smoke Run (20 steps)", use_container_width=True)
         st.markdown("---")
         st.subheader("Load Existing Result")
         latest_path = _latest_result_path()
@@ -100,6 +101,19 @@ def main() -> None:
             st.session_state["minicluster_result"] = _run_and_load_result(cfg)
             st.session_state["minicluster_result_path"] = "generated-now"
 
+    if quick_clicked:
+        cfg = RunConfig(
+            num_steps=20,
+            num_processes=1,
+            batch_size=16,
+            learning_rate=0.01,
+            seed=42,
+            tdp_watts=float(tdp_watts),
+        )
+        with st.spinner("Running quick MiniCluster smoke run..."):
+            st.session_state["minicluster_result"] = _run_and_load_result(cfg)
+            st.session_state["minicluster_result_path"] = "generated-quick-smoke"
+
     if load_clicked:
         try:
             st.session_state["minicluster_result"] = load_trackiq_result(result_path)
@@ -109,6 +123,17 @@ def main() -> None:
 
     result = st.session_state.get("minicluster_result")
     if result is None:
+        st.markdown("### Run Configuration Preview")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Workers", int(workers))
+            st.metric("Steps", int(steps))
+        with c2:
+            st.metric("Batch Size", int(batch_size))
+            st.metric("Learning Rate", float(learning_rate))
+        with c3:
+            st.metric("Seed", int(seed))
+            st.metric("TDP (W)", float(tdp_watts))
         st.info(
             "Configure run settings and click 'Run MiniCluster', or load an existing "
             "result JSON from the sidebar."

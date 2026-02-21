@@ -197,6 +197,23 @@ def test_llm_metrics_from_tool_payload_backcompat() -> None:
     assert loaded.metrics.decode_tpt_ms == 28.4
 
 
+def test_llm_metrics_backcompat_falls_back_when_canonical_payload_values_are_null() -> None:
+    """from_dict should use legacy keys when canonical tool_payload keys are present but null."""
+    payload = _sample_result().to_dict()
+    payload["tool_payload"] = {
+        "ttft_ms": None,
+        "ttft_p50": 750.0,
+        "tokens_per_sec": None,
+        "throughput_tokens_per_sec": 31.5,
+        "decode_tpt_ms": None,
+        "tpt_p50": 28.4,
+    }
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.metrics.ttft_ms == 750.0
+    assert loaded.metrics.tokens_per_sec == 31.5
+    assert loaded.metrics.decode_tpt_ms == 28.4
+
+
 def test_save_trackiq_result_enforces_schema_contract(tmp_path) -> None:
     """save_trackiq_result should reject invalid dataclass payloads."""
     result = _sample_result()

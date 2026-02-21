@@ -1,6 +1,6 @@
 """Tests for trackiq_core.ui package."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -271,6 +271,24 @@ def test_run_history_loader_loads_sorted_results_and_skips_invalid(tmp_path: Pat
     save_trackiq_result(newer, history_dir / "newer.json")
     save_trackiq_result(older, history_dir / "older.json")
     (history_dir / "broken.json").write_text("{not-json", encoding="utf-8")
+
+    loaded = RunHistoryLoader(str(history_dir)).load()
+    assert len(loaded) == 2
+    assert [item.metrics.throughput_samples_per_sec for item in loaded] == [90.0, 120.0]
+
+
+def test_run_history_loader_sorts_mixed_naive_and_aware_timestamps(tmp_path: Path) -> None:
+    """RunHistoryLoader should sort mixed timestamp types without raising TypeError."""
+    history_dir = tmp_path / "history_mixed_tz"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    aware_older = _result(throughput=90.0, perf_per_watt=0.7)
+    aware_older.timestamp = datetime(2026, 2, 21, 9, 0, 0, tzinfo=timezone.utc)
+    naive_newer = _result(throughput=120.0, perf_per_watt=1.0)
+    naive_newer.timestamp = datetime(2026, 2, 21, 10, 0, 0)
+
+    save_trackiq_result(naive_newer, history_dir / "naive_newer.json")
+    save_trackiq_result(aware_older, history_dir / "aware_older.json")
 
     loaded = RunHistoryLoader(str(history_dir)).load()
     assert len(loaded) == 2

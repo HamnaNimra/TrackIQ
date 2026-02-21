@@ -107,16 +107,22 @@ class TrackiqResult:
         payload = self.tool_payload
 
         if self.metrics.ttft_ms is None:
-            self.metrics.ttft_ms = _coerce_optional_float(
-                payload.get("ttft_ms", payload.get("ttft_p50"))
+            self.metrics.ttft_ms = _coerce_first_optional_float(
+                payload,
+                "ttft_ms",
+                "ttft_p50",
             )
         if self.metrics.tokens_per_sec is None:
-            self.metrics.tokens_per_sec = _coerce_optional_float(
-                payload.get("tokens_per_sec", payload.get("throughput_tokens_per_sec"))
+            self.metrics.tokens_per_sec = _coerce_first_optional_float(
+                payload,
+                "tokens_per_sec",
+                "throughput_tokens_per_sec",
             )
         if self.metrics.decode_tpt_ms is None:
-            self.metrics.decode_tpt_ms = _coerce_optional_float(
-                payload.get("decode_tpt_ms", payload.get("tpt_p50"))
+            self.metrics.decode_tpt_ms = _coerce_first_optional_float(
+                payload,
+                "decode_tpt_ms",
+                "tpt_p50",
             )
 
     def to_dict(self) -> Dict[str, object]:
@@ -170,3 +176,14 @@ def _coerce_optional_float(value: object) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _coerce_first_optional_float(payload: Dict[str, Any], *keys: str) -> Optional[float]:
+    """Return the first present key that can be coerced to float."""
+    for key in keys:
+        if key not in payload:
+            continue
+        coerced = _coerce_optional_float(payload.get(key))
+        if coerced is not None:
+            return coerced
+    return None

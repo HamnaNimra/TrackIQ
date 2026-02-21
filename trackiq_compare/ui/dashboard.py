@@ -88,6 +88,7 @@ class CompareDashboard(TrackiqDashboard):
         result: Optional[List[TrackiqResult]] = None,
         theme: TrackiqTheme = DARK_THEME,
         title: str = "TrackIQ Compare Dashboard",
+        regression_threshold_percent: float = 5.0,
     ) -> None:
         if result is not None:
             if len(result) != 2:
@@ -102,6 +103,7 @@ class CompareDashboard(TrackiqDashboard):
         self.result_b = right
         self.label_a = label_a or left.tool_name
         self.label_b = label_b or right.tool_name
+        self.regression_threshold_percent = float(regression_threshold_percent)
         super().__init__(result=[left, right], theme=theme, title=title)
 
     def _vendors(self) -> Tuple[str, str]:
@@ -407,7 +409,9 @@ class CompareDashboard(TrackiqDashboard):
 
         comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
         comparison = comparator.compare(self.result_a, self.result_b)
-        summary = SummaryGenerator().generate(comparison)
+        summary = SummaryGenerator(
+            regression_threshold_percent=self.regression_threshold_percent
+        ).generate(comparison)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report_path = str(Path(tmpdir) / "trackiq_compare_report.html")

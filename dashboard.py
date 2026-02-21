@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
 from autoperfpy.ui.dashboard import AutoPerfDashboard
+from minicluster.runner import RunConfig, run_distributed, save_metrics
 from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
@@ -75,6 +78,21 @@ def _placeholder_result(tool_name: str, workload_type: str = "inference") -> Tra
             failed_metrics=[],
         ),
     )
+
+
+def _run_minicluster_once(config: RunConfig) -> TrackiqResult:
+    """Run MiniCluster once and return canonical TrackiqResult."""
+    metrics = run_distributed(config)
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
+        out_path = handle.name
+    try:
+        save_metrics(metrics, out_path)
+        return load_trackiq_result(out_path)
+    finally:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
 
 
 def main(argv: Optional[List[str]] = None) -> int:
