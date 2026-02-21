@@ -1,6 +1,7 @@
 """Tests for canonical TrackIQ result schema and helpers."""
 
 from datetime import datetime
+import json
 
 import pytest
 
@@ -159,3 +160,21 @@ def test_kv_cache_from_tool_payload_backcompat() -> None:
     loaded = TrackiqResult.from_dict(payload)
     assert loaded.kv_cache is not None
     assert loaded.kv_cache.estimated_size_mb == 512.0
+
+
+def test_save_trackiq_result_enforces_schema_contract(tmp_path) -> None:
+    """save_trackiq_result should reject invalid dataclass payloads."""
+    result = _sample_result()
+    result.workload.workload_type = "invalid"  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="workload.workload_type"):
+        save_trackiq_result(result, tmp_path / "invalid.json")
+
+
+def test_load_trackiq_result_enforces_schema_contract(tmp_path) -> None:
+    """load_trackiq_result should reject invalid JSON payloads."""
+    path = tmp_path / "broken_schema.json"
+    payload = _sample_result().to_dict()
+    del payload["metrics"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Missing required field: metrics"):
+        load_trackiq_result(path)
