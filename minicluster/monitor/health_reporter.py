@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from html import escape
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from trackiq_core.configs.config_io import ensure_parent_dir
 from minicluster.monitor.anomaly_detector import Anomaly
-from minicluster.runner.distributed_runner import HealthCheckpoint
+
+if TYPE_CHECKING:
+    from minicluster.runner.distributed_runner import HealthCheckpoint
 
 
 class HealthReporter:
@@ -155,4 +157,3 @@ class HealthReporter:
             ],
             "recommendations": recommendations,
         }
-
