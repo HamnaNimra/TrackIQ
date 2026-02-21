@@ -75,6 +75,7 @@ def _add_run_metadata_tables(
     merged_summary: dict[str, Any],
 ) -> None:
     """Add run/platform metadata tables for parity with Streamlit metadata view."""
+    section_added = False
     rows: list[list[str]] = []
     overview_pairs = [
         ("Collector", data.get("collector_name")),
@@ -94,6 +95,7 @@ def _add_run_metadata_tables(
     if rows:
         report.add_section("Run Metadata", "Platform, configuration, and run metadata captured for this benchmark.")
         report.add_table("Run Overview", ["Field", "Value"], rows, "Run Metadata")
+        section_added = True
 
     for title, payload in [
         ("Platform Metadata", data.get("platform_metadata")),
@@ -105,12 +107,12 @@ def _add_run_metadata_tables(
             continue
         flat_rows = [[key, _format_value(value)] for key, value in _flatten_mapping(payload, max_depth=3)]
         if flat_rows:
-            if not rows:
+            if not section_added:
                 report.add_section(
                     "Run Metadata",
                     "Platform, configuration, and run metadata captured for this benchmark.",
                 )
-                rows = [["_", "_"]]  # sentinel to avoid duplicate add_section
+                section_added = True
             report.add_table(title, ["Field", "Value"], flat_rows, "Run Metadata")
 
 
