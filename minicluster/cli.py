@@ -503,6 +503,9 @@ Examples:
 
   # Compare current run against baseline
   minicluster baseline compare --metrics current.json --name stable_v1
+
+  # Generate PDF report from canonical result
+  minicluster report pdf --result ./minicluster_results/run_metrics.json --output ./minicluster_results/report.pdf
         """,
     )
 
