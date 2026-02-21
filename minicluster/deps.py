@@ -15,6 +15,9 @@ from trackiq_core.utils.compare import (
 # Schema definitions
 from trackiq_core.schemas import AnalysisResult
 
+# Distributed training configuration
+from trackiq_core.distributed_validator import DistributedValidationConfig
+
 # Configuration and utilities
 from trackiq_core.utils.stats import percentile, stats_from_values
 from trackiq_core.utils.dict_utils import safe_get
@@ -31,6 +34,7 @@ __all__ = [
     "RegressionThreshold",
     "MetricComparison",
     "AnalysisResult",
+    "DistributedValidationConfig",
     "percentile",
     "stats_from_values",
     "safe_get",

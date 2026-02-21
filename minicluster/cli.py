@@ -237,13 +237,13 @@ def cmd_run(args):
         batch_size=args.batch_size,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
-        num_workers=args.workers,
+        num_processes=args.workers,
         seed=args.seed,
     )
 
     if args.verbose:
         print(f"Running minicluster with config:")
-        print(f"  Workers: {config.num_workers}")
+        print(f"  Workers: {config.num_processes}")
         print(f"  Steps: {config.num_steps}")
         print(f"  Batch size: {config.batch_size}")
         print(f"  Learning rate: {config.learning_rate}")

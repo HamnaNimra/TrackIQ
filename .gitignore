@@ -82,4 +82,4 @@ test_performance_report.html
 interactive_report.html
 .gitignore
 debug_test_report.html
-.trackiq/baselines/my_baseline.json
+.trackiq/

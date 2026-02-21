@@ -15,13 +15,13 @@ class TestFaultInjector:
 
     def test_injector_initialization(self):
         """Test fault injector can be initialized."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
         assert injector.base_config == config
 
     def test_fault_injection_report_structure(self):
         """Test fault injection report has correct structure."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
 
         # Run a simplified fault injection test
@@ -34,7 +34,7 @@ class TestFaultInjector:
 
     def test_slow_worker_detection(self):
         """Test fault injector can test slow worker detection."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
 
         report = injector.run_fault_injection_tests()
@@ -45,7 +45,7 @@ class TestFaultInjector:
 
     def test_gradient_anomaly_detection(self):
         """Test fault injector can test gradient anomaly detection."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
 
         report = injector.run_fault_injection_tests()
@@ -56,7 +56,7 @@ class TestFaultInjector:
 
     def test_timeout_detection(self):
         """Test fault injector can test timeout detection."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
 
         report = injector.run_fault_injection_tests()
@@ -67,7 +67,7 @@ class TestFaultInjector:
 
     def test_report_summary(self):
         """Test fault injection report generates summary."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
 
         report = injector.run_fault_injection_tests()
@@ -77,7 +77,7 @@ class TestFaultInjector:
 
     def test_report_save(self):
         """Test fault injection report can be saved to JSON."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
         report = injector.run_fault_injection_tests()
 
@@ -93,7 +93,7 @@ class TestFaultInjector:
 
     def test_report_to_dict(self):
         """Test fault injection report can be converted to dict."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
         report = injector.run_fault_injection_tests()
 
@@ -105,7 +105,7 @@ class TestFaultInjector:
 
     def test_injector_print_report(self, capsys):
         """Test fault injector can print human-readable report."""
-        config = RunConfig(num_steps=5)
+        config = RunConfig(num_steps=5, num_processes=2)
         injector = FaultInjector(config)
         report = injector.run_fault_injection_tests()
 
@@ -116,7 +116,7 @@ class TestFaultInjector:
 
     def test_detection_results_have_fault_types(self):
         """Test that all detection results have valid fault types."""
-        config = RunConfig(num_steps=10)
+        config = RunConfig(num_steps=10, num_processes=2)
         injector = FaultInjector(config)
         report = injector.run_fault_injection_tests()
 
@@ -130,7 +130,7 @@ class TestFaultInjector:
 
     def test_detection_results_consistency(self):
         """Test that detection results are internally consistent."""
-        config = RunConfig(num_steps=5)
+        config = RunConfig(num_steps=5, num_processes=2)
         injector = FaultInjector(config)
         report = injector.run_fault_injection_tests()
 

@@ -72,20 +72,20 @@ class TestSyntheticDataset:
 
 
 class TestRunConfig:
-    """Tests for RunConfig."""
+    """Tests for RunConfig (DistributedValidationConfig)."""
 
     def test_default_config(self):
         """Test RunConfig has sensible defaults."""
         config = RunConfig()
         assert config.num_steps == 100
-        assert config.num_workers == 1
+        assert config.num_processes == 2  # trackiq_core default
         assert config.batch_size == 32
 
     def test_config_with_custom_values(self):
         """Test RunConfig with custom values."""
-        config = RunConfig(num_steps=50, num_workers=4, batch_size=64)
+        config = RunConfig(num_steps=50, num_processes=4, batch_size=64)
         assert config.num_steps == 50
-        assert config.num_workers == 4
+        assert config.num_processes == 4
         assert config.batch_size == 64
 
 
@@ -94,7 +94,7 @@ class TestSingleProcessTraining:
 
     def test_single_process_run_completes(self):
         """Test single-process training run completes successfully."""
-        config = RunConfig(num_steps=10, batch_size=32, num_workers=1, seed=42)
+        config = RunConfig(num_steps=10, batch_size=32, num_processes=1, seed=42)
         metrics = train_single_process(config)
 
         assert metrics is not None
@@ -199,8 +199,8 @@ class TestMultiProcessTraining:
     """
 
     def test_multiprocess_wrapper_singleworker(self):
-        """Test run_distributed with num_workers=1 (single process fallback)."""
-        config = RunConfig(num_steps=10, num_workers=1, seed=42)
+        """Test run_distributed with num_processes=1 (single process fallback)."""
+        config = RunConfig(num_steps=10, num_processes=1, seed=42)
         metrics = run_distributed(config)
 
         assert metrics is not None
@@ -209,7 +209,7 @@ class TestMultiProcessTraining:
 
     def test_run_distributed_metrics_structure(self):
         """Test run_distributed returns properly structured metrics."""
-        config = RunConfig(num_steps=15, num_workers=1, seed=42)
+        config = RunConfig(num_steps=15, num_processes=1, seed=42)
         metrics = run_distributed(config)
 
         assert hasattr(metrics, "steps")
@@ -219,10 +219,10 @@ class TestMultiProcessTraining:
 
     def test_run_distributed_reproducibility(self):
         """Test run_distributed is reproducible with same seed."""
-        config1 = RunConfig(num_steps=20, num_workers=1, seed=99)
+        config1 = RunConfig(num_steps=20, num_processes=1, seed=99)
         metrics1 = run_distributed(config1)
 
-        config2 = RunConfig(num_steps=20, num_workers=1, seed=99)
+        config2 = RunConfig(num_steps=20, num_processes=1, seed=99)
         metrics2 = run_distributed(config2)
 
         assert len(metrics1.steps) == len(metrics2.steps)
