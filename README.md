@@ -94,6 +94,11 @@ python launch_dashboard.py --tool autoperfpy --result output/autoperf_result.jso
 python launch_dashboard.py
 ```
 
+Unified mode now includes:
+- AutoPerfPy result browser + graph-rich dashboard
+- MiniCluster run configuration (workers/steps/batch/lr/seed/tdp) and quick smoke run
+- Compare configuration (browse/manual inputs, labels, regression threshold) with comparison graphs
+
 ### MiniCluster
 
 Main use: distributed training correctness/performance/fault validation.
