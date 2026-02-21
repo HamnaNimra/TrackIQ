@@ -209,3 +209,70 @@ def test_populate_standard_html_report_adds_metadata_and_detailed_summary_tables
     assert "power.max_w" in metric_names
     assert "temperature.max_c" in metric_names
     assert any(table["section"] == "Raw Data" for table in report.tables)
+
+
+@pytest.mark.skipif(not CHARTS_AVAILABLE, reason="trackiq.reporting.charts (pandas/plotly) not available")
+def test_populate_multi_run_html_report_with_run_details_includes_per_run_sections() -> None:
+    """Multi-run detail mode should include per-run config tables and chart sections."""
+    report = HTMLReportGenerator()
+    runs = [
+        {
+            "run_label": "cpu_0_fp32_bs1",
+            "platform_metadata": {"device_name": "CPU"},
+            "inference_config": {
+                "precision": "fp32",
+                "batch_size": 1,
+                "accelerator": "cpu_0",
+                "warmup_runs": 3,
+                "iterations": 20,
+                "streams": 1,
+            },
+            "summary": {},
+            "samples": [
+                {"timestamp": 1.0, "metrics": {"latency_ms": 20.0, "throughput_fps": 50.0}},
+                {"timestamp": 2.0, "metrics": {"latency_ms": 22.0, "throughput_fps": 45.0}},
+            ],
+        },
+        {
+            "run_label": "cpu_0_fp16_bs4",
+            "platform_metadata": {"device_name": "CPU"},
+            "inference_config": {
+                "precision": "fp16",
+                "batch_size": 4,
+                "accelerator": "cpu_0",
+                "warmup_runs": 3,
+                "iterations": 20,
+                "streams": 1,
+            },
+            "summary": {},
+            "samples": [
+                {"timestamp": 1.0, "metrics": {"latency_ms": 12.0, "throughput_fps": 80.0}},
+                {"timestamp": 2.0, "metrics": {"latency_ms": 13.0, "throughput_fps": 76.0}},
+            ],
+        },
+    ]
+
+    populate_multi_run_html_report(
+        report,
+        runs,
+        include_run_details=True,
+        chart_engine="plotly",
+    )
+
+    section_names = {section["name"] for section in report.sections}
+    assert "Run Details: cpu_0_fp32_bs1" in section_names
+    assert any(name.startswith("cpu_0_fp32_bs1 | ") for name in section_names)
+    assert len(report.html_figures) > 0
+
+    overview_table = next(item for item in report.tables if item["title"] == "Run Overview Table")
+    headers = overview_table["headers"]
+    assert "Precision" in headers
+    assert "Batch" in headers
+    assert "Warmup" in headers
+    assert "Iterations" in headers
+    assert "Streams" in headers
+
+    detail_table = next(item for item in report.tables if item["title"] == "Run Detail Fields: cpu_0_fp32_bs1")
+    detail_rows = {row[0] for row in detail_table["rows"]}
+    assert "inference_config.precision" in detail_rows
+    assert "inference_config.batch_size" in detail_rows
