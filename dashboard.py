@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import List, Optional
 
 from autoperfpy.ui.dashboard import AutoPerfDashboard
-from minicluster.ui.launcher import launch_minicluster_dashboard
+from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
+from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import run_dashboard
+from trackiq_core.ui import ResultBrowser, run_dashboard
 
 
 def _validate_path(path: Optional[str], label: str) -> str:
@@ -37,25 +38,93 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _placeholder_result(tool_name: str, workload_type: str = "inference") -> TrackiqResult:
+    """Create placeholder result for browser-mode dashboards."""
+    from datetime import datetime
+
+    return TrackiqResult(
+        tool_name=tool_name,
+        tool_version="browser",
+        timestamp=datetime.utcnow(),
+        platform=PlatformInfo(
+            hardware_name="Unknown",
+            os="Unknown",
+            framework="unknown",
+            framework_version="unknown",
+        ),
+        workload=WorkloadInfo(
+            name="browser_mode",
+            workload_type=workload_type,  # type: ignore[arg-type]
+            batch_size=0,
+            steps=0,
+        ),
+        metrics=Metrics(
+            throughput_samples_per_sec=0.0,
+            latency_p50_ms=0.0,
+            latency_p95_ms=0.0,
+            latency_p99_ms=0.0,
+            memory_utilization_percent=0.0,
+            communication_overhead_percent=None,
+            power_consumption_watts=None,
+        ),
+        regression=RegressionInfo(
+            baseline_id=None,
+            delta_percent=0.0,
+            status="pass",
+            failed_metrics=[],
+        ),
+    )
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """CLI entrypoint for the unified dashboard launcher."""
     args = _parse_args(argv)
 
     try:
         if args.tool == "autoperfpy":
-            # Library-first result viewer when result is provided.
-            # Interactive benchmark workflow fallback when no result is provided.
             if args.result:
                 result_path = _validate_path(args.result, "--result")
                 run_dashboard(AutoPerfDashboard, result_path=result_path)
             else:
-                from autoperfpy.ui import streamlit_app
+                class _AutoPerfBrowserDashboard(AutoPerfDashboard):
+                    def render_body(self) -> None:
+                        import streamlit as st
 
-                streamlit_app.main()
+                        loaded = st.session_state.get("loaded_result")
+                        if loaded is None:
+                            st.info("Select a result file to begin.")
+                            ResultBrowser(theme=self.theme).render()
+                            return
+                        self.result = loaded
+                        super().render_body()
+
+                run_dashboard(
+                    _AutoPerfBrowserDashboard,
+                    result=_placeholder_result("autoperfpy", workload_type="inference"),
+                )
             return 0
 
         if args.tool == "minicluster":
-            launch_minicluster_dashboard(args.result)
+            if args.result:
+                result_path = _validate_path(args.result, "--result")
+                run_dashboard(MiniClusterDashboard, result_path=result_path)
+            else:
+                class _MiniClusterBrowserDashboard(MiniClusterDashboard):
+                    def render_body(self) -> None:
+                        import streamlit as st
+
+                        loaded = st.session_state.get("loaded_result")
+                        if loaded is None:
+                            st.info("Select a result file to begin.")
+                            ResultBrowser(theme=self.theme).render()
+                            return
+                        self.result = loaded
+                        super().render_body()
+
+                run_dashboard(
+                    _MiniClusterBrowserDashboard,
+                    result=_placeholder_result("minicluster", workload_type="training"),
+                )
             return 0
 
         if not args.result_a or not args.result_b:
