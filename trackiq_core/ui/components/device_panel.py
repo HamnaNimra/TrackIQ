@@ -2,18 +2,47 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from trackiq_core.hardware.devices import (
+    DEVICE_TYPE_AMD_GPU,
+    DEVICE_TYPE_APPLE_SILICON,
     DEVICE_TYPE_CPU,
+    DEVICE_TYPE_INTEL_GPU,
     DEVICE_TYPE_NVIDIA_DRIVE,
     DEVICE_TYPE_NVIDIA_GPU,
     DEVICE_TYPE_NVIDIA_JETSON,
     DeviceProfile,
     get_platform_metadata_for_device,
 )
-from trackiq_core.hardware.gpu import get_memory_metrics, get_performance_metrics
+from trackiq_core.hardware.gpu import (
+    get_amd_gpu_metrics,
+    get_apple_silicon_metrics,
+    get_cpu_metrics,
+    get_intel_gpu_metrics,
+    get_memory_metrics,
+    get_performance_metrics,
+)
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
+
+
+def _nvidia_metrics(_: int) -> Optional[Dict[str, Any]]:
+    mem = get_memory_metrics()
+    perf = get_performance_metrics()
+    if mem is None and perf is None:
+        return None
+    return {**(mem or {}), **(perf or {})}
+
+
+METRICS_DISPATCH: Dict[str, Callable[[int], Optional[Dict[str, Any]]]] = {
+    DEVICE_TYPE_NVIDIA_GPU: _nvidia_metrics,
+    DEVICE_TYPE_AMD_GPU: lambda idx: get_amd_gpu_metrics(idx),
+    DEVICE_TYPE_INTEL_GPU: lambda idx: get_intel_gpu_metrics(),
+    DEVICE_TYPE_APPLE_SILICON: lambda idx: get_apple_silicon_metrics(),
+    DEVICE_TYPE_CPU: lambda idx: get_cpu_metrics(),
+    DEVICE_TYPE_NVIDIA_JETSON: lambda idx: None,
+    DEVICE_TYPE_NVIDIA_DRIVE: lambda idx: None,
+}
 
 
 class DevicePanel:
@@ -39,23 +68,13 @@ class DevicePanel:
     def _live_metrics(self, device: Optional[DeviceProfile]) -> Optional[Dict[str, Any]]:
         if not self.show_live_metrics or device is None:
             return None
-        if device.device_type == DEVICE_TYPE_NVIDIA_GPU:
-            perf = get_performance_metrics()
-            mem = get_memory_metrics()
-            if perf is None and mem is None:
-                return None
-            return {"performance": perf, "memory": mem}
-        if device.device_type == DEVICE_TYPE_CPU:
-            try:
-                import psutil
-
-                return {
-                    "cpu_percent": float(psutil.cpu_percent(interval=None)),
-                    "memory_percent": float(psutil.virtual_memory().percent),
-                }
-            except Exception:
-                return None
-        return None
+        handler = METRICS_DISPATCH.get(device.device_type)
+        if handler is None:
+            return None
+        try:
+            return handler(device.index)
+        except Exception:
+            return None
 
     def to_dict(self) -> Dict[str, Any]:
         """Return serializable device panel payload."""
@@ -67,6 +86,51 @@ class DevicePanel:
             ),
             "live_metrics": self._live_metrics(selected),
         }
+
+    def _temperature_state(self, temperature: Optional[float]) -> str:
+        if temperature is None:
+            return "N/A"
+        if temperature < 70:
+            return "green"
+        if temperature <= 85:
+            return "amber"
+        return "red"
+
+    def _render_util_temp_power_memory(self, live: Dict[str, Any], label_prefix: str) -> None:
+        import streamlit as st
+
+        util = (
+            live.get("utilization")
+            or live.get("gpu_utilization")
+            or live.get("cpu_utilization")
+        )
+        temp = live.get("temperature")
+        power = live.get("power")
+        used = live.get("gpu_memory_used_mb")
+        total = live.get("gpu_memory_total_mb")
+        percent = live.get("gpu_memory_percent")
+        if util is not None:
+            st.metric(f"{label_prefix} Utilization", f"{float(util):.1f}%")
+        if temp is not None:
+            temp_state = self._temperature_state(float(temp))
+            color = (
+                self.theme.pass_color
+                if temp_state == "green"
+                else self.theme.warning_color
+                if temp_state == "amber"
+                else self.theme.fail_color
+            )
+            st.metric("Temperature (°C)", f"{float(temp):.1f}")
+            st.markdown(
+                f"<div style='color:{color};font-size:12px;'>Thermal State: {temp_state.upper()}</div>",
+                unsafe_allow_html=True,
+            )
+        if power is not None:
+            st.metric("Power Draw (W)", f"{float(power):.1f}")
+        if used is not None and total is not None:
+            pct = float(percent) if percent is not None else (float(used) / float(total) * 100.0 if float(total) > 0 else 0.0)
+            st.caption(f"Memory Used: {float(used):.0f}/{float(total):.0f} MB")
+            st.progress(max(0.0, min(1.0, pct / 100.0)))
 
     def render(self) -> None:
         """Render device selector and live metrics."""
@@ -105,55 +169,46 @@ class DevicePanel:
             f"<div><b>GPU:</b> {device.gpu_model or 'N/A'}</div>"
             f"<div><b>SoC:</b> {device.soc or 'N/A'}</div>"
             f"<div><b>OS:</b> {metadata.get('os', 'N/A')}</div>"
-            f"<div><b>Driver:</b> {metadata.get('driver_version', 'N/A')}</div>"
+            f"<div><b>Driver:</b> {metadata.get('driver_version', metadata.get('rocm_version', 'N/A'))}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
 
-        live = self._live_metrics(device)
         if not self.show_live_metrics:
             return
 
-        if device.device_type == DEVICE_TYPE_NVIDIA_GPU:
-            if not live:
-                st.markdown(
-                    f"<div style='color:{self.theme.warning_color};'>Live metrics not available for this device</div>",
-                    unsafe_allow_html=True,
-                )
-                return
-            perf = live.get("performance") or {}
-            mem = live.get("memory") or {}
-            col1, col2, col3 = st.columns(3)
-            col1.metric("GPU Utilization", f"{perf.get('utilization', 0):.1f}%")
-            col2.metric("Temperature", f"{perf.get('temperature', 0):.1f} C")
-            col3.metric("Power Draw", f"{perf.get('power', 0):.1f} W")
-            used = float(mem.get("gpu_memory_used_mb", 0.0) or 0.0)
-            total = float(mem.get("gpu_memory_total_mb", 0.0) or 0.0)
-            percent = float(mem.get("gpu_memory_percent", 0.0) or 0.0)
-            st.caption(f"Memory: {used:.0f} / {total:.0f} MB")
-            st.progress(max(0.0, min(1.0, percent / 100.0)))
-            return
-
-        if device.device_type == DEVICE_TYPE_CPU:
-            if not live:
-                st.markdown(
-                    f"<div style='color:{self.theme.warning_color};'>Live metrics not available for this device</div>",
-                    unsafe_allow_html=True,
-                )
-                return
-            col1, col2 = st.columns(2)
-            col1.metric("CPU Utilization", f"{live.get('cpu_percent', 0):.1f}%")
-            col2.metric("Memory Utilization", f"{live.get('memory_percent', 0):.1f}%")
-            return
-
         if device.device_type in (DEVICE_TYPE_NVIDIA_JETSON, DEVICE_TYPE_NVIDIA_DRIVE):
-            st.info(
-                f"Connect tegrastats for live metrics. Device: {device.device_name}, SoC: {device.soc or 'N/A'}"
+            st.markdown(
+                (
+                    f"<div style='background:{self.theme.surface_color};padding:10px;border-radius:{self.theme.border_radius};'>"
+                    f"<div><b>{device.device_name}</b> ({device.soc or 'N/A'})</div>"
+                    "<div>Connect tegrastats reader for live metrics.</div>"
+                    "</div>"
+                ),
+                unsafe_allow_html=True,
             )
             return
 
-        st.markdown(
-            f"<div style='color:{self.theme.warning_color};'>Live metrics not available for this device</div>",
-            unsafe_allow_html=True,
-        )
+        live = self._live_metrics(device)
+        if live is None:
+            st.markdown(
+                f"<div style='color:{self.theme.warning_color};'>Live metrics not available for this device</div>",
+                unsafe_allow_html=True,
+            )
+            return
+
+        if device.device_type == DEVICE_TYPE_CPU:
+            self._render_util_temp_power_memory(live, "CPU")
+        elif device.device_type in (
+            DEVICE_TYPE_NVIDIA_GPU,
+            DEVICE_TYPE_AMD_GPU,
+            DEVICE_TYPE_INTEL_GPU,
+            DEVICE_TYPE_APPLE_SILICON,
+        ):
+            self._render_util_temp_power_memory(live, "GPU")
+        else:
+            st.markdown(
+                "<div class='trackiq-card'>Live metrics not available for this device</div>",
+                unsafe_allow_html=True,
+            )
 
