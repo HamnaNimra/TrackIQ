@@ -94,14 +94,14 @@ Tasks:
 3. Add a "run health scorecard" visualization (table + bars) computed from p99 latency, mean throughput, perf/watt, and variability.
 4. Add a consolidated multi-run heatmap (`run x metric`) for p50/p95/p99 latency, mean throughput, mean power, mean CPU/GPU, and mean memory.
 5. Add correlation/scatter views:
-   - latency vs throughput
-   - throughput vs power (efficiency frontier)
-   - GPU utilization vs latency (where GPU data exists)
+  - latency vs throughput
+  - throughput vs power (efficiency frontier)
+  - GPU utilization vs latency (where GPU data exists)
 6. Add missing-data coverage view (which metrics were present per run) to avoid misleading comparisons.
 7. Wire the same consolidated pack into:
-   - CLI HTML report generation
-   - Streamlit report export
-   - Streamlit in-app comparison page
+  - CLI HTML report generation
+  - Streamlit report export
+  - Streamlit in-app comparison page
 8. Add tests for consolidated builders (non-empty figures, expected section names, and graceful behavior when metrics are missing).
 
 Candidate visualizations to add:
@@ -116,15 +116,15 @@ Candidate visualizations to add:
 Implementation plan:
 
 1. Sprint 1 (MVP):
-   - Add shared overview pack + multi-run heatmap.
-   - Add baseline delta bars for runs with baseline selected.
-   - Wire into HTML report + Streamlit report export.
+  - Add shared overview pack + multi-run heatmap.
+  - Add baseline delta bars for runs with baseline selected.
+  - Wire into HTML report + Streamlit report export.
 2. Sprint 2:
-   - Add correlation/scatter pack and data completeness matrix.
-   - Add filtering controls in Streamlit (metric subset, run subset, normalize on/off).
+  - Add correlation/scatter pack and data completeness matrix.
+  - Add filtering controls in Streamlit (metric subset, run subset, normalize on/off).
 3. Sprint 3:
-   - Add ranking/scorecard view and optional weighted scoring config.
-   - Add PDF parity checks for consolidated sections.
+  - Add ranking/scorecard view and optional weighted scoring config.
+  - Add PDF parity checks for consolidated sections.
 
 Acceptance criteria:
 
@@ -140,17 +140,17 @@ Problem: `minicluster` currently shows strong single-run training curves, but it
 Tasks:
 
 1. Add a shared MiniCluster chart pack (`minicluster/ui/dashboard.py` + reusable helpers) for:
-   - worker throughput skew over time
-   - allreduce/compute ratio trend
-   - per-step fault/anomaly overlay on loss and throughput
+  - worker throughput skew over time
+  - allreduce/compute ratio trend
+  - per-step fault/anomaly overlay on loss and throughput
 2. Add worker health heatmap (`worker x step`) for status/throughput/loss deltas.
 3. Add fault impact visualization:
-   - pre-fault vs post-fault throughput/latency deltas
-   - fault-type frequency and duration bars
+  - pre-fault vs post-fault throughput/latency deltas
+  - fault-type frequency and duration bars
 4. Add checkpoint continuity chart from health monitor snapshots (gap/staleness visualization).
 5. Add multi-run MiniCluster comparison view:
-   - run-level summary bars (mean throughput, max allreduce time, final loss)
-   - consistency chart for convergence variance across runs
+  - run-level summary bars (mean throughput, max allreduce time, final loss)
+  - consistency chart for convergence variance across runs
 6. Add HTML export parity for new MiniCluster visuals (report or dashboard export path).
 7. Add tests for sparse worker payloads, missing fault data, and partial checkpoint streams.
 
@@ -177,25 +177,25 @@ Problem: `trackiq-compare` has core pairwise bars/tables, but needs richer compa
 Progress update:
 
 1. Implemented in dashboard MVP:
-   - normalized metric delta chart
-   - metric-family delta waterfall
-   - metric availability/confidence matrix
+  - normalized metric delta chart
+  - metric-family delta waterfall
+  - metric availability/confidence matrix
 
 Tasks:
 
 1. Add advanced comparison charts in `trackiq_compare/ui/dashboard.py`:
-   - normalized metric radar/spider view (A vs B)
-   - signed delta waterfall by metric family (latency, throughput, power, memory, comms)
+  - normalized metric radar/spider view (A vs B)
+  - signed delta waterfall by metric family (latency, throughput, power, memory, comms)
 2. Add weighted-score sensitivity visualization:
-   - show how winner changes under alternate weight profiles
-   - expose default profile vs custom profile comparison
+  - show how winner changes under alternate weight profiles
+  - expose default profile vs custom profile comparison
 3. Add comparison confidence/context panel:
-   - metric availability matrix
-   - "insufficient data" flags where conclusions are weak
+  - metric availability matrix
+  - "insufficient data" flags where conclusions are weak
 4. Add baseline-chain mode (`A vs baseline`, `B vs baseline`, and `A vs B`) for three-way context.
 5. Add platform-vendor comparison enhancements:
-   - metric-family winners summary grid
-   - exportable one-page executive summary chart section
+  - metric-family winners summary grid
+  - exportable one-page executive summary chart section
 6. Add HTML reporter parity for all new compare visuals (`trackiq_compare/reporters/html_reporter.py`).
 7. Add tests for mixed-workload comparisons, missing metrics, and tie/near-tie scenarios.
 
@@ -468,3 +468,4 @@ Tasks:
 6. `[P1]` Deliver consolidated visualization MVP (overview pack + multi-run heatmap + baseline deltas) across CLI HTML and Streamlit export.
 7. `[P1]` Add MiniCluster visualization MVP (worker skew + timing ratio + fault impact overlays).
 8. `[P1]` Add Compare visualization MVP (normalized deltas + metric-family waterfall + confidence matrix).
+

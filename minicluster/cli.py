@@ -13,6 +13,7 @@ import sys
 
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
+from minicluster.reporting import MiniClusterHtmlReporter
 from minicluster.runner import RunConfig, run_distributed, save_metrics
 from trackiq_core.reporting import (
     PDF_BACKENDS,
@@ -253,6 +254,28 @@ def setup_report_parser(subparsers):
     )
     report_subparsers = parser.add_subparsers(dest="report_cmd", help="Report subcommand")
 
+    html_parser = report_subparsers.add_parser(
+        "html",
+        help="Generate HTML report from one or more canonical result JSON files",
+    )
+    html_parser.add_argument(
+        "--result",
+        nargs="+",
+        required=True,
+        help=("Path(s) to TrackiqResult JSON. " "Use multiple files to generate a consolidated multi-config report."),
+    )
+    html_parser.add_argument(
+        "--output",
+        default="./minicluster_results/report.html",
+        help="Output HTML file path (default: ./minicluster_results/report.html)",
+    )
+    html_parser.add_argument(
+        "--title",
+        default="MiniCluster Performance Report",
+        help="Report title",
+    )
+    html_parser.set_defaults(func=cmd_report_html)
+
     pdf_parser = report_subparsers.add_parser(
         "pdf",
         help="Generate PDF report from canonical result JSON",
@@ -476,6 +499,34 @@ def cmd_report_pdf(args):
     print(f"[OK] PDF report generated: {outcome.output_path}")
 
 
+def cmd_report_html(args):
+    """Execute `minicluster report html` command."""
+    results = []
+    for path in args.result:
+        try:
+            result = load_trackiq_result(path)
+        except FileNotFoundError:
+            print(f"Error: Result file not found: {path}", file=sys.stderr)
+            sys.exit(2)
+        except Exception as e:  # pragma: no cover - defensive parse guard
+            print(f"Error: Invalid TrackiqResult input ({path}): {e}", file=sys.stderr)
+            sys.exit(2)
+        results.append(result)
+
+    try:
+        output_path = MiniClusterHtmlReporter().generate(
+            output_path=args.output,
+            results=results,
+            title=args.title,
+        )
+    except Exception as e:
+        print(f"Error: Failed to generate HTML report: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    mode = "consolidated" if len(results) > 1 else "single-run"
+    print(f"[OK] HTML report generated ({mode}): {output_path}")
+
+
 def setup_main_parser() -> argparse.ArgumentParser:
     """Setup main argument parser with all subcommands.
 
@@ -505,6 +556,9 @@ Examples:
 
   # Generate PDF report from canonical result
   minicluster report pdf --result ./minicluster_results/run_metrics.json --output ./minicluster_results/report.pdf
+
+  # Generate consolidated HTML report from multiple configs
+  minicluster report html --result run_cfg_a.json run_cfg_b.json --output ./minicluster_results/report.html
         """,
     )
 
