@@ -397,7 +397,7 @@ Tasks:
 1. Add a supported chart-debug harness under `tests/fixtures` for synthetic sample generation and chart smoke checks.
 2. Add a maintained report-debug command that exercises `autoperfpy report html/pdf` using canonical fixture inputs.
 3. Add an optional `distributed-validator` smoke CLI wrapper (or documented pytest command) for quick local checks.
-4. Decide whether `autoperfpy/cli/utils.py` compatibility wrappers should be retained or removed in a future breaking-change window.
+4. Completed: removed dead `autoperfpy/cli/utils.py` compatibility wrappers after confirming no import path can resolve them and no internal consumers exist.
 
 Acceptance criteria:
 
