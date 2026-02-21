@@ -24,7 +24,10 @@ class WorkerGrid:
         """Render worker cards in a responsive grid."""
         import streamlit as st
 
-        st.subheader("Worker Status")
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};'>Worker Status</div>",
+            unsafe_allow_html=True,
+        )
         if not self.workers:
             st.info("No worker data available.")
             return
@@ -42,7 +45,7 @@ class WorkerGrid:
             with columns[idx % len(columns)]:
                 st.markdown(
                     f"""
-                    <div class="trackiq-card">
+                    <div class="trackiq-card" style="background:{self.theme.surface_color};border-radius:{self.theme.border_radius};">
                         <div><b>Worker:</b> {worker.get("worker_id", "N/A")}</div>
                         <div><b>Throughput:</b> {worker.get("throughput", "N/A")}</div>
                         <div><b>AllReduce ms:</b> {worker.get("allreduce_time_ms", "N/A")}</div>
@@ -51,4 +54,3 @@ class WorkerGrid:
                     """,
                     unsafe_allow_html=True,
                 )
-
