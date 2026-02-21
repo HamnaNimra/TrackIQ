@@ -11,7 +11,6 @@ import sys
 import tempfile
 import time
 from datetime import datetime
-from turtle import st
 from typing import Any, Dict, Optional, Tuple
 
 from autoperfpy.config import ConfigManager
@@ -69,9 +68,7 @@ from autoperfpy.device_config import (
     PRECISION_BF16,
     PRECISION_INT8,
     PRECISION_INT4,
-    PRECISION_MIXED,
     PRECISIONS,
-    get_supported_precisions_for_device,
     resolve_precision_for_device,
     get_devices_and_configs_auto,
     resolve_device,

@@ -87,7 +87,7 @@ Acceptance criteria:
 
 ## Platform Expansion
 
-### 5) Precision expansion `[P2] [OPEN]`
+### 5) Precision expansion `[P2] [DONE]`
 
 Add BF16, INT4, and mixed precision modes where supported.
 
