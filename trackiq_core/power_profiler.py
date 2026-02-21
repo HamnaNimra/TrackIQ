@@ -38,7 +38,7 @@ import subprocess
 import time
 from dataclasses import dataclass, replace
 from statistics import mean
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 try:
     import psutil
@@ -46,7 +46,6 @@ except ModuleNotFoundError:  # pragma: no cover - exercised in minimal envs
     psutil = None  # type: ignore[assignment]
 
 from trackiq_core.schema import Metrics
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ class PowerReading:
     """Single sampled power/thermal reading."""
 
     power_watts: float
-    temperature_celsius: Optional[float]
+    temperature_celsius: float | None
 
 
 class PowerReader(Protocol):
@@ -83,15 +82,11 @@ class TegrastatsReader:
 
     def __init__(self) -> None:
         if not self.is_available():
-            raise PowerSourceUnavailableError(
-                "TegrastatsReader unavailable: 'tegrastats' command not found."
-            )
+            raise PowerSourceUnavailableError("TegrastatsReader unavailable: 'tegrastats' command not found.")
 
     def read(self) -> PowerReading:
         if not self.is_available():
-            raise PowerSourceUnavailableError(
-                "TegrastatsReader unavailable: 'tegrastats' command not found."
-            )
+            raise PowerSourceUnavailableError("TegrastatsReader unavailable: 'tegrastats' command not found.")
 
         proc = subprocess.Popen(
             ["tegrastats", "--interval", "1000"],
@@ -104,9 +99,7 @@ class TegrastatsReader:
             if proc.stdout is not None:
                 line = proc.stdout.readline().strip()
             if not line:
-                raise PowerSourceUnavailableError(
-                    "TegrastatsReader could not read tegrastats output."
-                )
+                raise PowerSourceUnavailableError("TegrastatsReader could not read tegrastats output.")
             return self._parse_tegrastats_line(line)
         finally:
             proc.terminate()
@@ -121,9 +114,7 @@ class TegrastatsReader:
         power_match = re.search(r"VDD_IN\s+(\d+(?:\.\d+)?)mW", line)
         temp_match = re.search(r"GPU@(\d+(?:\.\d+)?)C", line)
         if not power_match:
-            raise PowerSourceUnavailableError(
-                f"TegrastatsReader could not parse board power from: {line}"
-            )
+            raise PowerSourceUnavailableError(f"TegrastatsReader could not parse board power from: {line}")
         power_watts = float(power_match.group(1)) / 1000.0
         temp_c = float(temp_match.group(1)) if temp_match else None
         return PowerReading(power_watts=power_watts, temperature_celsius=temp_c)
@@ -138,15 +129,11 @@ class RocmSmiReader:
 
     def __init__(self) -> None:
         if not self.is_available():
-            raise PowerSourceUnavailableError(
-                "RocmSmiReader unavailable: 'rocm-smi' command not found."
-            )
+            raise PowerSourceUnavailableError("RocmSmiReader unavailable: 'rocm-smi' command not found.")
 
     def read(self) -> PowerReading:
         if not self.is_available():
-            raise PowerSourceUnavailableError(
-                "RocmSmiReader unavailable: 'rocm-smi' command not found."
-            )
+            raise PowerSourceUnavailableError("RocmSmiReader unavailable: 'rocm-smi' command not found.")
         try:
             result = subprocess.run(
                 ["rocm-smi", "--showpower", "--showtemp", "--json"],
@@ -156,9 +143,7 @@ class RocmSmiReader:
                 check=False,
             )
         except Exception as exc:
-            raise PowerSourceUnavailableError(
-                f"RocmSmiReader failed to execute rocm-smi: {exc}"
-            ) from exc
+            raise PowerSourceUnavailableError(f"RocmSmiReader failed to execute rocm-smi: {exc}") from exc
 
         output = (result.stdout or "").strip()
         if not output:
@@ -190,9 +175,7 @@ class RocmSmiReader:
         power_match = re.search(r"(\d+(?:\.\d+)?)\s*W", output)
         temp_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:C|c)", output)
         if not power_match:
-            raise PowerSourceUnavailableError(
-                "RocmSmiReader could not parse power draw from rocm-smi output."
-            )
+            raise PowerSourceUnavailableError("RocmSmiReader could not parse power draw from rocm-smi output.")
         power_watts = float(power_match.group(1))
         temp_c = float(temp_match.group(1)) if temp_match else None
         return PowerReading(power_watts=power_watts, temperature_celsius=temp_c)
@@ -212,8 +195,7 @@ class SimulatedPowerReader:
     def read(self) -> PowerReading:
         if psutil is None:
             raise PowerSourceUnavailableError(
-                "SimulatedPowerReader unavailable: 'psutil' is not installed. "
-                "Install with `pip install psutil`."
+                "SimulatedPowerReader unavailable: 'psutil' is not installed. " "Install with `pip install psutil`."
             )
         utilization = float(psutil.cpu_percent(interval=None))
         utilization = max(0.0, min(100.0, utilization))
@@ -244,24 +226,22 @@ def detect_power_source() -> PowerReader:
 class SessionSummary:
     """Computed power session summary."""
 
-    mean_power_watts: Optional[float]
-    peak_power_watts: Optional[float]
-    total_energy_joules: Optional[float]
-    performance_per_watt: Optional[float]
-    mean_temperature_celsius: Optional[float]
-    elapsed_seconds: Optional[float]
+    mean_power_watts: float | None
+    peak_power_watts: float | None
+    total_energy_joules: float | None
+    performance_per_watt: float | None
+    mean_temperature_celsius: float | None
+    elapsed_seconds: float | None
 
 
 class PowerProfiler:
     """Session-based power profiler with derived efficiency metrics."""
 
-    def __init__(self, reader: Optional[PowerReader] = None):
+    def __init__(self, reader: PowerReader | None = None):
         try:
             self.reader = reader or detect_power_source()
             if not self.reader.is_available():
-                raise PowerSourceUnavailableError(
-                    f"{self.reader.__class__.__name__} is unavailable."
-                )
+                raise PowerSourceUnavailableError(f"{self.reader.__class__.__name__} is unavailable.")
         except PowerSourceUnavailableError as exc:
             LOGGER.warning(
                 "Power source unavailable (%s). Falling back to SimulatedPowerReader.",
@@ -270,10 +250,10 @@ class PowerProfiler:
             self.reader = SimulatedPowerReader()
 
         self._started = False
-        self._start_time: Optional[float] = None
-        self._end_time: Optional[float] = None
-        self._readings: List[Dict[str, Any]] = []
-        self._summary: Optional[SessionSummary] = None
+        self._start_time: float | None = None
+        self._end_time: float | None = None
+        self._readings: list[dict[str, Any]] = []
+        self._summary: SessionSummary | None = None
 
     def start_session(self) -> None:
         """Begin power monitoring session and record initial reading."""
@@ -314,15 +294,9 @@ class PowerProfiler:
 
         power_values = [float(r["power_watts"]) for r in self._readings]
         step_rows = [r for r in self._readings if r["step"] >= 0]
-        throughput_values = [
-            float(r["throughput"])
-            for r in step_rows
-            if r.get("throughput") is not None
-        ]
+        throughput_values = [float(r["throughput"]) for r in step_rows if r.get("throughput") is not None]
         temp_values = [
-            float(r["temperature_celsius"])
-            for r in self._readings
-            if r.get("temperature_celsius") is not None
+            float(r["temperature_celsius"]) for r in self._readings if r.get("temperature_celsius") is not None
         ]
 
         mean_power = mean(power_values) if power_values else None
@@ -352,9 +326,7 @@ class PowerProfiler:
             raise RuntimeError("Power profiling session summary not available.")
         step_count = max(1, len([r for r in self._readings if r["step"] >= 0]))
         energy_per_step = (
-            (self._summary.total_energy_joules / step_count)
-            if self._summary.total_energy_joules is not None
-            else None
+            (self._summary.total_energy_joules / step_count) if self._summary.total_energy_joules is not None else None
         )
         return replace(
             metrics,
@@ -364,7 +336,7 @@ class PowerProfiler:
             temperature_celsius=self._summary.mean_temperature_celsius,
         )
 
-    def to_tool_payload(self) -> Dict[str, Any]:
+    def to_tool_payload(self) -> dict[str, Any]:
         """Return per-step power/thermal data and summary details."""
         if self._summary is None:
             raise RuntimeError("Power profiling session summary not available.")
@@ -386,7 +358,7 @@ class PowerProfiler:
         }
 
 
-def _extract_float(value: Any) -> Optional[float]:
+def _extract_float(value: Any) -> float | None:
     """Extract first float from mixed textual value."""
     if value is None:
         return None

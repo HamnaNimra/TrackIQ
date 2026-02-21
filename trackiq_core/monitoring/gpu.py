@@ -1,10 +1,11 @@
 """GPU and system monitoring for TrackIQ."""
 
-import time
 import threading
-from typing import Dict, Any, List, Optional
-from trackiq_core.utils.base import BaseMonitor
+import time
+from typing import Any
+
 from trackiq_core.hardware import get_memory_metrics
+from trackiq_core.utils.base import BaseMonitor
 
 
 class GPUMemoryMonitor(BaseMonitor):
@@ -54,7 +55,7 @@ class GPUMemoryMonitor(BaseMonitor):
 
             time.sleep(interval)
 
-    def _get_gpu_metrics(self) -> Optional[Dict[str, Any]]:
+    def _get_gpu_metrics(self) -> dict[str, Any] | None:
         """Get current GPU metrics using shared utilities.
 
         Returns:
@@ -65,7 +66,7 @@ class GPUMemoryMonitor(BaseMonitor):
             metrics["timestamp"] = time.time()
         return metrics
 
-    def get_metrics(self) -> List[Dict[str, Any]]:
+    def get_metrics(self) -> list[dict[str, Any]]:
         """Get collected metrics (thread-safe copy).
 
         Returns:
@@ -74,7 +75,7 @@ class GPUMemoryMonitor(BaseMonitor):
         with self._metrics_lock:
             return self.metrics.copy()
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary statistics of collected metrics (thread-safe).
 
         Returns:
@@ -116,9 +117,7 @@ class LLMKVCacheMonitor(BaseMonitor):
         """Stop KV cache monitoring."""
         pass
 
-    def estimate_kv_cache_size(
-        self, sequence_length: int, model_config: Dict[str, int]
-    ) -> float:
+    def estimate_kv_cache_size(self, sequence_length: int, model_config: dict[str, int]) -> float:
         """Estimate KV cache size in MB.
 
         Args:
@@ -153,7 +152,7 @@ class LLMKVCacheMonitor(BaseMonitor):
 
         return kv_cache_bytes / (1024 * 1024)  # Convert to MB
 
-    def get_metrics(self) -> List[Dict[str, Any]]:
+    def get_metrics(self) -> list[dict[str, Any]]:
         """Get collected metrics.
 
         Returns:

@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytest
 
+import dashboard as root_dashboard
 from autoperfpy.ui.dashboard import AutoPerfDashboard
 from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import (
@@ -18,7 +19,6 @@ from trackiq_core.schema import (
     TrackiqResult,
     WorkloadInfo,
 )
-import dashboard as root_dashboard
 
 
 def _result(
@@ -91,9 +91,7 @@ def test_minicluster_dashboard_component_smoke_to_dict() -> None:
         ],
         "faults_detected": {"slow_workers": []},
     }
-    dash = MiniClusterDashboard(
-        result=_result(tool_name="minicluster", workload_type="training", tool_payload=payload)
-    )
+    dash = MiniClusterDashboard(result=_result(tool_name="minicluster", workload_type="training", tool_payload=payload))
     components = dash.build_components()
     for component in components.values():
         component.to_dict()

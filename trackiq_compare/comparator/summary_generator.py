@@ -1,7 +1,6 @@
 """Plain-English summary generator for metric comparisons."""
 
 from dataclasses import dataclass, field
-from typing import List
 
 from .metric_comparator import ComparisonResult, MetricComparison
 
@@ -11,8 +10,8 @@ class SummaryResult:
     """Summary output for a comparison run."""
 
     overall_winner: str
-    largest_deltas: List[MetricComparison] = field(default_factory=list)
-    flagged_regressions: List[MetricComparison] = field(default_factory=list)
+    largest_deltas: list[MetricComparison] = field(default_factory=list)
+    flagged_regressions: list[MetricComparison] = field(default_factory=list)
     text: str = ""
 
 
@@ -59,19 +58,14 @@ class SummaryGenerator:
             if winner != "tie"
             else f"No overall winner: both results won {wins_a} metrics."
         )
-        largest_text = ", ".join(
-            f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in largest
-        )
+        largest_text = ", ".join(f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in largest)
         regression_text = (
             f"{len(regressions)} regression(s) exceeded {self.regression_threshold_percent:.1f}%."
             if regressions
             else f"No regressions exceeded {self.regression_threshold_percent:.1f}%."
         )
 
-        text = (
-            f"Overall winner: {winner}. {winner_reason} "
-            f"Largest deltas: {largest_text}. {regression_text}"
-        )
+        text = f"Overall winner: {winner}. {winner_reason} " f"Largest deltas: {largest_text}. {regression_text}"
 
         return SummaryResult(
             overall_winner=winner,
@@ -79,4 +73,3 @@ class SummaryGenerator:
             flagged_regressions=regressions,
             text=text,
         )
-

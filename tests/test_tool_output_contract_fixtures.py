@@ -11,7 +11,6 @@ from trackiq_compare.comparator import MetricComparator
 from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
 
-
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "tool_outputs"
 AUTOPERFPY_FIXTURE = FIXTURE_DIR / "autoperfpy_real_output.json"
 MINICLUSTER_FIXTURE = FIXTURE_DIR / "minicluster_real_output.json"
@@ -45,9 +44,7 @@ def test_real_fixtures_are_comparable_by_trackiq_compare() -> None:
     """trackiq-compare comparator should consume real tool fixtures without adaptation."""
     autoperfpy_result = load_trackiq_result(AUTOPERFPY_FIXTURE)
     minicluster_result = load_trackiq_result(MINICLUSTER_FIXTURE)
-    comparison = MetricComparator("autoperfpy", "minicluster").compare(
-        autoperfpy_result, minicluster_result
-    )
+    comparison = MetricComparator("autoperfpy", "minicluster").compare(autoperfpy_result, minicluster_result)
     assert "throughput_samples_per_sec" in comparison.metrics
     assert "latency_p99_ms" in comparison.metrics
 

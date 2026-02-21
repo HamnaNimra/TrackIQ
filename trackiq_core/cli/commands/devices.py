@@ -1,6 +1,7 @@
 """Devices command for trackiq_core CLI."""
 
 import sys
+
 from trackiq_core.hardware import get_all_devices
 
 

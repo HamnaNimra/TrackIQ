@@ -9,7 +9,7 @@ import json
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict
+from typing import Any
 
 
 def _load_module(name: str, file_path: Path) -> ModuleType:
@@ -62,12 +62,12 @@ def save_trackiq_result(result: Any, path: str) -> None:
 
 def load_trackiq_result(path: str):
     """Load TrackiqResult object from JSON file."""
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         payload = json.load(handle)
     return TrackiqResult.from_dict(payload)
 
 
-def validate_trackiq_result(payload: Dict[str, Any]) -> None:
+def validate_trackiq_result(payload: dict[str, Any]) -> None:
     """Validate payload by attempting schema construction."""
     try:
         TrackiqResult.from_dict(payload)

@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from minicluster.runner.distributed_runner import HealthCheckpoint
@@ -19,15 +20,15 @@ class HealthReader:
         self,
         checkpoint_path: str,
         timeout_seconds: float = 30.0,
-        stop_event: Optional[threading.Event] = None,
+        stop_event: threading.Event | None = None,
     ) -> None:
         self.checkpoint_path = checkpoint_path
         self.timeout_seconds = timeout_seconds
         self.stop_event = stop_event or threading.Event()
-        self._latest: Optional[HealthCheckpoint] = None
+        self._latest: HealthCheckpoint | None = None
         self._start_time = time.time()
 
-    def read(self) -> Optional[HealthCheckpoint]:
+    def read(self) -> HealthCheckpoint | None:
         """Read current checkpoint file, returning None when unavailable."""
         from minicluster.runner.distributed_runner import HealthCheckpoint, WorkerSnapshot
 
@@ -42,9 +43,7 @@ class HealthReader:
         except (json.JSONDecodeError, OSError):
             return None
 
-        workers = [
-            WorkerSnapshot(**worker) for worker in payload.get("workers", [])
-        ]
+        workers = [WorkerSnapshot(**worker) for worker in payload.get("workers", [])]
         checkpoint = HealthCheckpoint(
             run_id=str(payload.get("run_id", "")),
             total_steps=int(payload.get("total_steps", 0)),

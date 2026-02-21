@@ -14,8 +14,6 @@ import textwrap
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
-
 
 PDF_BACKEND_AUTO = "auto"
 PDF_BACKEND_WEASYPRINT = "weasyprint"
@@ -46,12 +44,10 @@ def render_pdf_from_html(
     backend: str = PDF_BACKEND_AUTO,
     title: str = "TrackIQ Report",
     author: str = "TrackIQ",
-    fallback_text: Optional[str] = None,
+    fallback_text: str | None = None,
 ) -> PdfRenderOutcome:
     """Render PDF from HTML content using standardized backend strategy."""
-    with tempfile.NamedTemporaryFile(
-        suffix=".html", delete=False, mode="w", encoding="utf-8"
-    ) as handle:
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as handle:
         html_path = handle.name
         handle.write(html_content)
     try:
@@ -76,7 +72,7 @@ def render_pdf_from_html_file(
     backend: str = PDF_BACKEND_AUTO,
     title: str = "TrackIQ Report",
     author: str = "TrackIQ",
-    fallback_text: Optional[str] = None,
+    fallback_text: str | None = None,
 ) -> PdfRenderOutcome:
     """Render PDF from an HTML file path.
 
@@ -86,8 +82,8 @@ def render_pdf_from_html_file(
     """
     backend_name = _normalize_backend(backend)
     _ensure_parent_dir(output_path)
-    weasy_error: Optional[Exception] = None
-    mpl_error: Optional[Exception] = None
+    weasy_error: Exception | None = None
+    mpl_error: Exception | None = None
 
     if backend_name in (PDF_BACKEND_AUTO, PDF_BACKEND_WEASYPRINT):
         try:

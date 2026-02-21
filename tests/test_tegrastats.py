@@ -1,20 +1,20 @@
 """Tests for tegrastats analyzer and parsing utilities."""
 
-import pytest
 import tempfile
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
+
+import pytest
 
 from autoperfpy.analyzers.tegrastats import TegrastatsAnalyzer
 from autoperfpy.core.tegrastats import (
-    TegrastatsParser,
-    TegrastatsCalculator,
     CPUCoreStats,
     GPUStats,
     MemoryStats,
+    TegrastatsCalculator,
+    TegrastatsParser,
     ThermalStats,
 )
-
 
 # Sample tegrastats output lines for testing
 SAMPLE_TEGRASTATS_LINE = (
@@ -203,9 +203,7 @@ class TestTegrastatsCalculator:
         snapshots = []
         base_time = datetime.now()
         for i, line in enumerate(lines):
-            snapshot = TegrastatsParser.parse_line(
-                line, timestamp=base_time + timedelta(seconds=i)
-            )
+            snapshot = TegrastatsParser.parse_line(line, timestamp=base_time + timedelta(seconds=i))
             snapshots.append(snapshot)
         return snapshots
 
@@ -257,9 +255,7 @@ class TestTegrastatsCalculator:
 
     def test_detect_thermal_throttling(self, sample_snapshots):
         """Test thermal throttling detection."""
-        result = TegrastatsCalculator.detect_thermal_throttling(
-            sample_snapshots, throttle_temp_c=85.0
-        )
+        result = TegrastatsCalculator.detect_thermal_throttling(sample_snapshots, throttle_temp_c=85.0)
 
         assert result["throttle_events"] >= 1  # Throttling line exceeds 85C
         assert result["max_temp_observed"] == 97.0
@@ -267,27 +263,21 @@ class TestTegrastatsCalculator:
     def test_detect_thermal_throttling_none(self):
         """Test throttling detection with no throttling."""
         snapshot = TegrastatsParser.parse_line(SAMPLE_TEGRASTATS_LINE)
-        result = TegrastatsCalculator.detect_thermal_throttling(
-            [snapshot], throttle_temp_c=85.0
-        )
+        result = TegrastatsCalculator.detect_thermal_throttling([snapshot], throttle_temp_c=85.0)
 
         assert result["throttle_events"] == 0
         assert result["throttle_percentage"] == 0.0
 
     def test_detect_memory_pressure(self, sample_snapshots):
         """Test memory pressure detection."""
-        result = TegrastatsCalculator.detect_memory_pressure(
-            sample_snapshots, pressure_threshold_percent=85.0
-        )
+        result = TegrastatsCalculator.detect_memory_pressure(sample_snapshots, pressure_threshold_percent=85.0)
 
         assert result["pressure_events"] >= 1  # Throttling line at ~88%
 
     def test_detect_memory_pressure_none(self):
         """Test memory pressure detection with no pressure."""
         snapshot = TegrastatsParser.parse_line(SAMPLE_TEGRASTATS_LINE)
-        result = TegrastatsCalculator.detect_memory_pressure(
-            [snapshot], pressure_threshold_percent=90.0
-        )
+        result = TegrastatsCalculator.detect_memory_pressure([snapshot], pressure_threshold_percent=90.0)
 
         assert result["pressure_events"] == 0
 

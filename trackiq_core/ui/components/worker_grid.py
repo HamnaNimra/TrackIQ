@@ -1,6 +1,6 @@
 """Worker status grid component."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
 
@@ -10,13 +10,13 @@ class WorkerGrid:
 
     def __init__(
         self,
-        workers: List[Dict[str, Any]],
+        workers: list[dict[str, Any]],
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
         self.workers = workers
         self.theme = theme
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return raw worker entries."""
         return {"workers": list(self.workers)}
 

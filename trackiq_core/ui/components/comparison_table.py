@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui.components.metric_table import MetricTable
@@ -16,8 +16,8 @@ class ComparisonTable:
         self,
         result_a: TrackiqResult,
         result_b: TrackiqResult,
-        label_a: Optional[str] = None,
-        label_b: Optional[str] = None,
+        label_a: str | None = None,
+        label_b: str | None = None,
         theme: TrackiqTheme = DARK_THEME,
         regression_threshold_percent: float = 5.0,
     ) -> None:
@@ -28,10 +28,10 @@ class ComparisonTable:
         self.theme = theme
         self.regression_threshold_percent = regression_threshold_percent
 
-    def _platform_diff(self) -> Dict[str, Tuple[str, str]]:
+    def _platform_diff(self) -> dict[str, tuple[str, str]]:
         a = self.result_a.platform
         b = self.result_b.platform
-        diff: Dict[str, Tuple[str, str]] = {}
+        diff: dict[str, tuple[str, str]] = {}
         if a.hardware_name != b.hardware_name:
             diff["hardware_name"] = (a.hardware_name, b.hardware_name)
         if a.os != b.os:
@@ -42,7 +42,7 @@ class ComparisonTable:
             diff["framework_version"] = (a.framework_version, b.framework_version)
         return diff
 
-    def _summary(self, rows: List[Dict[str, Any]]) -> str:
+    def _summary(self, rows: list[dict[str, Any]]) -> str:
         comparable = [row for row in rows if row.get("winner") in ("A", "B")]
         wins_a = sum(1 for row in comparable if row["winner"] == "A")
         wins_b = sum(1 for row in comparable if row["winner"] == "B")
@@ -53,9 +53,9 @@ class ComparisonTable:
             key=lambda x: abs(float(x["delta_percent"])),
             reverse=True,
         )[:3]
-        largest_text = ", ".join(
-            f"{row['metric']} ({row['delta_percent']:.2f}%)" for row in largest
-        ) if largest else "none"
+        largest_text = (
+            ", ".join(f"{row['metric']} ({row['delta_percent']:.2f}%)" for row in largest) if largest else "none"
+        )
 
         regressions = [
             row["metric"]
@@ -63,16 +63,14 @@ class ComparisonTable:
             if isinstance(row.get("delta_percent"), (int, float))
             and abs(float(row["delta_percent"])) > self.regression_threshold_percent
         ]
-        regression_text = (
-            ", ".join(regressions) if regressions else "none"
-        )
+        regression_text = ", ".join(regressions) if regressions else "none"
         return (
             f"Overall winner: {overall}. "
             f"Largest deltas: {largest_text}. "
             f"Metrics exceeding {self.regression_threshold_percent:.1f}%: {regression_text}."
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return platform diff, metric table payload, and plain-English summary."""
         metric_payload = MetricTable(
             [self.result_a, self.result_b],

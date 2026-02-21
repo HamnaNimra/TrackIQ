@@ -1,7 +1,6 @@
 """Theme primitives for TrackIQ dashboards."""
 
 from dataclasses import dataclass
-from typing import List
 
 
 @dataclass(frozen=True)
@@ -16,7 +15,7 @@ class TrackiqTheme:
     pass_color: str
     fail_color: str
     warning_color: str
-    chart_colors: List[str]
+    chart_colors: list[str]
     font_family: str
     border_radius: str
     card_shadow: str

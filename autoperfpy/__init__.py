@@ -4,56 +4,54 @@ __version__ = "1.0"
 __author__ = "Hamna Nimra"
 __description__ = "Performance analysis and benchmarking toolkit for NVIDIA platforms"
 
-from .config import Config, ConfigManager
+from .analyzers import (
+    DNNPipelineAnalyzer,
+    EfficiencyAnalyzer,
+    LogAnalyzer,
+    PercentileLatencyAnalyzer,
+    TegrastatsAnalyzer,
+    VariabilityAnalyzer,
+)
+from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .collectors import (
     CollectorBase,
-    CollectorSample,
     CollectorExport,
+    CollectorSample,
     SyntheticCollector,
 )
-from .core import (
+from .config import Config, ConfigManager
+from .core import (  # DNN Pipeline (TensorRT/DriveWorks); Tegrastats (DriveOS/Jetson)
     BaseAnalyzer,
     BaseBenchmark,
     BaseMonitor,
+    BatchEfficiencyAnalyzer,
     DataLoader,
+    DNNPipelineCalculator,
+    DNNPipelineParser,
+    EfficiencyCalculator,
+    EfficiencyMetrics,
+    InferenceRun,
     LatencyStats,
+    LayerTiming,
     PerformanceComparator,
     RegressionDetector,
-    EfficiencyMetrics,
-    EfficiencyCalculator,
-    BatchEfficiencyAnalyzer,
-    # Tegrastats (DriveOS/Jetson)
-    TegrastatsParser,
     TegrastatsCalculator,
+    TegrastatsParser,
     TegrastatsSnapshot,
-    # DNN Pipeline (TensorRT/DriveWorks)
-    DNNPipelineParser,
-    DNNPipelineCalculator,
-    InferenceRun,
-    LayerTiming,
 )
-from .analyzers import (
-    PercentileLatencyAnalyzer,
-    LogAnalyzer,
-    EfficiencyAnalyzer,
-    VariabilityAnalyzer,
-    TegrastatsAnalyzer,
-    DNNPipelineAnalyzer,
-)
-from .benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
 from .monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
-from .reporting import PerformanceVisualizer, PDFReportGenerator, HTMLReportGenerator
 from .profiles import (
-    Profile,
     CollectorType,
+    Profile,
+    ProfileValidationError,
     get_profile,
+    get_profile_info,
     list_profiles,
     register_profile,
-    get_profile_info,
     validate_profile_collector,
     validate_profile_precision,
-    ProfileValidationError,
 )
+from .reporting import HTMLReportGenerator, PDFReportGenerator, PerformanceVisualizer
 
 __all__ = [
     "Config",

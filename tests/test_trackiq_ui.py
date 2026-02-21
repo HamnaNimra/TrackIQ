@@ -1,7 +1,7 @@
 """Tests for trackiq_core.ui package."""
 
-from datetime import datetime, timezone
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -13,6 +13,7 @@ from trackiq_core.schema import (
     TrackiqResult,
     WorkloadInfo,
 )
+from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.ui import (
     DARK_THEME,
     LIGHT_THEME,
@@ -29,7 +30,6 @@ from trackiq_core.ui import (
     WorkerGrid,
     run_dashboard,
 )
-from trackiq_core.serializer import save_trackiq_result
 
 
 def _result(
@@ -155,9 +155,7 @@ def test_components_instantiate_with_optional_metrics_none() -> None:
     MetricTable(result=[result, _result(optional_none=True)], mode="comparison")
     LossChart(steps=[0, 1, 2], loss_values=[1.0, 0.8, 0.7])
     RegressionBadge(result.regression)
-    WorkerGrid(
-        [{"worker_id": "w0", "throughput": 1, "allreduce_time_ms": 0.5, "status": "healthy"}]
-    )
+    WorkerGrid([{"worker_id": "w0", "throughput": 1, "allreduce_time_ms": 0.5, "status": "healthy"}])
     PowerGauge(metrics=result.metrics, tool_payload=result.tool_payload)
     ComparisonTable(result, _result(optional_none=True, hardware="HW-B"))
 
@@ -350,9 +348,7 @@ def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
 def test_power_gauge_placeholder_with_null_metrics_and_live_device_none() -> None:
     """PowerGauge to_dict should return placeholder when no benchmark/live power exists."""
     result = _result(optional_none=True)
-    payload = PowerGauge(
-        metrics=result.metrics, tool_payload=result.tool_payload, live_device=None
-    ).to_dict()
+    payload = PowerGauge(metrics=result.metrics, tool_payload=result.tool_payload, live_device=None).to_dict()
     assert payload["placeholder"] == "Power profiling not available in this environment."
 
 

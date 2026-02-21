@@ -9,7 +9,7 @@ import multiprocessing
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     import torch
@@ -35,8 +35,7 @@ def _require_torch() -> None:
     """Raise actionable dependency error when torch extras are missing."""
     if _TORCH_IMPORT_ERROR is not None:
         raise ImportError(
-            "PyTorch is required for distributed validation features. "
-            "Install with: pip install -e \".[ml]\""
+            "PyTorch is required for distributed validation features. " 'Install with: pip install -e ".[ml]"'
         ) from _TORCH_IMPORT_ERROR
 
 
@@ -101,7 +100,7 @@ def create_synthetic_dataset(num_samples: int = 1000, input_size: int = 10, outp
     return TensorDataset(x_values, y_values)
 
 
-def train_single_process(config: DistributedValidationConfig) -> List[float]:
+def train_single_process(config: DistributedValidationConfig) -> list[float]:
     """Run training in single process mode."""
     _require_torch()
     torch.manual_seed(42)  # Ensure deterministic training
@@ -133,7 +132,7 @@ def train_single_process(config: DistributedValidationConfig) -> List[float]:
             if step >= config.num_steps:
                 break
 
-    return losses[:config.num_steps]
+    return losses[: config.num_steps]
 
 
 def train_worker(rank: int, world_size: int, config: DistributedValidationConfig, losses_queue: multiprocessing.Queue):
@@ -189,12 +188,12 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
                 break
 
     if rank == 0:
-        losses_queue.put(local_losses[:config.num_steps])
+        losses_queue.put(local_losses[: config.num_steps])
 
     dist.destroy_process_group()
 
 
-def train_multi_process(config: DistributedValidationConfig) -> List[float]:
+def train_multi_process(config: DistributedValidationConfig) -> list[float]:
     """Run training in multi-process distributed mode."""
     _require_torch()
     # Use multiprocessing to spawn processes
@@ -226,8 +225,8 @@ class DistributedValidator:
 
     def run_validation(
         self,
-        config: Optional[DistributedValidationConfig] = None,
-    ) -> Dict[str, Any]:
+        config: DistributedValidationConfig | None = None,
+    ) -> dict[str, Any]:
         """Run distributed validation.
 
         Args:
@@ -255,9 +254,7 @@ class DistributedValidator:
             multi_loss = multi_losses[i]
             delta = abs(single_loss - multi_loss)
             rel_delta = (
-                delta / max(abs(single_loss), abs(multi_loss))
-                if max(abs(single_loss), abs(multi_loss)) > 0
-                else 0
+                delta / max(abs(single_loss), abs(multi_loss)) if max(abs(single_loss), abs(multi_loss)) > 0 else 0
             )
 
             passed = rel_delta <= config.loss_tolerance
@@ -305,7 +302,7 @@ class DistributedValidator:
 
         return result
 
-    def save_baseline(self, name: str, results: Dict[str, Any]) -> None:
+    def save_baseline(self, name: str, results: dict[str, Any]) -> None:
         """Save validation results as baseline."""
         # Extract loss metrics for regression detection
         metrics = {}
@@ -317,9 +314,9 @@ class DistributedValidator:
     def detect_regression(
         self,
         baseline_name: str,
-        results: Dict[str, Any],
-        threshold: Optional[float] = None,
-    ) -> Dict[str, Any]:
+        results: dict[str, Any],
+        threshold: float | None = None,
+    ) -> dict[str, Any]:
         """Detect regression against baseline."""
         if threshold is None:
             threshold = results["config"]["regression_threshold"]
@@ -343,8 +340,8 @@ class DistributedValidator:
 
     def generate_report(
         self,
-        results: Dict[str, Any],
-        regression_results: Optional[Dict[str, Any]] = None,
+        results: dict[str, Any],
+        regression_results: dict[str, Any] | None = None,
         output_format: str = "json",
     ) -> str:
         """Generate validation report."""

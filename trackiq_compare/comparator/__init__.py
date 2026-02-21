@@ -2,8 +2,8 @@
 
 from .metric_comparator import (
     ComparisonResult,
-    MetricComparison,
     MetricComparator,
+    MetricComparison,
 )
 from .summary_generator import SummaryGenerator, SummaryResult
 
@@ -14,4 +14,3 @@ __all__ = [
     "SummaryGenerator",
     "SummaryResult",
 ]
-

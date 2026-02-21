@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import autoperfpy.cli as autoperf_cli
 import pytest
+
+import autoperfpy.cli as autoperf_cli
 import trackiq_core.reporting.pdf as pdf_backend
 from minicluster.cli import cmd_report_pdf as minicluster_report_pdf
 from trackiq_compare.cli import main as trackiq_compare_main
-
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "tool_outputs"
 AUTOPERFPY_FIXTURE = FIXTURE_DIR / "autoperfpy_real_output.json"

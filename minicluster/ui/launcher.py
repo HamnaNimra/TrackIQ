@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
-from minicluster.ui.dashboard import MiniClusterDashboard
 from minicluster.ui import streamlit_app
+from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_core.ui import run_dashboard
 
 
-def launch_minicluster_dashboard(result_path: Optional[str] = None) -> None:
+def launch_minicluster_dashboard(result_path: str | None = None) -> None:
     """Launch MiniCluster dashboard from result file or interactive app."""
     if result_path:
         if not Path(result_path).exists():
@@ -18,4 +17,3 @@ def launch_minicluster_dashboard(result_path: Optional[str] = None) -> None:
         run_dashboard(MiniClusterDashboard, result_path=result_path)
         return
     streamlit_app.main()
-

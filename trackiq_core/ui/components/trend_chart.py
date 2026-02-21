@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.serializer import load_trackiq_result
@@ -18,13 +19,13 @@ class RunHistoryLoader:
         self.history_dir = history_dir
         self.pattern = pattern
 
-    def load(self) -> List[TrackiqResult]:
+    def load(self) -> list[TrackiqResult]:
         """Load and timestamp-sort valid TrackiqResult files."""
         directory = Path(self.history_dir)
         if not directory.exists() or not directory.is_dir():
             return []
 
-        results: List[TrackiqResult] = []
+        results: list[TrackiqResult] = []
         for json_path in sorted(directory.glob(self.pattern)):
             try:
                 results.append(load_trackiq_result(json_path))
@@ -52,15 +53,15 @@ class TrendChart:
     def __init__(
         self,
         results: Sequence[TrackiqResult],
-        metric_names: Optional[Iterable[str]] = None,
+        metric_names: Iterable[str] | None = None,
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
         self.results = sorted(list(results), key=lambda item: _timestamp_sort_key(item.timestamp))
         self.metric_names = list(metric_names) if metric_names is not None else list(self.DEFAULT_METRICS)
         self.theme = theme
 
-    def _metric_points(self, metric_name: str) -> List[Dict[str, Any]]:
-        points: List[Dict[str, Any]] = []
+    def _metric_points(self, metric_name: str) -> list[dict[str, Any]]:
+        points: list[dict[str, Any]] = []
         for result in self.results:
             value = getattr(result.metrics, metric_name, None)
             if value is None:
@@ -75,7 +76,7 @@ class TrendChart:
             )
         return points
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return trend data suitable for tests or API export."""
         trends = {metric: self._metric_points(metric) for metric in self.metric_names}
         return {

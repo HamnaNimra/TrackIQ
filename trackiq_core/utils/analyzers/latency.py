@@ -1,9 +1,10 @@
 """Latency and performance analyzers."""
 
-from typing import Dict, Any
-from trackiq_core.utils.base import BaseAnalyzer
+from typing import Any
+
 from trackiq_core.schemas import AnalysisResult
 from trackiq_core.utils.analysis_utils import DataLoader, LatencyStats
+from trackiq_core.utils.base import BaseAnalyzer
 
 
 class PercentileLatencyAnalyzer(BaseAnalyzer):
@@ -49,7 +50,7 @@ class PercentileLatencyAnalyzer(BaseAnalyzer):
         self.add_result(result)
         return result
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         """Summarize all analysis results.
 
         Returns:
@@ -99,7 +100,7 @@ class LogAnalyzer(BaseAnalyzer):
         total_events = 0
 
         try:
-            with open(log_filepath, "r") as f:
+            with open(log_filepath) as f:
                 for line in f:
                     if "Frame" in line and "E2E" in line:
                         total_events += 1

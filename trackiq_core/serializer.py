@@ -7,7 +7,6 @@ from typing import Union
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.validator import validate_trackiq_result_obj
 
-
 PathLike = Union[str, Path]
 
 

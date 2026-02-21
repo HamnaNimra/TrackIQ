@@ -1,9 +1,10 @@
 """Tests for AutoPerfPy core module."""
 
-import pytest
-import pandas as pd
 import tempfile
 from pathlib import Path
+
+import pandas as pd
+import pytest
 
 from autoperfpy.core import (
     DataLoader,
@@ -39,9 +40,7 @@ class TestDataLoader:
 
     def test_validate_columns_success(self):
         """Test validation passes with all required columns."""
-        df = pd.DataFrame(
-            {"timestamp": [1, 2], "workload": ["a", "b"], "latency_ms": [25, 26]}
-        )
+        df = pd.DataFrame({"timestamp": [1, 2], "workload": ["a", "b"], "latency_ms": [25, 26]})
         assert DataLoader.validate_columns(df, ["timestamp", "workload"]) is True
 
     def test_validate_columns_missing(self):
@@ -86,9 +85,7 @@ class TestLatencyStats:
 
     def test_calculate_for_groups(self):
         """Test calculating statistics per group."""
-        df = pd.DataFrame(
-            {"latency_ms": [10, 20, 30, 40, 50], "batch_size": [1, 1, 4, 4, 8]}
-        )
+        df = pd.DataFrame({"latency_ms": [10, 20, 30, 40, 50], "batch_size": [1, 1, 4, 4, 8]})
 
         stats = LatencyStats.calculate_for_groups(df, "latency_ms", "batch_size")
 
@@ -108,9 +105,7 @@ class TestPerformanceComparator:
         latencies = [10.0, 12.0, 11.0, 15.0]
         throughput = [100.0, 83.3, 90.9, 66.7]
 
-        result = PerformanceComparator.compare_latency_throughput(
-            batch_sizes, latencies, throughput
-        )
+        result = PerformanceComparator.compare_latency_throughput(batch_sizes, latencies, throughput)
 
         assert "optimal_for_latency" in result
         assert "optimal_for_throughput" in result
@@ -212,9 +207,7 @@ class TestRegressionDetector:
         detector.save_baseline("main", baseline_metrics)
 
         current_metrics = {"p99_latency": 56.0}
-        report = detector.generate_report(
-            "main", current_metrics, RegressionThreshold(p99_percent=10.0)
-        )
+        report = detector.generate_report("main", current_metrics, RegressionThreshold(p99_percent=10.0))
 
         assert "PERFORMANCE REGRESSION REPORT" in report
         assert "REGRESSIONS DETECTED" in report
@@ -234,9 +227,7 @@ class TestRegressionThreshold:
 
     def test_custom_thresholds(self):
         """Test custom threshold values."""
-        thresholds = RegressionThreshold(
-            latency_percent=2.0, throughput_percent=3.0, p99_percent=15.0
-        )
+        thresholds = RegressionThreshold(latency_percent=2.0, throughput_percent=3.0, p99_percent=15.0)
         assert thresholds.latency_percent == 2.0
         assert thresholds.throughput_percent == 3.0
         assert thresholds.p99_percent == 15.0

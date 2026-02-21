@@ -1,17 +1,17 @@
 """Tests for distributed validator module."""
 
 import json
-import pytest
+from unittest.mock import MagicMock, patch
+
 import torch
-from unittest.mock import patch, MagicMock
 
 from trackiq_core.distributed_validator import (
-    DistributedValidator,
     DistributedValidationConfig,
+    DistributedValidator,
     SimpleMLP,
     create_synthetic_dataset,
-    train_single_process,
     train_multi_process,
+    train_single_process,
 )
 
 
@@ -74,7 +74,7 @@ class TestTrainingFunctions:
         assert all(isinstance(loss, float) for loss in losses)
         assert all(loss >= 0 for loss in losses)
 
-    @patch('multiprocessing.get_context')
+    @patch("multiprocessing.get_context")
     def test_multi_process_training(self, mock_get_context):
         """Test multi-process training."""
         # Mock the multiprocessing context and queue
@@ -103,8 +103,8 @@ class TestDistributedValidator:
         assert validator.baseline_dir.name == "baselines"
         assert validator.regression_detector is not None
 
-    @patch('trackiq_core.distributed_validator.train_single_process')
-    @patch('trackiq_core.distributed_validator.train_multi_process')
+    @patch("trackiq_core.distributed_validator.train_single_process")
+    @patch("trackiq_core.distributed_validator.train_multi_process")
     def test_run_validation(self, mock_multi_train, mock_single_train):
         """Test validation run."""
         mock_single_train.return_value = [1.0, 0.9, 0.8, 0.7, 0.6]
@@ -120,8 +120,8 @@ class TestDistributedValidator:
         assert results["summary"]["overall_pass"] is True
         assert results["summary"]["passed_steps"] == 5
 
-    @patch('trackiq_core.distributed_validator.train_single_process')
-    @patch('trackiq_core.distributed_validator.train_multi_process')
+    @patch("trackiq_core.distributed_validator.train_single_process")
+    @patch("trackiq_core.distributed_validator.train_multi_process")
     def test_run_validation_with_differences(self, mock_multi_train, mock_single_train):
         """Test validation with loss differences exceeding tolerance."""
         mock_single_train.return_value = [1.0, 0.9, 0.8, 0.7, 0.6]
@@ -144,7 +144,7 @@ class TestDistributedValidator:
             ]
         }
 
-        with patch.object(validator.regression_detector, 'save_baseline') as mock_save:
+        with patch.object(validator.regression_detector, "save_baseline") as mock_save:
             validator.save_baseline("test_baseline", results)
             mock_save.assert_called_once()
 
@@ -156,11 +156,11 @@ class TestDistributedValidator:
                 {"step": 0, "relative_delta": 0.01},
                 {"step": 1, "relative_delta": 0.02},
             ],
-            "config": {"regression_threshold": 5.0}
+            "config": {"regression_threshold": 5.0},
         }
 
         mock_result = {"has_regressions": False, "regressions": {}}
-        with patch.object(validator.regression_detector, 'detect_regressions', return_value=mock_result):
+        with patch.object(validator.regression_detector, "detect_regressions", return_value=mock_result):
             regression = validator.detect_regression("test_baseline", results)
             assert regression == mock_result
 
@@ -183,8 +183,8 @@ class TestDistributedValidator:
                 "passed_steps": 8,
                 "failed_steps": 2,
                 "pass_rate": 0.8,
-                "overall_pass": False
-            }
+                "overall_pass": False,
+            },
         }
 
         report = validator.generate_report(results, output_format="text")
@@ -196,7 +196,7 @@ class TestDistributedValidator:
 class TestCLIntegration:
     """Tests for CLI integration."""
 
-    @patch('autoperfpy.cli.DistributedValidator')
+    @patch("autoperfpy.cli.DistributedValidator")
     def test_cli_run_benchmark_distributed(self, mock_validator_class):
         """Test CLI integration for distributed benchmark."""
         from autoperfpy.cli import run_benchmark_distributed
@@ -218,7 +218,7 @@ class TestCLIntegration:
                 "passed_steps": 45,
                 "failed_steps": 5,
                 "pass_rate": 0.9,
-                "overall_pass": True
+                "overall_pass": True,
             }
         }
         mock_validator.run_validation.return_value = mock_results

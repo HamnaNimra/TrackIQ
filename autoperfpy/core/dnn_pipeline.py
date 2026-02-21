@@ -23,10 +23,10 @@ Authors:
     Hamna Nimra
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
-from datetime import datetime
 import re
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -37,16 +37,16 @@ class LayerTiming:
     layer_type: str
     execution_time_ms: float
     device: str  # "GPU", "DLA0", "DLA1", etc.
-    input_dims: Optional[List[int]] = None
-    output_dims: Optional[List[int]] = None
-    workspace_size_bytes: Optional[int] = None
+    input_dims: list[int] | None = None
+    output_dims: list[int] | None = None
+    workspace_size_bytes: int | None = None
 
     @property
     def execution_time_us(self) -> float:
         """Return execution time in microseconds."""
         return self.execution_time_ms * 1000
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "layer_type": self.layer_type,
@@ -66,7 +66,7 @@ class MemoryTransfer:
     transfer_type: str  # "H2D" (Host to Device) or "D2H" (Device to Host)
     size_bytes: int
     duration_ms: float
-    stream_id: Optional[int] = None
+    stream_id: int | None = None
 
     @property
     def bandwidth_gbps(self) -> float:
@@ -77,7 +77,7 @@ class MemoryTransfer:
         duration_s = self.duration_ms / 1000
         return size_gb / duration_s
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "transfer_type": self.transfer_type,
             "size_bytes": self.size_bytes,
@@ -95,35 +95,29 @@ class InferenceRun:
     timestamp: datetime
     batch_size: int
     total_time_ms: float
-    layers: List[LayerTiming]
-    memory_transfers: List[MemoryTransfer] = field(default_factory=list)
-    engine_name: Optional[str] = None
+    layers: list[LayerTiming]
+    memory_transfers: list[MemoryTransfer] = field(default_factory=list)
+    engine_name: str | None = None
 
     @property
     def gpu_time_ms(self) -> float:
         """Total time spent on GPU layers."""
-        return sum(l.execution_time_ms for l in self.layers if l.device == "GPU")
+        return sum(layer.execution_time_ms for layer in self.layers if layer.device == "GPU")
 
     @property
     def dla_time_ms(self) -> float:
         """Total time spent on DLA layers."""
-        return sum(
-            l.execution_time_ms for l in self.layers if l.device.startswith("DLA")
-        )
+        return sum(layer.execution_time_ms for layer in self.layers if layer.device.startswith("DLA"))
 
     @property
     def h2d_time_ms(self) -> float:
         """Total host-to-device transfer time."""
-        return sum(
-            t.duration_ms for t in self.memory_transfers if t.transfer_type == "H2D"
-        )
+        return sum(t.duration_ms for t in self.memory_transfers if t.transfer_type == "H2D")
 
     @property
     def d2h_time_ms(self) -> float:
         """Total device-to-host transfer time."""
-        return sum(
-            t.duration_ms for t in self.memory_transfers if t.transfer_type == "D2H"
-        )
+        return sum(t.duration_ms for t in self.memory_transfers if t.transfer_type == "D2H")
 
     @property
     def memory_overhead_ms(self) -> float:
@@ -163,7 +157,7 @@ class InferenceRun:
         """Number of layers in the model."""
         return len(self.layers)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp.isoformat(),
             "batch_size": self.batch_size,
@@ -179,7 +173,7 @@ class InferenceRun:
             "throughput_fps": self.throughput_fps,
             "num_layers": self.num_layers,
             "engine_name": self.engine_name,
-            "layers": [l.to_dict() for l in self.layers],
+            "layers": [layer.to_dict() for layer in self.layers],
             "memory_transfers": [t.to_dict() for t in self.memory_transfers],
         }
 
@@ -190,11 +184,11 @@ class EngineOptimizationMetrics:
 
     engine_name: str
     build_time_seconds: float
-    input_shapes: Dict[str, List[int]]
-    output_shapes: Dict[str, List[int]]
+    input_shapes: dict[str, list[int]]
+    output_shapes: dict[str, list[int]]
     precision: str  # "FP32", "FP16", "INT8", "MIXED"
     dla_enabled: bool
-    dla_cores_used: List[int] = field(default_factory=list)
+    dla_cores_used: list[int] = field(default_factory=list)
     gpu_fallback_layers: int = 0
     total_layers: int = 0
     workspace_size_mb: float = 0.0
@@ -208,7 +202,7 @@ class EngineOptimizationMetrics:
         dla_layers = self.total_layers - self.gpu_fallback_layers
         return (dla_layers / self.total_layers) * 100
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "engine_name": self.engine_name,
             "build_time_seconds": self.build_time_seconds,
@@ -229,12 +223,8 @@ class DNNPipelineParser:
     """Parser for DNN pipeline profiling data."""
 
     # Patterns for parsing TensorRT/Nsight profiler output
-    LAYER_PATTERN = re.compile(
-        r"(?P<name>\S+)\s+(?P<type>\S+)\s+(?P<time>[\d.]+)\s*ms\s+(?P<device>GPU|DLA\d*)"
-    )
-    MEMORY_PATTERN = re.compile(
-        r"(?P<type>H2D|D2H)\s+(?P<size>\d+)\s+bytes?\s+(?P<time>[\d.]+)\s*ms"
-    )
+    LAYER_PATTERN = re.compile(r"(?P<name>\S+)\s+(?P<type>\S+)\s+(?P<time>[\d.]+)\s*ms\s+(?P<device>GPU|DLA\d*)")
+    MEMORY_PATTERN = re.compile(r"(?P<type>H2D|D2H)\s+(?P<size>\d+)\s+bytes?\s+(?P<time>[\d.]+)\s*ms")
     TOTAL_TIME_PATTERN = re.compile(r"Total:\s*([\d.]+)\s*ms")
     BATCH_SIZE_PATTERN = re.compile(r"[Bb]atch\s*[Ss]ize[:\s]+(\d+)")
 
@@ -242,7 +232,7 @@ class DNNPipelineParser:
     def parse_profiler_output(
         cls,
         content: str,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> InferenceRun:
         """Parse profiler output text into an InferenceRun.
 
@@ -294,9 +284,7 @@ class DNNPipelineParser:
 
         # If no total time found, compute from layers + transfers
         if total_time == 0.0:
-            total_time = sum(l.execution_time_ms for l in layers) + sum(
-                t.duration_ms for t in memory_transfers
-            )
+            total_time = sum(layer.execution_time_ms for layer in layers) + sum(t.duration_ms for t in memory_transfers)
 
         return InferenceRun(
             timestamp=timestamp,
@@ -328,25 +316,21 @@ class DNNPipelineParser:
 
         layers = []
         try:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     layers.append(
                         LayerTiming(
                             name=row.get("layer_name", row.get("name", "unknown")),
-                            layer_type=row.get(
-                                "layer_type", row.get("type", "unknown")
-                            ),
-                            execution_time_ms=float(
-                                row.get("time_ms", row.get("time", 0))
-                            ),
+                            layer_type=row.get("layer_type", row.get("type", "unknown")),
+                            execution_time_ms=float(row.get("time_ms", row.get("time", 0))),
                             device=row.get("device", "GPU"),
                         )
                     )
         except FileNotFoundError:
             raise FileNotFoundError(f"Layer timing file not found: {filepath}")
 
-        total_time = sum(l.execution_time_ms for l in layers)
+        total_time = sum(layer.execution_time_ms for layer in layers)
 
         return InferenceRun(
             timestamp=datetime.now(),
@@ -362,7 +346,7 @@ class DNNPipelineAggregateStats:
 
     num_runs: int
     total_inferences: int
-    batch_sizes_used: List[int]
+    batch_sizes_used: list[int]
 
     # Timing aggregates
     avg_total_time_ms: float
@@ -386,9 +370,9 @@ class DNNPipelineAggregateStats:
     memory_overhead_percentage: float
 
     # Layer breakdown
-    slowest_layers: List[Dict[str, Any]]
+    slowest_layers: list[dict[str, Any]]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "num_runs": self.num_runs,
             "total_inferences": self.total_inferences,
@@ -423,7 +407,7 @@ class DNNPipelineCalculator:
 
     @staticmethod
     def calculate_aggregates(
-        runs: List[InferenceRun],
+        runs: list[InferenceRun],
         top_n_layers: int = 5,
     ) -> DNNPipelineAggregateStats:
         """Calculate aggregate statistics from inference runs.
@@ -474,14 +458,12 @@ class DNNPipelineCalculator:
         avg_h2d = np.mean([r.h2d_time_ms for r in runs])
         avg_d2h = np.mean([r.d2h_time_ms for r in runs])
         avg_mem_overhead = np.mean([r.memory_overhead_ms for r in runs])
-        mem_overhead_pct = (
-            (avg_mem_overhead / avg_total * 100) if avg_total > 0 else 0.0
-        )
+        mem_overhead_pct = (avg_mem_overhead / avg_total * 100) if avg_total > 0 else 0.0
 
         # Find slowest layers across all runs
         from collections import defaultdict
 
-        layer_times: Dict[str, List[float]] = defaultdict(list)
+        layer_times: dict[str, list[float]] = defaultdict(list)
         for run in runs:
             for layer in run.layers:
                 key = f"{layer.name}:{layer.layer_type}"
@@ -518,8 +500,8 @@ class DNNPipelineCalculator:
 
     @staticmethod
     def analyze_batch_scaling(
-        runs: List[InferenceRun],
-    ) -> Dict[str, Any]:
+        runs: list[InferenceRun],
+    ) -> dict[str, Any]:
         """Analyze how performance scales with batch size.
 
         Args:
@@ -532,7 +514,7 @@ class DNNPipelineCalculator:
             return {"error": "No runs provided"}
 
         # Group runs by batch size
-        by_batch: Dict[int, List[InferenceRun]] = {}
+        by_batch: dict[int, list[InferenceRun]] = {}
         for run in runs:
             if run.batch_size not in by_batch:
                 by_batch[run.batch_size] = []
@@ -544,9 +526,7 @@ class DNNPipelineCalculator:
             batch_runs = by_batch[batch_size]
             avg_time = sum(r.total_time_ms for r in batch_runs) / len(batch_runs)
             avg_throughput = sum(r.throughput_fps for r in batch_runs) / len(batch_runs)
-            avg_mem_overhead = sum(r.memory_overhead_ms for r in batch_runs) / len(
-                batch_runs
-            )
+            avg_mem_overhead = sum(r.memory_overhead_ms for r in batch_runs) / len(batch_runs)
 
             batch_metrics.append(
                 {
@@ -562,9 +542,7 @@ class DNNPipelineCalculator:
         # Find optimal batch sizes
         optimal_throughput = max(batch_metrics, key=lambda x: x["avg_throughput_fps"])
         optimal_latency = min(batch_metrics, key=lambda x: x["avg_latency_ms"])
-        optimal_efficiency = min(
-            batch_metrics, key=lambda x: x["latency_per_sample_ms"]
-        )
+        optimal_efficiency = min(batch_metrics, key=lambda x: x["latency_per_sample_ms"])
 
         return {
             "batch_metrics": batch_metrics,
@@ -577,8 +555,8 @@ class DNNPipelineCalculator:
 
     @staticmethod
     def compare_dla_vs_gpu(
-        runs: List[InferenceRun],
-    ) -> Dict[str, Any]:
+        runs: list[InferenceRun],
+    ) -> dict[str, Any]:
         """Compare DLA vs GPU execution characteristics.
 
         Args:
@@ -607,12 +585,8 @@ class DNNPipelineCalculator:
         return {
             "total_gpu_time_ms": total_gpu_time,
             "total_dla_time_ms": total_dla_time,
-            "gpu_percentage": (
-                (total_gpu_time / total_compute * 100) if total_compute > 0 else 0
-            ),
-            "dla_percentage": (
-                (total_dla_time / total_compute * 100) if total_compute > 0 else 0
-            ),
+            "gpu_percentage": ((total_gpu_time / total_compute * 100) if total_compute > 0 else 0),
+            "dla_percentage": ((total_dla_time / total_compute * 100) if total_compute > 0 else 0),
             "gpu_layer_count": len(gpu_layers),
             "dla_layer_count": len(dla_layers),
             "gpu_layers": list(gpu_layers),

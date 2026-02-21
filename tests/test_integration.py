@@ -11,14 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from trackiq_core.collectors import SyntheticCollector
-from trackiq_core.hardware.devices import DeviceProfile, DEVICE_TYPE_CPU
-from trackiq_core.inference import InferenceConfig
-from trackiq_core.power_profiler import SimulatedPowerReader
-from autoperfpy.runners import BenchmarkRunner
 from autoperfpy.auto_runner import run_single_benchmark
 from autoperfpy.cli import _infer_trackiq_result
 from autoperfpy.reports import HTMLReportGenerator, PerformanceVisualizer
+from autoperfpy.runners import BenchmarkRunner
+from trackiq_core.collectors import SyntheticCollector
+from trackiq_core.hardware.devices import DEVICE_TYPE_CPU, DeviceProfile
+from trackiq_core.inference import InferenceConfig
+from trackiq_core.power_profiler import SimulatedPowerReader
 
 try:
     from autoperfpy.reports import charts as shared_charts

@@ -1,6 +1,6 @@
 """Terminal reporter using rich output."""
 
-from typing import Optional, Any
+from typing import Any
 
 try:
     from rich.console import Console
@@ -16,7 +16,7 @@ from trackiq_compare.comparator.summary_generator import SummaryResult
 class TerminalReporter:
     """Render comparison output as a terminal table and summary."""
 
-    def __init__(self, tolerance_percent: float = 0.5, console: Optional[Any] = None):
+    def __init__(self, tolerance_percent: float = 0.5, console: Any | None = None):
         self.tolerance_percent = tolerance_percent
         self.console = console or (Console() if Console is not None else None)
 
@@ -54,8 +54,7 @@ class TerminalReporter:
         print("TrackIQ Metric Comparison")
         print("=" * 80)
         print(
-            f"{'Metric':30} {comparison.label_a:12} {comparison.label_b:12} "
-            f"{'Abs Delta':10} {'% Delta':10} Winner"
+            f"{'Metric':30} {comparison.label_a:12} {comparison.label_b:12} " f"{'Abs Delta':10} {'% Delta':10} Winner"
         )
         for metric in comparison.metrics.values():
             print(

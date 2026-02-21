@@ -1,7 +1,9 @@
 """Benchmarking modules for AutoPerfPy."""
 
+from typing import Any
+
 import numpy as np
-from typing import Dict, Any, List
+
 from ..core import BaseBenchmark
 
 
@@ -19,11 +21,11 @@ class BatchingTradeoffBenchmark(BaseBenchmark):
 
     def run(
         self,
-        batch_sizes: List[int] = None,
+        batch_sizes: list[int] = None,
         num_images: int = 1000,
         base_overhead: float = 0.01,
         time_per_image: float = 0.005,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run batching trade-off benchmark.
 
         Args:
@@ -89,7 +91,7 @@ class LLMLatencyBenchmark(BaseBenchmark):
         super().__init__("LLMLatencyBenchmark")
         self.config = config
 
-    def run(self, prompt_tokens: int = 512, output_tokens: int = 256, num_runs: int = 10) -> Dict[str, Any]:
+    def run(self, prompt_tokens: int = 512, output_tokens: int = 256, num_runs: int = 10) -> dict[str, Any]:
         """Run LLM latency benchmark.
 
         Args:

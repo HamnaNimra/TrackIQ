@@ -7,46 +7,41 @@ execution. Automotive-focused: wires TegrastatsCollector for Jetson/DRIVE;
 trackiq_core provides generic device detection and runner infrastructure.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
+from trackiq_core.collectors import SyntheticCollector
 from trackiq_core.hardware.devices import (
-    DeviceProfile,
-    DEVICE_TYPE_NVIDIA_GPU,
     DEVICE_TYPE_CPU,
     DEVICE_TYPE_INTEL_GPU,
-    DEVICE_TYPE_NVIDIA_JETSON,
     DEVICE_TYPE_NVIDIA_DRIVE,
+    DEVICE_TYPE_NVIDIA_GPU,
+    DEVICE_TYPE_NVIDIA_JETSON,
+    DeviceProfile,
 )
+from trackiq_core.inference import InferenceConfig
+from trackiq_core.power_profiler import PowerProfiler, detect_power_source
 from trackiq_core.runners import (
     BenchmarkRunner,
-    run_single_benchmark as _run_single_benchmark_generic,
-    run_auto_benchmarks as _run_auto_benchmarks_generic,
     base_collector_config,
     make_run_label,
 )
-from trackiq_core.collectors import SyntheticCollector
-from trackiq_core.inference import InferenceConfig
-from trackiq_core.power_profiler import PowerProfiler, detect_power_source
+from trackiq_core.runners import run_auto_benchmarks as _run_auto_benchmarks_generic
+from trackiq_core.runners import run_single_benchmark as _run_single_benchmark_generic
 from trackiq_core.schema import Metrics
 
 
-def _collector_nvidia_gpu(
-    device: DeviceProfile, config: InferenceConfig
-) -> Optional[Any]:
+def _collector_nvidia_gpu(device: DeviceProfile, config: InferenceConfig) -> Any | None:
     """Build NVML collector for discrete NVIDIA GPU."""
     try:
         from trackiq_core.collectors import NVMLCollector
 
-        return NVMLCollector(
-            device_index=device.index, config=base_collector_config(config)
-        )
+        return NVMLCollector(device_index=device.index, config=base_collector_config(config))
     except (ImportError, Exception):
         return None
 
 
-def _collector_psutil(
-    device: DeviceProfile, config: InferenceConfig  # noqa: ARG001
-) -> Optional[Any]:
+def _collector_psutil(device: DeviceProfile, config: InferenceConfig) -> Any | None:  # noqa: ARG001
     """Build Psutil collector for CPU or Intel GPU."""
     del device  # unused, but kept for consistent factory signature
     try:
@@ -57,9 +52,7 @@ def _collector_psutil(
         return None
 
 
-def _collector_tegrastats(
-    device: DeviceProfile, config: InferenceConfig
-) -> Optional[Any]:
+def _collector_tegrastats(device: DeviceProfile, config: InferenceConfig) -> Any | None:
     """Build Tegrastats collector for Jetson/DRIVE (automotive / edge AI)."""
     try:
         from autoperfpy.collectors import TegrastatsCollector
@@ -72,9 +65,7 @@ def _collector_tegrastats(
 
 # Registry: device_type -> (device, config) -> collector or None.
 # Add new automotive hardware here.
-COLLECTOR_FACTORY: Dict[
-    str, Callable[[DeviceProfile, InferenceConfig], Optional[Any]]
-] = {
+COLLECTOR_FACTORY: dict[str, Callable[[DeviceProfile, InferenceConfig], Any | None]] = {
     DEVICE_TYPE_NVIDIA_GPU: _collector_nvidia_gpu,
     DEVICE_TYPE_CPU: _collector_psutil,
     DEVICE_TYPE_INTEL_GPU: _collector_psutil,
@@ -83,9 +74,7 @@ COLLECTOR_FACTORY: Dict[
 }
 
 
-def _collector_for_device(
-    device: DeviceProfile, config: InferenceConfig
-) -> Any:
+def _collector_for_device(device: DeviceProfile, config: InferenceConfig) -> Any:
     """Build collector for the given device via registry; fallback Synthetic."""
     builder = COLLECTOR_FACTORY.get(device.device_type)
     if builder:
@@ -102,7 +91,7 @@ def run_single_benchmark(
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
     enable_power: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Run one benchmark for (device, config) and return result dict.
 
     Uses the automotive collector factory to select appropriate collector
@@ -134,13 +123,13 @@ def run_single_benchmark(
 
 
 def run_auto_benchmarks(
-    device_config_pairs: List[Tuple[DeviceProfile, InferenceConfig]],
+    device_config_pairs: list[tuple[DeviceProfile, InferenceConfig]],
     duration_seconds: float = 10.0,
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
-    progress_callback: Optional[Callable[..., None]] = None,
+    progress_callback: Callable[..., None] | None = None,
     enable_power: bool = True,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Run benchmarks sequentially for each (device, config).
 
     Uses the automotive collector factory to select appropriate collector
@@ -163,13 +152,11 @@ def run_auto_benchmarks(
         sample_interval_seconds=sample_interval_seconds,
         quiet=quiet,
         progress_callback=progress_callback,
-        power_profiler_factory=(
-            (lambda: PowerProfiler(detect_power_source())) if enable_power else None
-        ),
+        power_profiler_factory=((lambda: PowerProfiler(detect_power_source())) if enable_power else None),
     )
 
 
-def _attach_power_profile(result: Dict[str, Any], profiler: PowerProfiler) -> None:
+def _attach_power_profile(result: dict[str, Any], profiler: PowerProfiler) -> None:
     """Populate result summary and payload with profiler-derived power metrics."""
     summary = result.setdefault("summary", {})
     latency = summary.get("latency", {}) if isinstance(summary.get("latency"), dict) else {}

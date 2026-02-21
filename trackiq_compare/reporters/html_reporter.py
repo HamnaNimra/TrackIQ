@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from html import escape
-from typing import List, Optional
 
 from trackiq_compare.comparator.metric_comparator import ComparisonResult
 from trackiq_compare.comparator.summary_generator import SummaryResult
@@ -173,7 +172,7 @@ class HtmlReporter:
         return output_path
 
     @staticmethod
-    def _fmt(value: Optional[float], is_percent: bool = False) -> str:
+    def _fmt(value: float | None, is_percent: bool = False) -> str:
         if value is None:
             return "N/A"
         if value == float("inf"):
@@ -181,7 +180,7 @@ class HtmlReporter:
         return f"{value:+.2f}%" if is_percent else f"{value:.4f}"
 
     def _metric_rows(self, comparison: ComparisonResult) -> str:
-        rows: List[str] = []
+        rows: list[str] = []
         for metric in comparison.metrics.values():
             if not metric.comparable:
                 winner = '<span class="warn">N/A</span>'
@@ -205,7 +204,7 @@ class HtmlReporter:
 
     @staticmethod
     def _platform_comparison(result_a: TrackiqResult, result_b: TrackiqResult) -> str:
-        diffs: List[str] = []
+        diffs: list[str] = []
         if result_a.platform.hardware_name != result_b.platform.hardware_name:
             diffs.append(
                 f"Hardware differs: {escape(result_a.platform.hardware_name)} vs {escape(result_b.platform.hardware_name)}."

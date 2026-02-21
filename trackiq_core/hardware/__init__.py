@@ -1,40 +1,40 @@
 """Hardware detection and platform utilities."""
 
-from .env import (
-    command_available,
-    nvidia_smi_available,
-    find_nvidia_smi_path,
-    NVIDIA_SMI_PATHS,
-)
-from .gpu import (
-    query_nvidia_smi,
-    query_rocm_smi,
-    parse_gpu_metrics,
-    get_memory_metrics,
-    get_performance_metrics,
-    get_amd_gpu_metrics,
-    get_intel_gpu_metrics,
-    get_apple_silicon_metrics,
-    get_cpu_metrics,
-    DEFAULT_NVIDIA_SMI_TIMEOUT,
-)
 from .devices import (
+    DEVICE_TYPE_AMD_GPU,
+    DEVICE_TYPE_APPLE_SILICON,
+    DEVICE_TYPE_CPU,
+    DEVICE_TYPE_INTEL_GPU,
+    DEVICE_TYPE_NVIDIA_DRIVE,
+    DEVICE_TYPE_NVIDIA_GPU,
+    DEVICE_TYPE_NVIDIA_JETSON,
     DeviceProfile,
-    get_all_devices,
-    detect_nvidia_gpus,
     detect_amd_gpus,
     detect_apple_silicon,
     detect_cpu,
     detect_intel_gpus,
+    detect_nvidia_gpus,
     detect_tegrastats_platforms,
+    get_all_devices,
     get_platform_metadata_for_device,
-    DEVICE_TYPE_NVIDIA_GPU,
-    DEVICE_TYPE_AMD_GPU,
-    DEVICE_TYPE_INTEL_GPU,
-    DEVICE_TYPE_CPU,
-    DEVICE_TYPE_APPLE_SILICON,
-    DEVICE_TYPE_NVIDIA_JETSON,
-    DEVICE_TYPE_NVIDIA_DRIVE,
+)
+from .env import (
+    NVIDIA_SMI_PATHS,
+    command_available,
+    find_nvidia_smi_path,
+    nvidia_smi_available,
+)
+from .gpu import (
+    DEFAULT_NVIDIA_SMI_TIMEOUT,
+    get_amd_gpu_metrics,
+    get_apple_silicon_metrics,
+    get_cpu_metrics,
+    get_intel_gpu_metrics,
+    get_memory_metrics,
+    get_performance_metrics,
+    parse_gpu_metrics,
+    query_nvidia_smi,
+    query_rocm_smi,
 )
 
 __all__ = [

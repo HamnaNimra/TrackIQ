@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean, pstdev
-from typing import TYPE_CHECKING, Any, Dict, List, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from minicluster.runner.distributed_runner import HealthCheckpoint
@@ -25,12 +25,12 @@ class AnomalyDetector:
     """Detect throughput, loss, and communication anomalies from checkpoints."""
 
     def __init__(self) -> None:
-        self._last_step_by_worker: Dict[int, int] = {}
-        self._stalled_counts: Dict[int, int] = {}
+        self._last_step_by_worker: dict[int, int] = {}
+        self._stalled_counts: dict[int, int] = {}
 
-    def detect(self, checkpoint: HealthCheckpoint) -> List[Anomaly]:
+    def detect(self, checkpoint: HealthCheckpoint) -> list[Anomaly]:
         """Detect anomalies for the current checkpoint."""
-        anomalies: List[Anomaly] = []
+        anomalies: list[Anomaly] = []
         workers = checkpoint.workers
         if not workers:
             return anomalies
@@ -108,19 +108,17 @@ class AnomalyDetector:
 
         return anomalies
 
-    def summarize(self, anomalies: List[Anomaly]) -> Dict[str, Any]:
+    def summarize(self, anomalies: list[Anomaly]) -> dict[str, Any]:
         """Summarize anomaly list with counts and hot workers."""
-        by_severity: Dict[str, int] = {"warning": 0, "critical": 0}
-        by_type: Dict[str, int] = {}
-        by_worker: Dict[int, int] = {}
+        by_severity: dict[str, int] = {"warning": 0, "critical": 0}
+        by_type: dict[str, int] = {}
+        by_worker: dict[int, int] = {}
         for anomaly in anomalies:
             by_severity[anomaly.severity] = by_severity.get(anomaly.severity, 0) + 1
             by_type[anomaly.anomaly_type] = by_type.get(anomaly.anomaly_type, 0) + 1
             by_worker[anomaly.worker_id] = by_worker.get(anomaly.worker_id, 0) + 1
 
-        hot_workers = [
-            worker for worker, _ in sorted(by_worker.items(), key=lambda item: item[1], reverse=True)
-        ]
+        hot_workers = [worker for worker, _ in sorted(by_worker.items(), key=lambda item: item[1], reverse=True)]
         return {
             "total": len(anomalies),
             "by_severity": by_severity,

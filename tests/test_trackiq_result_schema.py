@@ -1,7 +1,7 @@
 """Tests for canonical TrackIQ result schema and helpers."""
 
-from datetime import datetime
 import json
+from datetime import datetime
 
 import pytest
 

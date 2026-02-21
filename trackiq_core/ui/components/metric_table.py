@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
-
 
 LOWER_IS_BETTER = {
     "power_consumption_watts",
@@ -22,7 +21,7 @@ class MetricTable:
 
     def __init__(
         self,
-        result: Union[TrackiqResult, List[TrackiqResult]],
+        result: TrackiqResult | list[TrackiqResult],
         mode: Literal["single", "comparison"] = "single",
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
@@ -30,10 +29,10 @@ class MetricTable:
         self.mode = mode
         self.theme = theme
 
-    def _format_value(self, value: Optional[float]) -> Any:
+    def _format_value(self, value: float | None) -> Any:
         return "N/A" if value is None else value
 
-    def _single_payload(self) -> Dict[str, Any]:
+    def _single_payload(self) -> dict[str, Any]:
         result = self.result[0] if isinstance(self.result, list) else self.result
         metrics = asdict(result.metrics)
         return {
@@ -41,9 +40,7 @@ class MetricTable:
             "metrics": {name: self._format_value(value) for name, value in metrics.items()},
         }
 
-    def _compare_metric(
-        self, name: str, value_a: Optional[float], value_b: Optional[float]
-    ) -> Dict[str, Any]:
+    def _compare_metric(self, name: str, value_a: float | None, value_b: float | None) -> dict[str, Any]:
         if value_a is None or value_b is None:
             return {
                 "metric": name,
@@ -74,20 +71,17 @@ class MetricTable:
             "winner": winner,
         }
 
-    def _comparison_payload(self) -> Dict[str, Any]:
+    def _comparison_payload(self) -> dict[str, Any]:
         if not isinstance(self.result, list) or len(self.result) != 2:
             raise ValueError("Comparison mode requires exactly two TrackiqResult objects.")
 
         metrics_a = asdict(self.result[0].metrics)
         metrics_b = asdict(self.result[1].metrics)
         all_names = sorted(set(metrics_a.keys()) | set(metrics_b.keys()))
-        rows = [
-            self._compare_metric(name, metrics_a.get(name), metrics_b.get(name))
-            for name in all_names
-        ]
+        rows = [self._compare_metric(name, metrics_a.get(name), metrics_b.get(name)) for name in all_names]
         return {"mode": "comparison", "metrics": rows}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize table payload without any Streamlit dependency."""
         if self.mode == "single":
             return self._single_payload()
@@ -107,10 +101,7 @@ class MetricTable:
                 f"<div style='background:{self.theme.surface_color};height:8px;border-radius:{self.theme.border_radius};margin:4px 0 8px 0;'></div>",
                 unsafe_allow_html=True,
             )
-            rows = [
-                {"Metric": k, "Value": v}
-                for k, v in payload["metrics"].items()
-            ]
+            rows = [{"Metric": k, "Value": v} for k, v in payload["metrics"].items()]
             st.table(rows)
             return
 

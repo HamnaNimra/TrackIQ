@@ -40,10 +40,10 @@ import subprocess
 import threading
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from trackiq_core.hardware.env import command_available
 from trackiq_core.collectors import CollectorBase, CollectorExport
+from trackiq_core.hardware.env import command_available
 
 # Import tegrastats parser from core module
 try:
@@ -81,9 +81,9 @@ class TegrastatsCollector(CollectorBase):
     def __init__(
         self,
         mode: str = "live",
-        filepath: Optional[str] = None,
+        filepath: str | None = None,
         interval_ms: int = 1000,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
         name: str = "TegrastatsCollector",
     ):
         """Initialize the Tegrastats collector.
@@ -126,7 +126,7 @@ class TegrastatsCollector(CollectorBase):
         self._process = None
         self._reader_thread = None
         self._line_buffer: deque = deque(maxlen=self._cfg["buffer_size"])
-        self._file_lines: List[str] = []
+        self._file_lines: list[str] = []
         self._file_index = 0
         self._stop_event = threading.Event()
 
@@ -142,8 +142,7 @@ class TegrastatsCollector(CollectorBase):
         """
         if TegrastatsParser is None:
             raise ImportError(
-                "TegrastatsParser not available. "
-                "Ensure autoperfpy.core.tegrastats module is accessible."
+                "TegrastatsParser not available. " "Ensure autoperfpy.core.tegrastats module is accessible."
             )
 
         self._is_running = True
@@ -173,8 +172,7 @@ class TegrastatsCollector(CollectorBase):
             )
         except FileNotFoundError:
             raise RuntimeError(
-                f"tegrastats not found at '{tegrastats_path}'. "
-                "Ensure you're running on a Jetson/DriveOS platform."
+                f"tegrastats not found at '{tegrastats_path}'. " "Ensure you're running on a Jetson/DriveOS platform."
             )
         except Exception as e:
             raise RuntimeError(f"Failed to start tegrastats: {e}")
@@ -187,10 +185,8 @@ class TegrastatsCollector(CollectorBase):
     def _start_file_collection(self) -> None:
         """Start file-based tegrastats collection."""
         try:
-            with open(self.filepath, "r") as f:
-                self._file_lines = [
-                    line.strip() for line in f if line.strip() and "RAM" in line
-                ]
+            with open(self.filepath) as f:
+                self._file_lines = [line.strip() for line in f if line.strip() and "RAM" in line]
         except FileNotFoundError:
             raise FileNotFoundError(f"Tegrastats file not found: {self.filepath}")
 
@@ -214,7 +210,7 @@ class TegrastatsCollector(CollectorBase):
         except Exception:
             pass  # Process terminated or pipe closed
 
-    def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def sample(self, timestamp: float) -> dict[str, Any] | None:
         """Collect tegrastats metrics at the given timestamp.
 
         For live mode: Returns the most recent tegrastats reading.
@@ -248,7 +244,7 @@ class TegrastatsCollector(CollectorBase):
         else:
             return self._sample_file(timestamp)
 
-    def _sample_live(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def _sample_live(self, timestamp: float) -> dict[str, Any] | None:
         """Get sample from live tegrastats process."""
         if not self._line_buffer:
             # No data available yet
@@ -260,9 +256,7 @@ class TegrastatsCollector(CollectorBase):
         try:
             snapshot = TegrastatsParser.parse_line(line)
             metrics = self._snapshot_to_metrics(snapshot)
-            metrics["is_warmup"] = self._sample_index < self._cfg.get(
-                "warmup_samples", 0
-            )
+            metrics["is_warmup"] = self._sample_index < self._cfg.get("warmup_samples", 0)
 
             # Store sample
             metadata = {
@@ -277,7 +271,7 @@ class TegrastatsCollector(CollectorBase):
         except Exception as e:
             return {"error": str(e)}
 
-    def _sample_file(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def _sample_file(self, timestamp: float) -> dict[str, Any] | None:
         """Get next sample from file."""
         if self._file_index >= len(self._file_lines):
             # End of file
@@ -289,9 +283,7 @@ class TegrastatsCollector(CollectorBase):
         try:
             snapshot = TegrastatsParser.parse_line(line)
             metrics = self._snapshot_to_metrics(snapshot)
-            metrics["is_warmup"] = self._sample_index < self._cfg.get(
-                "warmup_samples", 0
-            )
+            metrics["is_warmup"] = self._sample_index < self._cfg.get("warmup_samples", 0)
 
             # Store sample
             metadata = {
@@ -306,7 +298,7 @@ class TegrastatsCollector(CollectorBase):
         except Exception as e:
             return {"error": str(e)}
 
-    def _snapshot_to_metrics(self, snapshot: TegrastatsSnapshot) -> Dict[str, Any]:
+    def _snapshot_to_metrics(self, snapshot: TegrastatsSnapshot) -> dict[str, Any]:
         """Convert TegrastatsSnapshot to metrics dictionary.
 
         Args:
@@ -401,7 +393,7 @@ class TegrastatsCollector(CollectorBase):
             },
         )
 
-    def _calculate_summary(self) -> Dict[str, Any]:
+    def _calculate_summary(self) -> dict[str, Any]:
         """Calculate summary statistics for collected samples.
 
         Returns:
@@ -411,42 +403,24 @@ class TegrastatsCollector(CollectorBase):
             return {}
 
         warmup_count = self._cfg.get("warmup_samples", 0)
-        steady_samples = (
-            self._samples[warmup_count:]
-            if len(self._samples) > warmup_count
-            else self._samples
-        )
+        steady_samples = self._samples[warmup_count:] if len(self._samples) > warmup_count else self._samples
 
-        def safe_mean(key: str) -> Optional[float]:
-            values = [
-                s.metrics.get(key)
-                for s in steady_samples
-                if s.metrics.get(key) is not None
-            ]
+        def safe_mean(key: str) -> float | None:
+            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
             return sum(values) / len(values) if values else None
 
-        def safe_max(key: str) -> Optional[float]:
-            values = [
-                s.metrics.get(key)
-                for s in steady_samples
-                if s.metrics.get(key) is not None
-            ]
+        def safe_max(key: str) -> float | None:
+            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
             return max(values) if values else None
 
-        def safe_min(key: str) -> Optional[float]:
-            values = [
-                s.metrics.get(key)
-                for s in steady_samples
-                if s.metrics.get(key) is not None
-            ]
+        def safe_min(key: str) -> float | None:
+            values = [s.metrics.get(key) for s in steady_samples if s.metrics.get(key) is not None]
             return min(values) if values else None
 
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (
-                (self._end_time - self._start_time) if self._end_time else None
-            ),
+            "duration_seconds": ((self._end_time - self._start_time) if self._end_time else None),
             "mode": self.mode,
             "cpu": {
                 "mean_percent": safe_mean("cpu_percent"),
@@ -463,11 +437,7 @@ class TegrastatsCollector(CollectorBase):
                 "mean_mb": safe_mean("memory_used_mb"),
                 "max_mb": safe_max("memory_used_mb"),
                 "min_mb": safe_min("memory_used_mb"),
-                "total_mb": (
-                    steady_samples[0].metrics.get("memory_total_mb")
-                    if steady_samples
-                    else None
-                ),
+                "total_mb": (steady_samples[0].metrics.get("memory_total_mb") if steady_samples else None),
                 "mean_percent": safe_mean("memory_percent"),
             },
             "temperature": {

@@ -2,7 +2,6 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Dict, List, Optional
 
 
 class PerformanceVisualizer:
@@ -23,7 +22,7 @@ class PerformanceVisualizer:
 
     def plot_latency_percentiles(
         self,
-        latencies_by_workload: Dict[str, Dict[str, float]],
+        latencies_by_workload: dict[str, dict[str, float]],
         title: str = "Latency Percentiles Comparison",
     ) -> plt.Figure:
         """Create percentile latency comparison graph.
@@ -84,9 +83,9 @@ class PerformanceVisualizer:
 
     def plot_latency_throughput_tradeoff(
         self,
-        batch_sizes: List[int],
-        latencies: List[float],
-        throughputs: List[float],
+        batch_sizes: list[int],
+        latencies: list[float],
+        throughputs: list[float],
         title: str = "Latency vs Throughput Trade-off",
     ) -> plt.Figure:
         """Create latency vs throughput trade-off graph.
@@ -119,9 +118,7 @@ class PerformanceVisualizer:
 
         ax2 = ax1.twinx()
         color = "tab:orange"
-        ax2.set_ylabel(
-            "Throughput (items/sec)", color=color, fontsize=12, fontweight="bold"
-        )
+        ax2.set_ylabel("Throughput (items/sec)", color=color, fontsize=12, fontweight="bold")
         line2 = ax2.plot(
             batch_sizes,
             throughputs,
@@ -146,9 +143,9 @@ class PerformanceVisualizer:
 
     def plot_power_vs_performance(
         self,
-        workloads: List[str],
-        power_values: List[float],
-        performance_values: List[float],
+        workloads: list[str],
+        power_values: list[float],
+        performance_values: list[float],
         title: str = "Power vs Performance",
     ) -> plt.Figure:
         """Create power consumption vs performance scatter plot.
@@ -188,9 +185,9 @@ class PerformanceVisualizer:
 
     def plot_gpu_memory_timeline(
         self,
-        timestamps: List[float],
-        memory_used: List[float],
-        memory_total: Optional[List[float]] = None,
+        timestamps: list[float],
+        memory_used: list[float],
+        memory_total: list[float] | None = None,
         title: str = "GPU Memory Usage Over Time",
     ) -> plt.Figure:
         """Create GPU memory usage timeline.
@@ -240,7 +237,7 @@ class PerformanceVisualizer:
     def plot_relative_performance(
         self,
         baseline_name: str,
-        metrics_data: Dict[str, Dict[str, float]],
+        metrics_data: dict[str, dict[str, float]],
         title: str = "Relative Performance Comparison",
     ) -> plt.Figure:
         """Create relative performance comparison (normalized to baseline).
@@ -271,10 +268,7 @@ class PerformanceVisualizer:
 
         for i, metric in enumerate(metrics):
             baseline_value = baseline[metric]
-            relative_values = [
-                metrics_data[cfg].get(metric, baseline_value) / baseline_value * 100
-                for cfg in configs
-            ]
+            relative_values = [metrics_data[cfg].get(metric, baseline_value) / baseline_value * 100 for cfg in configs]
 
             ax.bar(
                 x + (i - len(metrics) / 2) * width,
@@ -300,7 +294,7 @@ class PerformanceVisualizer:
 
     def plot_distribution(
         self,
-        data_dict: Dict[str, List[float]],
+        data_dict: dict[str, list[float]],
         title: str = "Distribution Comparison",
         bins: int = 30,
     ) -> plt.Figure:
@@ -352,7 +346,7 @@ class PerformanceVisualizer:
 
     def plot_layer_timings(
         self,
-        layers: List[Dict[str, any]],
+        layers: list[dict[str, any]],
         title: str = "DNN Layer Execution Times",
         top_n: int = 10,
     ) -> plt.Figure:
@@ -376,14 +370,12 @@ class PerformanceVisualizer:
         fig, ax = plt.subplots(figsize=(12, 8))
 
         # Sort by time and take top N
-        sorted_layers = sorted(layers, key=lambda x: x.get("time_ms", 0), reverse=True)[
-            :top_n
-        ]
+        sorted_layers = sorted(layers, key=lambda x: x.get("time_ms", 0), reverse=True)[:top_n]
         sorted_layers = sorted_layers[::-1]  # Reverse for horizontal bar
 
-        names = [l.get("name", "unknown") for l in sorted_layers]
-        times = [l.get("time_ms", 0) for l in sorted_layers]
-        devices = [l.get("device", "GPU") for l in sorted_layers]
+        names = [layer.get("name", "unknown") for layer in sorted_layers]
+        times = [layer.get("time_ms", 0) for layer in sorted_layers]
+        devices = [layer.get("device", "GPU") for layer in sorted_layers]
 
         # Color by device
         colors = ["#FF6B6B" if d.startswith("DLA") else "#4ECDC4" for d in devices]
@@ -465,7 +457,7 @@ class PerformanceVisualizer:
 
     def plot_memory_transfer_timeline(
         self,
-        transfers: List[Dict[str, any]],
+        transfers: list[dict[str, any]],
         title: str = "Memory Transfer Timeline",
     ) -> plt.Figure:
         """Create bar chart of memory transfer times.
@@ -480,24 +472,14 @@ class PerformanceVisualizer:
         fig, ax = plt.subplots(figsize=(10, 6))
 
         if not transfers:
-            ax.text(
-                0.5, 0.5, "No memory transfers", ha="center", va="center", fontsize=14
-            )
+            ax.text(0.5, 0.5, "No memory transfers", ha="center", va="center", fontsize=14)
             ax.set_title(title, fontsize=14, fontweight="bold")
             plt.tight_layout()
             self.figures.append(fig)
             return fig
 
-        h2d_times = [
-            t.get("duration_ms", 0)
-            for t in transfers
-            if t.get("transfer_type") == "H2D"
-        ]
-        d2h_times = [
-            t.get("duration_ms", 0)
-            for t in transfers
-            if t.get("transfer_type") == "D2H"
-        ]
+        h2d_times = [t.get("duration_ms", 0) for t in transfers if t.get("transfer_type") == "H2D"]
+        d2h_times = [t.get("duration_ms", 0) for t in transfers if t.get("transfer_type") == "D2H"]
 
         x = np.arange(max(len(h2d_times), len(d2h_times)))
         width = 0.35
@@ -533,7 +515,7 @@ class PerformanceVisualizer:
 
     def plot_batch_scaling(
         self,
-        batch_metrics: List[Dict[str, any]],
+        batch_metrics: list[dict[str, any]],
         title: str = "Batch Size Scaling Analysis",
     ) -> plt.Figure:
         """Create dual-axis plot showing latency and throughput vs batch size.
@@ -584,7 +566,7 @@ class PerformanceVisualizer:
         ax3 = ax1.twinx()
         ax3.spines["right"].set_position(("outward", 60))
         color3 = "#2ECC71"
-        efficiency = [t / l if l > 0 else 0 for t, l in zip(throughputs, latencies)]
+        efficiency = [throughput / latency if latency > 0 else 0 for throughput, latency in zip(throughputs, latencies)]
         line3 = ax3.plot(
             batch_sizes,
             efficiency,
@@ -612,7 +594,7 @@ class PerformanceVisualizer:
 
     def plot_tegrastats_overview(
         self,
-        metrics: Dict[str, any],
+        metrics: dict[str, any],
         title: str = "Tegrastats System Overview",
     ) -> plt.Figure:
         """Create multi-panel overview of Tegrastats metrics.
@@ -632,14 +614,9 @@ class PerformanceVisualizer:
         if cpu_data:
             cores = list(cpu_data.keys())
             utilizations = [cpu_data[c].get("utilization", 0) for c in cores]
-            colors = [
-                "#E74C3C" if u > 80 else "#F39C12" if u > 50 else "#2ECC71"
-                for u in utilizations
-            ]
+            colors = ["#E74C3C" if u > 80 else "#F39C12" if u > 50 else "#2ECC71" for u in utilizations]
             ax1.bar(cores, utilizations, color=colors, alpha=0.8)
-            ax1.axhline(
-                y=80, color="red", linestyle="--", alpha=0.5, label="High (80%)"
-            )
+            ax1.axhline(y=80, color="red", linestyle="--", alpha=0.5, label="High (80%)")
             ax1.set_ylim(0, 100)
         ax1.set_xlabel("CPU Core", fontsize=10, fontweight="bold")
         ax1.set_ylabel("Utilization (%)", fontsize=10, fontweight="bold")
@@ -653,9 +630,7 @@ class PerformanceVisualizer:
         ax2.barh(["Utilization"], [gpu_util], color="#9B59B6", alpha=0.8, height=0.4)
         ax2.set_xlim(0, 100)
         ax2.set_xlabel("Percentage / Value", fontsize=10, fontweight="bold")
-        ax2.set_title(
-            f"GPU: {gpu_util}% @ {gpu_freq}MHz", fontsize=12, fontweight="bold"
-        )
+        ax2.set_title(f"GPU: {gpu_util}% @ {gpu_freq}MHz", fontsize=12, fontweight="bold")
         ax2.grid(axis="x", alpha=0.3)
 
         # Memory Usage
@@ -680,17 +655,10 @@ class PerformanceVisualizer:
         if thermal:
             zones = list(thermal.keys())
             temps = [thermal[z] for z in zones]
-            colors = [
-                "#E74C3C" if t > 80 else "#F39C12" if t > 60 else "#2ECC71"
-                for t in temps
-            ]
+            colors = ["#E74C3C" if t > 80 else "#F39C12" if t > 60 else "#2ECC71" for t in temps]
             ax4.bar(zones, temps, color=colors, alpha=0.8)
-            ax4.axhline(
-                y=80, color="red", linestyle="--", alpha=0.5, label="Critical (80°C)"
-            )
-            ax4.axhline(
-                y=60, color="orange", linestyle="--", alpha=0.5, label="Warning (60°C)"
-            )
+            ax4.axhline(y=80, color="red", linestyle="--", alpha=0.5, label="Critical (80°C)")
+            ax4.axhline(y=60, color="orange", linestyle="--", alpha=0.5, label="Warning (60°C)")
         ax4.set_xlabel("Thermal Zone", fontsize=10, fontweight="bold")
         ax4.set_ylabel("Temperature (°C)", fontsize=10, fontweight="bold")
         ax4.set_title("Thermal Status", fontsize=12, fontweight="bold")
@@ -704,7 +672,7 @@ class PerformanceVisualizer:
 
     def plot_tegrastats_timeline(
         self,
-        timeline_data: List[Dict[str, any]],
+        timeline_data: list[dict[str, any]],
         title: str = "Tegrastats Timeline",
     ) -> plt.Figure:
         """Create timeline plot of Tegrastats metrics over time.
@@ -767,7 +735,7 @@ class PerformanceVisualizer:
 
     def plot_efficiency_metrics(
         self,
-        efficiency_data: Dict[str, Dict[str, float]],
+        efficiency_data: dict[str, dict[str, float]],
         title: str = "Efficiency Metrics Comparison",
     ) -> plt.Figure:
         """Create multi-bar chart comparing efficiency metrics across workloads.
@@ -852,10 +820,10 @@ class PerformanceVisualizer:
 
     def plot_pareto_frontier(
         self,
-        workloads: List[str],
-        latencies: List[float],
-        throughputs: List[float],
-        power_values: List[float],
+        workloads: list[str],
+        latencies: list[float],
+        throughputs: list[float],
+        power_values: list[float],
         title: str = "Pareto Frontier: Latency vs Throughput",
     ) -> plt.Figure:
         """Create scatter plot with Pareto frontier for efficiency analysis.
@@ -920,7 +888,7 @@ class PerformanceVisualizer:
 
     def plot_variability_metrics(
         self,
-        variability_data: Dict[str, Dict[str, float]],
+        variability_data: dict[str, dict[str, float]],
         title: str = "Latency Variability Analysis",
     ) -> plt.Figure:
         """Create variability metrics comparison chart.
@@ -941,13 +909,9 @@ class PerformanceVisualizer:
         # Coefficient of Variation
         ax1 = axes[0]
         cv = [variability_data[w].get("cv_percent", 0) for w in workloads]
-        colors1 = [
-            "#E74C3C" if c > 20 else "#F39C12" if c > 10 else "#2ECC71" for c in cv
-        ]
+        colors1 = ["#E74C3C" if c > 20 else "#F39C12" if c > 10 else "#2ECC71" for c in cv]
         ax1.bar(x, cv, color=colors1, alpha=0.8)
-        ax1.axhline(
-            y=10, color="orange", linestyle="--", alpha=0.5, label="Moderate (10%)"
-        )
+        ax1.axhline(y=10, color="orange", linestyle="--", alpha=0.5, label="Moderate (10%)")
         ax1.axhline(y=20, color="red", linestyle="--", alpha=0.5, label="High (20%)")
         ax1.set_xlabel("Workload", fontsize=10, fontweight="bold")
         ax1.set_ylabel("CV (%)", fontsize=10, fontweight="bold")
@@ -986,9 +950,9 @@ class PerformanceVisualizer:
 
     def plot_consistency_rating(
         self,
-        workloads: List[str],
-        ratings: List[str],
-        cv_values: List[float],
+        workloads: list[str],
+        ratings: list[str],
+        cv_values: list[float],
         title: str = "Consistency Rating Overview",
     ) -> plt.Figure:
         """Create visual consistency rating chart.
@@ -1040,7 +1004,7 @@ class PerformanceVisualizer:
 
     def plot_outlier_analysis(
         self,
-        latencies: List[float],
+        latencies: list[float],
         workload_name: str = "Workload",
         title: str = "Outlier Analysis",
     ) -> plt.Figure:
@@ -1095,12 +1059,10 @@ class PerformanceVisualizer:
             label=f"Median: {np.median(latencies):.1f}",
         )
 
-        outliers = [l for l in latencies if l < lower_bound or l > upper_bound]
+        outliers = [latency for latency in latencies if latency < lower_bound or latency > upper_bound]
         ax2.set_xlabel("Latency (ms)", fontsize=12, fontweight="bold")
         ax2.set_ylabel("Frequency", fontsize=12, fontweight="bold")
-        ax2.set_title(
-            f"Distribution ({len(outliers)} outliers)", fontsize=12, fontweight="bold"
-        )
+        ax2.set_title(f"Distribution ({len(outliers)} outliers)", fontsize=12, fontweight="bold")
         ax2.legend(fontsize=9)
         ax2.grid(axis="y", alpha=0.3)
 

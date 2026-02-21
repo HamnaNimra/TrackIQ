@@ -57,9 +57,7 @@ def make_result(
             tokens_per_sec=tokens_per_sec,
             decode_tpt_ms=decode_tpt,
         ),
-        regression=RegressionInfo(
-            baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
-        ),
+        regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
     )
 
 

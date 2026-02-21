@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import streamlit as st
 
@@ -107,9 +106,7 @@ def main() -> None:
         label_b=st.session_state.get("compare_label_b", label_b),
     ).compare(a, b)
     summary = SummaryGenerator(
-        regression_threshold_percent=float(
-            st.session_state.get("compare_regression_threshold", regression_threshold)
-        )
+        regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold))
     ).generate(comp)
     top = summary.largest_deltas[:3]
     col1, col2, col3 = st.columns(3)
@@ -121,10 +118,9 @@ def main() -> None:
         st.metric("Flagged Regressions", len(summary.flagged_regressions))
     if top:
         st.caption(
-            "Top deltas: " + " | ".join(
-                f"{item.metric_name} ({item.percent_delta:+.2f}%)"
-                for item in top
-                if item.percent_delta is not None
+            "Top deltas: "
+            + " | ".join(
+                f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in top if item.percent_delta is not None
             )
         )
 
@@ -133,9 +129,7 @@ def main() -> None:
         result_b=b,
         label_a=st.session_state.get("compare_label_a"),
         label_b=st.session_state.get("compare_label_b"),
-        regression_threshold_percent=float(
-            st.session_state.get("compare_regression_threshold", regression_threshold)
-        ),
+        regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold)),
     )
     dash.apply_theme(dash.theme)
     dash.render_sidebar()

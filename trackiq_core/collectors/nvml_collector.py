@@ -39,9 +39,10 @@ Authors:
 
 import random
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from trackiq_core.utils.stats import percentile as _percentile, stats_from_values
+from trackiq_core.utils.stats import percentile as _percentile
+from trackiq_core.utils.stats import stats_from_values
 
 from .base import CollectorBase, CollectorExport, CollectorSample
 
@@ -78,9 +79,7 @@ class NVMLCollector(CollectorBase):
     # Capability flags for supported metrics/features
     supports_latency = True  # Collector provides latency measurement (if applicable, e.g. for GPU work submission)
     supports_throughput = True  # Collector can provide throughput metrics (e.g. processing rate, operations/sec)
-    supports_bandwidth = (
-        True  # Collector provides PCIe/memory bandwidth metrics (if available)
-    )
+    supports_bandwidth = True  # Collector provides PCIe/memory bandwidth metrics (if available)
     supports_power = True  # Reads GPU power consumption
     supports_utilization = True  # Reads GPU/memory utilization
     supports_temperature = True  # Reads GPU temperature
@@ -90,7 +89,7 @@ class NVMLCollector(CollectorBase):
     def __init__(
         self,
         device_index: int = 0,
-        config: Optional[Dict[str, Any]] = None,
+        config: dict[str, Any] | None = None,
         name: str = "NVMLCollector",
     ):
         """Initialize the NVML collector.
@@ -156,10 +155,7 @@ class NVMLCollector(CollectorBase):
         try:
             import pynvml  # provided by nvidia-ml-py
         except ImportError:
-            raise ImportError(
-                "nvidia-ml-py is required for NVMLCollector. "
-                "Install with: pip install nvidia-ml-py"
-            )
+            raise ImportError("nvidia-ml-py is required for NVMLCollector. " "Install with: pip install nvidia-ml-py")
 
         try:
             pynvml.nvmlInit()
@@ -168,10 +164,7 @@ class NVMLCollector(CollectorBase):
             # Get device handle
             device_count = pynvml.nvmlDeviceGetCount()
             if self._device_index >= device_count:
-                raise RuntimeError(
-                    f"Device index {self._device_index} out of range. "
-                    f"Found {device_count} GPU(s)."
-                )
+                raise RuntimeError(f"Device index {self._device_index} out of range. " f"Found {device_count} GPU(s).")
 
             self._handle = pynvml.nvmlDeviceGetHandleByIndex(self._device_index)
 
@@ -189,7 +182,7 @@ class NVMLCollector(CollectorBase):
         self._sample_index = 0
         self._samples.clear()
 
-    def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def sample(self, timestamp: float) -> dict[str, Any] | None:
         """Collect GPU metrics at the given timestamp.
 
         Args:
@@ -248,9 +241,7 @@ class NVMLCollector(CollectorBase):
 
             # Temperature
             try:
-                temp = pynvml.nvmlDeviceGetTemperature(
-                    self._handle, pynvml.NVML_TEMPERATURE_GPU
-                )
+                temp = pynvml.nvmlDeviceGetTemperature(self._handle, pynvml.NVML_TEMPERATURE_GPU)
                 metrics["temperature_c"] = temp
             except pynvml.NVMLError:
                 metrics["temperature_c"] = 0.0
@@ -265,17 +256,13 @@ class NVMLCollector(CollectorBase):
             # Clock frequencies
             if self._cfg.get("include_clocks", True):
                 try:
-                    sm_clock = pynvml.nvmlDeviceGetClockInfo(
-                        self._handle, pynvml.NVML_CLOCK_SM
-                    )
+                    sm_clock = pynvml.nvmlDeviceGetClockInfo(self._handle, pynvml.NVML_CLOCK_SM)
                     metrics["sm_clock_mhz"] = sm_clock
                 except pynvml.NVMLError:
                     metrics["sm_clock_mhz"] = None
 
                 try:
-                    mem_clock = pynvml.nvmlDeviceGetClockInfo(
-                        self._handle, pynvml.NVML_CLOCK_MEM
-                    )
+                    mem_clock = pynvml.nvmlDeviceGetClockInfo(self._handle, pynvml.NVML_CLOCK_MEM)
                     metrics["memory_clock_mhz"] = mem_clock
                 except pynvml.NVMLError:
                     metrics["memory_clock_mhz"] = None
@@ -283,12 +270,8 @@ class NVMLCollector(CollectorBase):
             # PCIe throughput
             if self._cfg.get("include_pcie", False):
                 try:
-                    tx = pynvml.nvmlDeviceGetPcieThroughput(
-                        self._handle, pynvml.NVML_PCIE_UTIL_TX_BYTES
-                    )
-                    rx = pynvml.nvmlDeviceGetPcieThroughput(
-                        self._handle, pynvml.NVML_PCIE_UTIL_RX_BYTES
-                    )
+                    tx = pynvml.nvmlDeviceGetPcieThroughput(self._handle, pynvml.NVML_PCIE_UTIL_TX_BYTES)
+                    rx = pynvml.nvmlDeviceGetPcieThroughput(self._handle, pynvml.NVML_PCIE_UTIL_RX_BYTES)
                     metrics["pcie_tx_kbps"] = tx
                     metrics["pcie_rx_kbps"] = rx
                 except pynvml.NVMLError:
@@ -400,7 +383,7 @@ class NVMLCollector(CollectorBase):
             },
         )
 
-    def _calculate_summary(self) -> Dict[str, Any]:
+    def _calculate_summary(self) -> dict[str, Any]:
         """Calculate summary statistics for collected samples.
 
         Returns:
@@ -411,38 +394,24 @@ class NVMLCollector(CollectorBase):
             return {}
 
         warmup_count = self._cfg.get("warmup_samples", 0)
-        steady_samples = (
-            self._samples[warmup_count:]
-            if len(self._samples) > warmup_count
-            else self._samples
-        )
+        steady_samples = self._samples[warmup_count:] if len(self._samples) > warmup_count else self._samples
 
-        def _safe_stats(key: str, samples: List[CollectorSample]) -> Dict[str, float]:
-            values = [
-                s.metrics.get(key) for s in samples if s.metrics.get(key) is not None
-            ]
+        def _safe_stats(key: str, samples: list[CollectorSample]) -> dict[str, float]:
+            values = [s.metrics.get(key) for s in samples if s.metrics.get(key) is not None]
             return stats_from_values(values)
 
         # Extract latency values for percentile calculations
-        latencies = [
-            s.metrics.get("latency_ms")
-            for s in steady_samples
-            if s.metrics.get("latency_ms") is not None
-        ]
+        latencies = [s.metrics.get("latency_ms") for s in steady_samples if s.metrics.get("latency_ms") is not None]
 
         # Extract throughput values
         throughputs = [
-            s.metrics.get("throughput_fps")
-            for s in steady_samples
-            if s.metrics.get("throughput_fps") is not None
+            s.metrics.get("throughput_fps") for s in steady_samples if s.metrics.get("throughput_fps") is not None
         ]
 
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (
-                (self._end_time - self._start_time) if self._end_time else None
-            ),
+            "duration_seconds": ((self._end_time - self._start_time) if self._end_time else None),
             "device": {
                 "index": self._device_index,
                 "name": self._device_name,
@@ -464,16 +433,12 @@ class NVMLCollector(CollectorBase):
             },
             # CPU utilization (required for UI utilization charts)
             "cpu": {
-                "mean_percent": _safe_stats("cpu_percent", steady_samples).get(
-                    "mean", 0
-                ),
+                "mean_percent": _safe_stats("cpu_percent", steady_samples).get("mean", 0),
                 "max_percent": _safe_stats("cpu_percent", steady_samples).get("max", 0),
             },
             # GPU utilization
             "gpu": {
-                "mean_percent": _safe_stats("gpu_percent", steady_samples).get(
-                    "mean", 0
-                ),
+                "mean_percent": _safe_stats("gpu_percent", steady_samples).get("mean", 0),
                 "max_percent": _safe_stats("gpu_percent", steady_samples).get("max", 0),
             },
             # Memory utilization
@@ -486,11 +451,7 @@ class NVMLCollector(CollectorBase):
                 "mean_mb": _safe_stats("memory_used_mb", steady_samples).get("mean"),
                 "max_mb": _safe_stats("memory_used_mb", steady_samples).get("max"),
                 "min_mb": _safe_stats("memory_used_mb", steady_samples).get("min"),
-                "total_mb": (
-                    steady_samples[0].metrics.get("memory_total_mb")
-                    if steady_samples
-                    else None
-                ),
+                "total_mb": (steady_samples[0].metrics.get("memory_total_mb") if steady_samples else None),
             },
             # Power consumption
             "power": {
@@ -504,7 +465,7 @@ class NVMLCollector(CollectorBase):
             },
         }
 
-    def get_device_info(self) -> Dict[str, Any]:
+    def get_device_info(self) -> dict[str, Any]:
         """Get detailed information about the GPU device.
 
         Returns:
@@ -553,16 +514,14 @@ class NVMLCollector(CollectorBase):
             pass
 
         try:
-            info["compute_capability"] = pynvml.nvmlDeviceGetCudaComputeCapability(
-                self._handle
-            )
+            info["compute_capability"] = pynvml.nvmlDeviceGetCudaComputeCapability(self._handle)
         except (pynvml.NVMLError, AttributeError):
             pass
 
         return info
 
     @staticmethod
-    def get_available_devices() -> List[Dict[str, Any]]:
+    def get_available_devices() -> list[dict[str, Any]]:
         """Get list of available NVIDIA GPUs.
 
         Returns:
@@ -574,9 +533,7 @@ class NVMLCollector(CollectorBase):
         try:
             import pynvml
         except ImportError:
-            raise ImportError(
-                "nvidia-ml-py required. Install with: pip install nvidia-ml-py"
-            )
+            raise ImportError("nvidia-ml-py required. Install with: pip install nvidia-ml-py")
 
         devices = []
         try:

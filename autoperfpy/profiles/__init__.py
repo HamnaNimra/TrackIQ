@@ -23,21 +23,20 @@ Example usage:
     collector = SyntheticCollector(config=profile.get_synthetic_config())
 """
 
-from .profiles import (
-    Profile,
+from .profiles import (  # Predefined profiles
+    AUTOMOTIVE_SAFETY,
+    CI_SMOKE,
+    EDGE_LOW_POWER,
+    EDGE_MAX_PERF,
     CollectorType,
+    Profile,
     ProfileValidationError,
     get_profile,
+    get_profile_info,
     list_profiles,
     register_profile,
-    get_profile_info,
     validate_profile_collector,
     validate_profile_precision,
-    # Predefined profiles
-    AUTOMOTIVE_SAFETY,
-    EDGE_MAX_PERF,
-    EDGE_LOW_POWER,
-    CI_SMOKE,
 )
 
 __all__ = [

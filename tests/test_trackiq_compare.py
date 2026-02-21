@@ -19,9 +19,7 @@ class TestRegressionDetectorCompare:
         comparisons = detector.compare_metrics(baseline, current, th)
         assert "p99_latency_ms" in comparisons
         assert comparisons["p99_latency_ms"].is_regression is True
-        assert comparisons["p99_latency_ms"].percent_change == pytest.approx(
-            12.0, rel=0.1
-        )
+        assert comparisons["p99_latency_ms"].percent_change == pytest.approx(12.0, rel=0.1)
 
     def test_compare_metrics_throughput_decrease_is_regression(self):
         baseline = {"throughput_fps": 100.0}

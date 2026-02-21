@@ -3,16 +3,16 @@
 Extends trackiq_core.configs.Config with automotive-specific defaults and property accessors.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from trackiq_core.configs.config import Config as TrackIQConfig
 
 from .defaults import (
     DEFAULT_CONFIG,
+    AnalysisConfig,
     BenchmarkConfig,
     LLMConfig,
     MonitoringConfig,
-    AnalysisConfig,
     ProcessMonitorConfig,
 )
 
@@ -24,7 +24,7 @@ class Config(TrackIQConfig):
     and property accessors for typed config sections.
     """
 
-    def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
+    def __init__(self, config_dict: dict[str, Any] | None = None):
         """Initialize configuration with automotive defaults.
 
         Args:
@@ -123,7 +123,7 @@ class ConfigManager:
         TrackIQConfigManager.save_json(config, filepath)
 
     @staticmethod
-    def load_or_default(filepath: Optional[str] = None) -> Config:
+    def load_or_default(filepath: str | None = None) -> Config:
         """Load configuration from file or return automotive defaults.
 
         Args:

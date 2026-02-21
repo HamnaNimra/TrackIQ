@@ -3,13 +3,11 @@
 Re-exports generic CLI utilities from trackiq_core and adds AutoPerfPy-specific wrappers.
 """
 
-from typing import Optional, Tuple
-
-from trackiq_core.cli.utils import output_path as _trackiq_output_path
-from trackiq_core.cli.utils import write_result_to_csv as _trackiq_write_csv
-from trackiq_core.cli.utils import run_default_benchmark as _trackiq_run_benchmark
-from autoperfpy.device_config import resolve_device
 from autoperfpy.auto_runner import run_single_benchmark
+from autoperfpy.device_config import resolve_device
+from trackiq_core.cli.utils import output_path as _trackiq_output_path
+from trackiq_core.cli.utils import run_default_benchmark as _trackiq_run_benchmark
+from trackiq_core.cli.utils import write_result_to_csv as _trackiq_write_csv
 
 
 # Re-export with backward-compatible names
@@ -24,9 +22,9 @@ def _write_result_to_csv(result: dict, path: str) -> bool:
 
 
 def _run_default_benchmark(
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     duration_seconds: int = 10,
-) -> Tuple[dict, Optional[str], Optional[str]]:
+) -> tuple[dict, str | None, str | None]:
     """Run a short benchmark for AutoPerfPy and return (data_dict, temp_csv_path, temp_json_path)."""
     return _trackiq_run_benchmark(
         device_resolver_fn=resolve_device,

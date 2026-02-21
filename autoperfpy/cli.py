@@ -11,70 +11,70 @@ import sys
 import tempfile
 import time
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
-from autoperfpy.config import ConfigManager
+import matplotlib
+import numpy as np
+
 from autoperfpy.analyzers import (
-    PercentileLatencyAnalyzer,
-    LogAnalyzer,
     DNNPipelineAnalyzer,
-    TegrastatsAnalyzer,
     EfficiencyAnalyzer,
+    LogAnalyzer,
+    PercentileLatencyAnalyzer,
+    TegrastatsAnalyzer,
     VariabilityAnalyzer,
 )
 from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
-from autoperfpy.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
-from autoperfpy.reporting import (
-    PerformanceVisualizer,
-    PDFReportGenerator,
-    HTMLReportGenerator,
-)
 from autoperfpy.collectors import SyntheticCollector
+from autoperfpy.config import ConfigManager
+from autoperfpy.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 from autoperfpy.profiles import (
+    CollectorType,
+    ProfileValidationError,
     get_profile,
     get_profile_info,
     validate_profile_collector,
     validate_profile_precision,
-    CollectorType,
-    ProfileValidationError,
 )
-from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
-from trackiq_core.utils.errors import HardwareNotFoundError, DependencyError
-from trackiq_core.hardware import DeviceProfile, get_all_devices
-from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
+from autoperfpy.reporting import (
+    HTMLReportGenerator,
+    PDFReportGenerator,
+    PerformanceVisualizer,
+)
+from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
+from trackiq_core.hardware import DeviceProfile
+from trackiq_core.power_profiler import PowerProfiler, detect_power_source
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError
 from trackiq_core.schema import (
     KVCacheInfo,
-    Metrics as TrackiqMetrics,
     PlatformInfo,
     RegressionInfo,
     TrackiqResult,
     WorkloadInfo,
 )
+from trackiq_core.schema import Metrics as TrackiqMetrics
 from trackiq_core.serializer import save_trackiq_result
-from trackiq_core.power_profiler import PowerProfiler, detect_power_source
-import numpy as np
-import matplotlib
+from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 
 matplotlib.use("Agg")
 
 # Phase 5: auto/manual run
+from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
 from autoperfpy.device_config import (
     DEFAULT_BATCH_SIZES,
     DEFAULT_ITERATIONS,
     DEFAULT_WARMUP_RUNS,
-    InferenceConfig,
-    PRECISION_FP32,
-    PRECISION_FP16,
     PRECISION_BF16,
-    PRECISION_INT8,
+    PRECISION_FP16,
+    PRECISION_FP32,
     PRECISION_INT4,
+    PRECISION_INT8,
     PRECISIONS,
-    resolve_precision_for_device,
+    InferenceConfig,
     get_devices_and_configs_auto,
     resolve_device,
+    resolve_precision_for_device,
 )
-from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -157,29 +157,19 @@ Environment Variables:
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Profiles command
-    profiles_parser = subparsers.add_parser(
-        "profiles", help="List and inspect performance profiles"
-    )
-    profiles_parser.add_argument(
-        "--list", "-l", action="store_true", help="List all available profiles"
-    )
-    profiles_parser.add_argument(
-        "--info", "-i", metavar="NAME", help="Show detailed info for a profile"
-    )
+    profiles_parser = subparsers.add_parser("profiles", help="List and inspect performance profiles")
+    profiles_parser.add_argument("--list", "-l", action="store_true", help="List all available profiles")
+    profiles_parser.add_argument("--info", "-i", metavar="NAME", help="Show detailed info for a profile")
 
     # Devices command (list detected hardware for run --auto / --device)
     devices_parser = subparsers.add_parser(
         "devices",
         help="List detected devices (GPUs, CPU, Jetson/DRIVE). Use before run --auto.",
     )
-    devices_parser.add_argument(
-        "--list", "-l", action="store_true", help="List all detected devices (default)"
-    )
+    devices_parser.add_argument("--list", "-l", action="store_true", help="List all detected devices (default)")
 
     # Run command (profile-based, auto, or manual)
-    run_parser = subparsers.add_parser(
-        "run", help="Run performance test (auto-detect devices, profile, or manual)"
-    )
+    run_parser = subparsers.add_parser("run", help="Run performance test (auto-detect devices, profile, or manual)")
     run_parser.add_argument(
         "--profile",
         "-p",
@@ -209,29 +199,17 @@ Environment Variables:
         type=int,
         help="Duration in seconds (default: 10 for auto, profile value for profile)",
     )
-    run_parser.add_argument(
-        "--batch-size", "-b", type=int, help="Batch size (manual or override)"
-    )
-    run_parser.add_argument(
-        "--iterations", "-n", type=int, help="Override number of iterations"
-    )
-    run_parser.add_argument(
-        "--warmup", "-w", type=int, help="Override warmup iterations"
-    )
-    run_parser.add_argument(
-        "--export", "-e", metavar="FILE", help="Export results to JSON file"
-    )
+    run_parser.add_argument("--batch-size", "-b", type=int, help="Batch size (manual or override)")
+    run_parser.add_argument("--iterations", "-n", type=int, help="Override number of iterations")
+    run_parser.add_argument("--warmup", "-w", type=int, help="Override warmup iterations")
+    run_parser.add_argument("--export", "-e", metavar="FILE", help="Export results to JSON file")
     run_parser.add_argument(
         "--export-csv",
         metavar="FILE",
         help="Export run samples to CSV (timestamp, workload, batch_size, latency_ms, power_w, throughput). Use with analyze/report.",
     )
-    run_parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Minimal output (summary only)"
-    )
-    run_parser.add_argument(
-        "--validate-only", action="store_true", help="Validate profile and exit"
-    )
+    run_parser.add_argument("--quiet", "-q", action="store_true", help="Minimal output (summary only)")
+    run_parser.add_argument("--validate-only", action="store_true", help="Validate profile and exit")
     run_parser.add_argument(
         "--device",
         "-D",
@@ -247,18 +225,12 @@ Environment Variables:
         "-P",
         choices=PRECISIONS,
         default=PRECISION_FP32,
-        help=(
-            "Inference precision "
-            f"(default: {PRECISION_FP32}; supported: {', '.join(PRECISIONS)})"
-        ),
+        help=("Inference precision " f"(default: {PRECISION_FP32}; supported: {', '.join(PRECISIONS)})"),
     )
     run_parser.add_argument(
         "--precisions",
         default=f"{PRECISION_FP32},{PRECISION_FP16}",
-        help=(
-            "Auto mode: comma-separated precisions "
-            f"(default: {PRECISION_FP32},{PRECISION_FP16})"
-        ),
+        help=("Auto mode: comma-separated precisions " f"(default: {PRECISION_FP32},{PRECISION_FP16})"),
     )
     run_parser.add_argument(
         "--batch-sizes",
@@ -278,32 +250,22 @@ Environment Variables:
     )
 
     # Compare command (uses trackiq comparison module)
-    compare_parser = subparsers.add_parser(
-        "compare", help="Compare run results against a baseline (trackiq)"
-    )
-    compare_parser.add_argument(
-        "--baseline", "-b", required=True, help="Baseline name or path to baseline JSON"
-    )
-    compare_parser.add_argument(
-        "--current", "-c", required=True, help="Path to current run JSON (metrics)"
-    )
+    compare_parser = subparsers.add_parser("compare", help="Compare run results against a baseline (trackiq)")
+    compare_parser.add_argument("--baseline", "-b", required=True, help="Baseline name or path to baseline JSON")
+    compare_parser.add_argument("--current", "-c", required=True, help="Path to current run JSON (metrics)")
     compare_parser.add_argument(
         "--baseline-dir",
         default=".trackiq/baselines",
         help="Directory for baseline files",
     )
-    compare_parser.add_argument(
-        "--latency-pct", type=float, default=5.0, help="Latency regression threshold %%"
-    )
+    compare_parser.add_argument("--latency-pct", type=float, default=5.0, help="Latency regression threshold %%")
     compare_parser.add_argument(
         "--throughput-pct",
         type=float,
         default=5.0,
         help="Throughput regression threshold %%",
     )
-    compare_parser.add_argument(
-        "--p99-pct", type=float, default=10.0, help="P99 regression threshold %%"
-    )
+    compare_parser.add_argument("--p99-pct", type=float, default=10.0, help="P99 regression threshold %%")
     compare_parser.add_argument(
         "--save-baseline",
         action="store_true",
@@ -315,15 +277,9 @@ Environment Variables:
     analyze_subparsers = analyze_parser.add_subparsers(dest="analyze_type")
 
     # Analyze latency
-    latency_parser = analyze_subparsers.add_parser(
-        "latency", help="Analyze percentile latencies"
-    )
-    latency_parser.add_argument(
-        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
-    )
-    latency_parser.add_argument(
-        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
-    )
+    latency_parser = analyze_subparsers.add_parser("latency", help="Analyze percentile latencies")
+    latency_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
+    latency_parser.add_argument("--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)")
     latency_parser.add_argument(
         "--duration",
         "-d",
@@ -335,25 +291,17 @@ Environment Variables:
     # Analyze logs
     log_parser = analyze_subparsers.add_parser("logs", help="Analyze performance logs")
     log_parser.add_argument("--log", required=True, help="Log file to analyze")
-    log_parser.add_argument(
-        "--threshold", type=float, default=50.0, help="Latency threshold (ms)"
-    )
+    log_parser.add_argument("--threshold", type=float, default=50.0, help="Latency threshold (ms)")
 
     # Analyze DNN pipeline
-    dnn_parser = analyze_subparsers.add_parser(
-        "dnn-pipeline", help="Analyze DNN inference pipeline"
-    )
+    dnn_parser = analyze_subparsers.add_parser("dnn-pipeline", help="Analyze DNN inference pipeline")
     dnn_parser.add_argument("--csv", help="CSV file with layer timings")
     dnn_parser.add_argument("--profiler", help="Profiler output text file")
     dnn_parser.add_argument("--batch-size", type=int, default=1, help="Batch size used")
-    dnn_parser.add_argument(
-        "--top-layers", type=int, default=5, help="Number of slowest layers to report"
-    )
+    dnn_parser.add_argument("--top-layers", type=int, default=5, help="Number of slowest layers to report")
 
     # Analyze tegrastats
-    tegra_parser = analyze_subparsers.add_parser(
-        "tegrastats", help="Analyze Tegrastats output"
-    )
+    tegra_parser = analyze_subparsers.add_parser("tegrastats", help="Analyze Tegrastats output")
     tegra_parser.add_argument("--log", required=True, help="Tegrastats log file")
     tegra_parser.add_argument(
         "--throttle-threshold",
@@ -363,15 +311,9 @@ Environment Variables:
     )
 
     # Analyze efficiency
-    eff_parser = analyze_subparsers.add_parser(
-        "efficiency", help="Analyze power efficiency"
-    )
-    eff_parser.add_argument(
-        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
-    )
-    eff_parser.add_argument(
-        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
-    )
+    eff_parser = analyze_subparsers.add_parser("efficiency", help="Analyze power efficiency")
+    eff_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
+    eff_parser.add_argument("--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)")
     eff_parser.add_argument(
         "--duration",
         "-d",
@@ -381,15 +323,9 @@ Environment Variables:
     )
 
     # Analyze variability
-    var_parser = analyze_subparsers.add_parser(
-        "variability", help="Analyze latency variability"
-    )
-    var_parser.add_argument(
-        "--csv", help="CSV file with latency data (default: run a quick benchmark)"
-    )
-    var_parser.add_argument(
-        "--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)"
-    )
+    var_parser = analyze_subparsers.add_parser("variability", help="Analyze latency variability")
+    var_parser.add_argument("--csv", help="CSV file with latency data (default: run a quick benchmark)")
+    var_parser.add_argument("--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)")
     var_parser.add_argument(
         "--duration",
         "-d",
@@ -397,59 +333,33 @@ Environment Variables:
         default=10,
         help="Benchmark duration (s) when no --csv",
     )
-    var_parser.add_argument(
-        "--column", default="latency_ms", help="Column name for latency values"
-    )
+    var_parser.add_argument("--column", default="latency_ms", help="Column name for latency values")
 
     # Benchmark commands
     bench_parser = subparsers.add_parser("benchmark", help="Run benchmarks")
     bench_subparsers = bench_parser.add_subparsers(dest="bench_type")
 
     # Batch size benchmark
-    batch_parser = bench_subparsers.add_parser(
-        "batching", help="Batch size trade-off analysis"
-    )
-    batch_parser.add_argument(
-        "--batch-sizes", default="1,4,8,16,32", help="Comma-separated batch sizes"
-    )
-    batch_parser.add_argument(
-        "--images", type=int, default=1000, help="Number of images"
-    )
+    batch_parser = bench_subparsers.add_parser("batching", help="Batch size trade-off analysis")
+    batch_parser.add_argument("--batch-sizes", default="1,4,8,16,32", help="Comma-separated batch sizes")
+    batch_parser.add_argument("--images", type=int, default=1000, help="Number of images")
 
     # LLM benchmark
     llm_parser = bench_subparsers.add_parser("llm", help="LLM inference latency")
-    llm_parser.add_argument(
-        "--prompt-length", type=int, default=512, help="Prompt token count"
-    )
-    llm_parser.add_argument(
-        "--output-tokens", type=int, default=256, help="Output token count"
-    )
-    llm_parser.add_argument(
-        "--runs", type=int, default=10, help="Number of benchmark runs"
-    )
+    llm_parser.add_argument("--prompt-length", type=int, default=512, help="Prompt token count")
+    llm_parser.add_argument("--output-tokens", type=int, default=256, help="Output token count")
+    llm_parser.add_argument("--runs", type=int, default=10, help="Number of benchmark runs")
 
     # Distributed validation
-    distributed_parser = bench_subparsers.add_parser(
-        "distributed", help="Validate distributed training correctness"
-    )
-    distributed_parser.add_argument(
-        "--steps", type=int, default=100, help="Number of training steps"
-    )
+    distributed_parser = bench_subparsers.add_parser("distributed", help="Validate distributed training correctness")
+    distributed_parser.add_argument("--steps", type=int, default=100, help="Number of training steps")
     distributed_parser.add_argument(
         "--processes", type=int, default=2, help="Number of processes for distributed training"
     )
-    distributed_parser.add_argument(
-        "--tolerance", type=float, default=0.05, help="Loss comparison tolerance"
-    )
-    distributed_parser.add_argument(
-        "--baseline", help="Baseline name for regression detection"
-    )
-    distributed_parser.add_argument(
-        "--save-baseline", help="Save results as new baseline with this name"
-    )
-    distributed_parser.add_argument(
-        "--output", "-o", help="Output file for results (JSON)"
-    )
+    distributed_parser.add_argument("--tolerance", type=float, default=0.05, help="Loss comparison tolerance")
+    distributed_parser.add_argument("--baseline", help="Baseline name for regression detection")
+    distributed_parser.add_argument("--save-baseline", help="Save results as new baseline with this name")
+    distributed_parser.add_argument("--output", "-o", help="Output file for results (JSON)")
 
     # Monitor commands
     monitor_parser = subparsers.add_parser("monitor", help="Monitor system metrics")
@@ -457,18 +367,12 @@ Environment Variables:
 
     # GPU monitor
     gpu_parser = monitor_subparsers.add_parser("gpu", help="Monitor GPU metrics")
-    gpu_parser.add_argument(
-        "--duration", type=int, default=300, help="Monitor duration (seconds)"
-    )
-    gpu_parser.add_argument(
-        "--interval", type=int, default=1, help="Sample interval (seconds)"
-    )
+    gpu_parser.add_argument("--duration", type=int, default=300, help="Monitor duration (seconds)")
+    gpu_parser.add_argument("--interval", type=int, default=1, help="Sample interval (seconds)")
 
     # KV cache monitor
     cache_parser = monitor_subparsers.add_parser("kv-cache", help="Monitor KV cache")
-    cache_parser.add_argument(
-        "--max-length", type=int, default=2048, help="Max sequence length"
-    )
+    cache_parser.add_argument("--max-length", type=int, default=2048, help="Max sequence length")
     cache_parser.add_argument("--num-layers", type=int, default=32)
     cache_parser.add_argument("--num-heads", type=int, default=32)
     cache_parser.add_argument("--head-size", type=int, default=128)
@@ -484,12 +388,8 @@ Environment Variables:
     report_subparsers = report_parser.add_subparsers(dest="report_type")
 
     # HTML report
-    html_parser = report_subparsers.add_parser(
-        "html", help="Generate interactive HTML report"
-    )
-    html_parser.add_argument(
-        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
-    )
+    html_parser = report_subparsers.add_parser("html", help="Generate interactive HTML report")
+    html_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
     html_parser.add_argument(
         "--json",
         "-j",
@@ -524,19 +424,13 @@ Environment Variables:
         metavar="FILE",
         help="Also write report data as CSV (default: <output_basename>_data.csv)",
     )
-    html_parser.add_argument(
-        "--title", default="Performance Analysis Report", help="Report title"
-    )
-    html_parser.add_argument(
-        "--theme", choices=["light", "dark"], default="light", help="Color theme"
-    )
+    html_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
+    html_parser.add_argument("--theme", choices=["light", "dark"], default="light", help="Color theme")
     html_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
 
     # PDF report
     pdf_parser = report_subparsers.add_parser("pdf", help="Generate PDF report")
-    pdf_parser.add_argument(
-        "--csv", help="CSV file with benchmark data (default: run a quick benchmark)"
-    )
+    pdf_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
     pdf_parser.add_argument(
         "--json",
         "-j",
@@ -555,9 +449,7 @@ Environment Variables:
         default=10,
         help="Benchmark duration (s) when no data file",
     )
-    pdf_parser.add_argument(
-        "--output", "-o", default="performance_report.pdf", help="Output PDF file path"
-    )
+    pdf_parser.add_argument("--output", "-o", default="performance_report.pdf", help="Output PDF file path")
     pdf_parser.add_argument(
         "--export-json",
         metavar="FILE",
@@ -568,27 +460,18 @@ Environment Variables:
         metavar="FILE",
         help="Also write report data as CSV (default: <output_basename>_data.csv)",
     )
-    pdf_parser.add_argument(
-        "--title", default="Performance Analysis Report", help="Report title"
-    )
+    pdf_parser.add_argument("--title", default="Performance Analysis Report", help="Report title")
     pdf_parser.add_argument("--author", default="AutoPerfPy", help="Report author")
     pdf_parser.add_argument(
         "--pdf-backend",
         choices=list(PDF_BACKENDS),
         default=PDF_BACKEND_AUTO,
-        help=(
-            "PDF backend strategy (default: auto). "
-            "auto uses weasyprint primary with matplotlib fallback."
-        ),
+        help=("PDF backend strategy (default: auto). " "auto uses weasyprint primary with matplotlib fallback."),
     )
 
     # UI command (Streamlit dashboard)
-    ui_parser = subparsers.add_parser(
-        "ui", help="Launch interactive Streamlit dashboard"
-    )
-    ui_parser.add_argument(
-        "--data", "-d", help="Path to collector export JSON or CSV file"
-    )
+    ui_parser = subparsers.add_parser("ui", help="Launch interactive Streamlit dashboard")
+    ui_parser.add_argument("--data", "-d", help="Path to collector export JSON or CSV file")
     ui_parser.add_argument(
         "--port",
         "-p",
@@ -596,32 +479,26 @@ Environment Variables:
         default=8501,
         help="Port to run Streamlit on (default: 8501)",
     )
-    ui_parser.add_argument(
-        "--host", default="localhost", help="Host to bind to (default: localhost)"
-    )
+    ui_parser.add_argument("--host", default="localhost", help="Host to bind to (default: localhost)")
     ui_parser.add_argument(
         "--browser",
         action="store_true",
         default=True,
         help="Open browser automatically (default: True)",
     )
-    ui_parser.add_argument(
-        "--no-browser", action="store_true", help="Don't open browser automatically"
-    )
+    ui_parser.add_argument("--no-browser", action="store_true", help="Don't open browser automatically")
 
     return parser
 
 
 def _run_default_benchmark(
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     duration_seconds: int = 10,
-) -> Tuple[dict, Optional[str], Optional[str]]:
+) -> tuple[dict, str | None, str | None]:
     """Run a short benchmark and return (data_dict, temp_csv_path, temp_json_path)."""
     device = resolve_device(device_id or "cpu_0")
     if not device:
-        raise HardwareNotFoundError(
-            "No devices detected. Use --device or install GPU/CPU support."
-        )
+        raise HardwareNotFoundError("No devices detected. Use --device or install GPU/CPU support.")
     config = InferenceConfig(
         precision=PRECISION_FP32,
         batch_size=1,
@@ -688,7 +565,7 @@ def _output_path(args, filename: str) -> str:
     return os.path.join(out_dir, os.path.basename(filename))
 
 
-def _parse_precision_list(raw: str) -> Tuple[list[str], list[str]]:
+def _parse_precision_list(raw: str) -> tuple[list[str], list[str]]:
     """Parse comma-separated precision list into (valid, invalid)."""
     tokens = [str(item).strip().lower() for item in str(raw or "").split(",")]
     requested = [item for item in tokens if item]
@@ -725,11 +602,7 @@ def _infer_trackiq_result(
     power = summary.get("power", {}) if isinstance(summary, dict) else {}
     memory = summary.get("memory", {}) if isinstance(summary, dict) else {}
     power_profile = payload.get("power_profile", {}) if isinstance(payload, dict) else {}
-    power_profile_summary = (
-        power_profile.get("summary", {})
-        if isinstance(power_profile, dict)
-        else {}
-    )
+    power_profile_summary = power_profile.get("summary", {}) if isinstance(power_profile, dict) else {}
     regression = payload.get("regression", {}) if isinstance(payload, dict) else {}
     platform_metadata = payload.get("platform_metadata", {}) if isinstance(payload, dict) else {}
     inference_cfg = payload.get("inference_config", {}) if isinstance(payload, dict) else {}
@@ -744,11 +617,7 @@ def _infer_trackiq_result(
         tool_version="1.0",
         timestamp=datetime.now(UTC),
         platform=PlatformInfo(
-            hardware_name=str(
-                platform_metadata.get("device_name")
-                or payload.get("collector_name")
-                or "unknown"
-            ),
+            hardware_name=str(platform_metadata.get("device_name") or payload.get("collector_name") or "unknown"),
             os=str(platform_metadata.get("os") or f"{_platform.system()} {_platform.release()}"),
             framework="pytorch",
             framework_version=_safe_torch_version(),
@@ -766,9 +635,7 @@ def _infer_trackiq_result(
             latency_p99_ms=float(latency.get("p99_ms", 0.0)),
             memory_utilization_percent=float(memory.get("mean_percent", 0.0)),
             communication_overhead_percent=None,
-            power_consumption_watts=(
-                float(power.get("mean_w")) if power.get("mean_w") is not None else None
-            ),
+            power_consumption_watts=(float(power.get("mean_w")) if power.get("mean_w") is not None else None),
             energy_per_step_joules=(
                 (
                     float(power_profile_summary.get("total_energy_joules"))
@@ -790,13 +657,9 @@ def _infer_trackiq_result(
         ),
         regression=RegressionInfo(
             baseline_id=regression.get("baseline") if isinstance(regression, dict) else None,
-            delta_percent=float(regression.get("delta_percent", 0.0))
-            if isinstance(regression, dict)
-            else 0.0,
+            delta_percent=float(regression.get("delta_percent", 0.0)) if isinstance(regression, dict) else 0.0,
             status=status,
-            failed_metrics=list(regression.get("failed_metrics", []))
-            if isinstance(regression, dict)
-            else [],
+            failed_metrics=list(regression.get("failed_metrics", [])) if isinstance(regression, dict) else [],
         ),
         kv_cache=(
             KVCacheInfo(
@@ -837,9 +700,7 @@ def _save_trackiq_wrapped_json(
         return
 
     if isinstance(payload, dict):
-        result = _infer_trackiq_result(
-            payload, workload_name=workload_name, workload_type=workload_type
-        )
+        result = _infer_trackiq_result(payload, workload_name=workload_name, workload_type=workload_type)
     else:
         result = _infer_trackiq_result(
             {"tool_payload": payload},
@@ -849,7 +710,7 @@ def _save_trackiq_wrapped_json(
     save_trackiq_result(result, path)
 
 
-def _normalize_report_input_data(data: object) -> Dict[str, Any]:
+def _normalize_report_input_data(data: object) -> dict[str, Any]:
     """Normalize report JSON inputs to legacy benchmark payload shape.
 
     Report generation historically consumed raw benchmark exports where fields
@@ -919,9 +780,7 @@ def run_analyze_latency(args, config):
             print(f"  P99: {metrics.get('p99', 0):.2f}ms")
             print(f"  P95: {metrics.get('p95', 0):.2f}ms")
             print(f"  P50: {metrics.get('p50', 0):.2f}ms")
-            print(
-                f"  Mean: {metrics.get('mean', 0):.2f}ms ± {metrics.get('std', 0):.2f}ms"
-            )
+            print(f"  Mean: {metrics.get('mean', 0):.2f}ms ± {metrics.get('std', 0):.2f}ms")
 
         return result
     finally:
@@ -958,7 +817,7 @@ def run_analyze_dnn_pipeline(args, config):
     if args.csv:
         result = analyzer.analyze_layer_csv(args.csv, batch_size=args.batch_size)
     elif args.profiler:
-        with open(args.profiler, "r") as f:
+        with open(args.profiler) as f:
             content = f.read()
         result = analyzer.analyze_profiler_output(content)
     else:
@@ -975,9 +834,7 @@ def run_analyze_dnn_pipeline(args, config):
 
     timing = metrics.get("timing", {})
     print("\n⏱️  Timing:")
-    print(
-        f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms"
-    )
+    print(f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms")
     print(f"  GPU Time: {timing.get('gpu_time_ms', 0):.2f}ms")
     print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
 
@@ -986,14 +843,12 @@ def run_analyze_dnn_pipeline(args, config):
     print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
     print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
 
-    throughput = metrics.get(
-        "throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0)
-    )
+    throughput = metrics.get("throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0))
     print(f"\n🚀 Throughput: {throughput:.1f} FPS")
 
     slowest = metrics.get("slowest_layers", [])
     if slowest:
-        print(f"\n🐢 Slowest Layers:")
+        print("\n🐢 Slowest Layers:")
         for layer in slowest[:5]:
             name = layer.get("name", "unknown")
             time_ms = layer.get("time_ms", layer.get("avg_time_ms", 0))
@@ -1011,9 +866,7 @@ def run_analyze_dnn_pipeline(args, config):
 
 def run_analyze_tegrastats(args, _config):
     """Run tegrastats analysis."""
-    analyzer = TegrastatsAnalyzer(
-        config={"throttle_temp_c": getattr(args, "throttle_threshold", 85.0)}
-    )
+    analyzer = TegrastatsAnalyzer(config={"throttle_temp_c": getattr(args, "throttle_threshold", 85.0)})
     result = analyzer.analyze(args.log)
 
     print("\n📊 Tegrastats Analysis")
@@ -1024,7 +877,7 @@ def run_analyze_tegrastats(args, _config):
 
     # CPU metrics
     cpu = metrics.get("cpu", {})
-    print(f"\n🖥️  CPU:")
+    print("\n🖥️  CPU:")
     print(f"  Average Utilization: {cpu.get('avg_utilization', 0):.1f}%")
     print(f"  Max Utilization: {cpu.get('max_utilization', 0):.1f}%")
 
@@ -1037,7 +890,7 @@ def run_analyze_tegrastats(args, _config):
 
     # Memory metrics
     memory = metrics.get("memory", {})
-    print(f"\n💾 Memory:")
+    print("\n💾 Memory:")
     print(f"  Average Used: {memory.get('avg_used_mb', 0):.0f} MB")
     print(f"  Max Used: {memory.get('max_used_mb', 0):.0f} MB")
 
@@ -1094,12 +947,8 @@ def run_analyze_efficiency(args, config):
         for workload, data in metrics.items():
             if isinstance(data, dict):
                 print(f"\n{workload}:")
-                print(
-                    f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W"
-                )
-                print(
-                    f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J"
-                )
+                print(f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W")
+                print(f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J")
                 print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
                 print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
 
@@ -1213,7 +1062,7 @@ def run_benchmark_distributed(args, config):
         num_steps=getattr(args, "steps", 100),
         loss_tolerance=getattr(args, "tolerance", 0.01),
         num_processes=getattr(args, "processes", 2),
-        regression_threshold=5.0  # Default
+        regression_threshold=5.0,  # Default
     )
 
     print("\n🔄 Distributed Training Validation")
@@ -1405,9 +1254,18 @@ def run_report_html(args, config):
 
                 summary = data["summary"]
                 report.add_summary_item("Total Steps", summary["total_steps"], "", "neutral")
-                report.add_summary_item("Passed Steps", summary["passed_steps"], "", "good" if summary["passed_steps"] > 0 else "neutral")
-                report.add_summary_item("Failed Steps", summary["failed_steps"], "", "critical" if summary["failed_steps"] > 0 else "neutral")
-                report.add_summary_item("Pass Rate", f"{summary['pass_rate']:.1%}", "", "good" if summary["overall_pass"] else "critical")
+                report.add_summary_item(
+                    "Passed Steps", summary["passed_steps"], "", "good" if summary["passed_steps"] > 0 else "neutral"
+                )
+                report.add_summary_item(
+                    "Failed Steps",
+                    summary["failed_steps"],
+                    "",
+                    "critical" if summary["failed_steps"] > 0 else "neutral",
+                )
+                report.add_summary_item(
+                    "Pass Rate", f"{summary['pass_rate']:.1%}", "", "good" if summary["overall_pass"] else "critical"
+                )
                 status = "good" if summary["overall_pass"] else "critical"
                 report.add_summary_item(
                     "Overall Status",
@@ -1417,7 +1275,9 @@ def run_report_html(args, config):
                 )
 
                 # Add section for step-by-step comparison
-                report.add_section("Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses")
+                report.add_section(
+                    "Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses"
+                )
                 comparisons = data["comparisons"]
                 table_data = []
                 for comp in comparisons:
@@ -1428,14 +1288,16 @@ def run_report_html(args, config):
                     rel_delta = comp["relative_delta"]
                     passed = comp["passed"]
                     status_icon = "✅" if passed else "❌"
-                    table_data.append([
-                        str(step),
-                        f"{single_loss:.6f}",
-                        f"{multi_loss:.6f}",
-                        f"{delta:.6f}",
-                        f"{rel_delta:.4f}",
-                        status_icon
-                    ])
+                    table_data.append(
+                        [
+                            str(step),
+                            f"{single_loss:.6f}",
+                            f"{multi_loss:.6f}",
+                            f"{delta:.6f}",
+                            f"{rel_delta:.4f}",
+                            status_icon,
+                        ]
+                    )
 
                 headers = ["Step", "Single Loss", "Multi Loss", "Abs Delta", "Rel Delta", "Status"]
                 report.add_table("Loss Comparison", headers, table_data, "Step-by-Step Loss Comparison")
@@ -1443,13 +1305,14 @@ def run_report_html(args, config):
                 # Add charts if available
                 if len(comparisons) > 1:
                     import matplotlib.pyplot as plt
+
                     steps = [c["step"] for c in comparisons]
                     single_losses = [c["single_process_loss"] for c in comparisons]
                     multi_losses = [c["multi_process_loss"] for c in comparisons]
 
                     fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.plot(steps, single_losses, label="Single Process", marker='o')
-                    ax.plot(steps, multi_losses, label="Multi Process", marker='s')
+                    ax.plot(steps, single_losses, label="Single Process", marker="o")
+                    ax.plot(steps, multi_losses, label="Multi Process", marker="s")
                     ax.set_xlabel("Training Step")
                     ax.set_ylabel("Loss")
                     ax.set_title("Loss Comparison: Single vs Multi Process")
@@ -1463,33 +1326,19 @@ def run_report_html(args, config):
                 if data.get("profile"):
                     report.add_metadata("Profile", data["profile"])
                 summary = data.get("summary", {})
-                sample_count = (
-                    data.get("sample_count")
-                    or summary.get("sample_count")
-                    or len(data.get("samples", []))
-                )
+                sample_count = data.get("sample_count") or summary.get("sample_count") or len(data.get("samples", []))
                 report.add_summary_item("Samples", sample_count, "", "neutral")
                 lat = summary.get("latency", {})
                 if lat:
-                    report.add_summary_item(
-                        "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
-                    )
-                    report.add_summary_item(
-                        "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
-                    )
-                    report.add_summary_item(
-                        "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
-                    )
+                    report.add_summary_item("P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral")
+                    report.add_summary_item("P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral")
+                    report.add_summary_item("Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral")
                 thr = summary.get("throughput", {})
                 if thr:
-                    report.add_summary_item(
-                        "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
-                    )
+                    report.add_summary_item("Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral")
                 pwr = summary.get("power", {})
                 if pwr and pwr.get("mean_w") is not None:
-                    report.add_summary_item(
-                        "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
-                    )
+                    report.add_summary_item("Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral")
                 if data.get("validation"):
                     v = data["validation"]
                     status = "good" if v.get("overall_pass") else "critical"
@@ -1503,29 +1352,20 @@ def run_report_html(args, config):
                 if samples:
                     # Build DataFrame from samples and add UI-matching Plotly charts
                     from autoperfpy.reports.charts import (
-                        samples_to_dataframe,
                         add_charts_to_html_report,
+                        samples_to_dataframe,
                     )
 
                     _report_df = samples_to_dataframe(samples)
-                    if (
-                        "latency_ms" in _report_df.columns
-                        and "throughput_fps" not in _report_df.columns
-                    ):
-                        _report_df["throughput_fps"] = 1000.0 / _report_df[
-                            "latency_ms"
-                        ].replace(0, np.nan)
+                    if "latency_ms" in _report_df.columns and "throughput_fps" not in _report_df.columns:
+                        _report_df["throughput_fps"] = 1000.0 / _report_df["latency_ms"].replace(0, np.nan)
                     # Add UI-matching Plotly sections and charts
                     add_charts_to_html_report(report, _report_df, summary)
                     # Fallback: matplotlib latency percentiles if no Plotly was added
                     if not report.html_figures:
                         latencies = []
                         for s in samples:
-                            m = (
-                                s.get("metrics", s)
-                                if isinstance(s, dict)
-                                else getattr(s, "metrics", {})
-                            )
+                            m = s.get("metrics", s) if isinstance(s, dict) else getattr(s, "metrics", {})
                             if isinstance(m, dict) and "latency_ms" in m:
                                 latencies.append(m["latency_ms"])
                         if latencies:
@@ -1538,9 +1378,7 @@ def run_report_html(args, config):
                                 }
                             }
                             fig = viz.plot_latency_percentiles(by_run)
-                            report.add_figure(
-                                fig, "Latency Percentiles", "Latency Analysis"
-                            )
+                            report.add_figure(fig, "Latency Percentiles", "Latency Analysis")
                 # Export JSON and CSV alongside report when we have run data (all in output dir)
                 base = os.path.splitext(os.path.basename(args.output))[0]
                 json_out = getattr(args, "export_json", None) or (base + "_data.json")
@@ -1568,12 +1406,8 @@ def run_report_html(args, config):
         # Add summary items based on available columns
         if "latency_ms" in df.columns:
             report.add_summary_item("Samples", len(df), "", "neutral")
-            report.add_summary_item(
-                "Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral"
-            )
-            report.add_summary_item(
-                "P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral"
-            )
+            report.add_summary_item("Mean Latency", f"{df['latency_ms'].mean():.2f}", "ms", "neutral")
+            report.add_summary_item("P99 Latency", f"{df['latency_ms'].quantile(0.99):.2f}", "ms", "neutral")
 
             cv = df["latency_ms"].std() / df["latency_ms"].mean() * 100
             status = "good" if cv < 10 else "warning" if cv < 20 else "critical"
@@ -1595,17 +1429,10 @@ def run_report_html(args, config):
                         "P99": wdf.quantile(0.99),
                     }
                 fig = viz.plot_latency_percentiles(latencies_by_workload)
-                report.add_figure(
-                    fig, "Latency Percentiles by Workload", "Latency Analysis"
-                )
+                report.add_figure(fig, "Latency Percentiles by Workload", "Latency Analysis")
 
-                data_dict = {
-                    w: df[df["workload"] == w]["latency_ms"].tolist()
-                    for w in df["workload"].unique()
-                }
-                fig = viz.plot_distribution(
-                    data_dict, "Latency Distribution Comparison"
-                )
+                data_dict = {w: df[df["workload"] == w]["latency_ms"].tolist() for w in df["workload"].unique()}
+                fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
                 report.add_figure(fig, "Latency Distribution", "Latency Analysis")
 
             if "batch_size" in df.columns and "latency_ms" in df.columns:
@@ -1622,54 +1449,34 @@ def run_report_html(args, config):
                 )
 
                 if "throughput" not in df.columns:
-                    batch_df["throughput"] = (
-                        batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
-                    )
+                    batch_df["throughput"] = batch_df["batch_size"] * 1000 / batch_df["latency_ms"]
                 else:
-                    batch_df["throughput"] = (
-                        df.groupby("batch_size")["throughput"].mean().values
-                    )
+                    batch_df["throughput"] = df.groupby("batch_size")["throughput"].mean().values
 
                 fig = viz.plot_latency_throughput_tradeoff(
                     batch_df["batch_size"].tolist(),
                     batch_df["latency_ms"].tolist(),
                     batch_df["throughput"].tolist(),
                 )
-                report.add_figure(
-                    fig, "Latency vs Throughput Trade-off", "Batch Analysis"
-                )
+                report.add_figure(fig, "Latency vs Throughput Trade-off", "Batch Analysis")
 
             if "power_w" in df.columns:
-                report.add_section(
-                    "Power Analysis", "Power consumption and efficiency metrics"
-                )
+                report.add_section("Power Analysis", "Power consumption and efficiency metrics")
 
                 if "workload" in df.columns:
                     workloads = df["workload"].unique().tolist()
-                    power_values = [
-                        df[df["workload"] == w]["power_w"].mean() for w in workloads
-                    ]
+                    power_values = [df[df["workload"] == w]["power_w"].mean() for w in workloads]
                     if "latency_ms" in df.columns:
-                        perf_values = [
-                            1000 / df[df["workload"] == w]["latency_ms"].mean()
-                            for w in workloads
-                        ]
-                        fig = viz.plot_power_vs_performance(
-                            workloads, power_values, perf_values
-                        )
+                        perf_values = [1000 / df[df["workload"] == w]["latency_ms"].mean() for w in workloads]
+                        fig = viz.plot_power_vs_performance(workloads, power_values, perf_values)
                         report.add_figure(fig, "Power vs Performance", "Power Analysis")
 
             if len(df) > 0:
                 sample_df = df.head(20)
                 headers = sample_df.columns.tolist()
                 rows = sample_df.values.tolist()
-                rows = [
-                    [f"{v:.2f}" if isinstance(v, float) else v for v in row]
-                    for row in rows
-                ]
-                report.add_table(
-                    "Sample Data (First 20 rows)", headers, rows, "Data Overview"
-                )
+                rows = [[f"{v:.2f}" if isinstance(v, float) else v for v in row] for row in rows]
+                report.add_table("Sample Data (First 20 rows)", headers, rows, "Data Overview")
                 report.add_section("Data Overview", "Raw data samples")
 
         else:
@@ -1729,7 +1536,7 @@ def run_ui(args):
     if args.data:
         cmd.extend(["--", "--data", args.data])
 
-    print(f"Launching AutoPerfPy Dashboard...")
+    print("Launching AutoPerfPy Dashboard...")
     print(f"URL: http://{args.host}:{args.port}")
 
     if args.data:
@@ -1782,9 +1589,7 @@ def run_report_pdf(args, config):
             pdf_backend=getattr(args, "pdf_backend", PDF_BACKEND_AUTO),
         )
 
-        data_source = (
-            getattr(args, "csv", None) or getattr(args, "json", None) or "Sample Data"
-        )
+        data_source = getattr(args, "csv", None) or getattr(args, "json", None) or "Sample Data"
         report.add_metadata("Data Source", data_source)
 
         if getattr(args, "json", None):
@@ -1798,22 +1603,14 @@ def run_report_pdf(args, config):
             # Add summary items
             lat = summary.get("latency", {})
             if lat:
-                report.add_summary_item(
-                    "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
-                )
-                report.add_summary_item(
-                    "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
-                )
+                report.add_summary_item("P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral")
+                report.add_summary_item("Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral")
             thr = summary.get("throughput", {})
             if thr:
-                report.add_summary_item(
-                    "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
-                )
+                report.add_summary_item("Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral")
             pwr = summary.get("power", {})
             if pwr and pwr.get("mean_w") is not None:
-                report.add_summary_item(
-                    "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
-                )
+                report.add_summary_item("Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral")
 
             # Add charts from sample data (same as HTML)
             if samples:
@@ -1849,8 +1646,8 @@ def run_report_pdf(args, config):
 
         if getattr(args, "csv", None):
             from autoperfpy.reports.charts import (
-                ensure_throughput_column,
                 compute_summary_from_dataframe,
+                ensure_throughput_column,
             )
 
             df = pd.read_csv(args.csv)
@@ -1869,10 +1666,7 @@ def run_report_pdf(args, config):
                     "neutral",
                 )
 
-            samples = [
-                {"timestamp": row.get("timestamp", 0), "metrics": row.to_dict()}
-                for _, row in df.iterrows()
-            ]
+            samples = [{"timestamp": row.get("timestamp", 0), "metrics": row.to_dict()} for _, row in df.iterrows()]
             if samples:
                 report.add_charts_from_data(samples, summary)
         else:
@@ -1927,27 +1721,19 @@ def run_profiles(args):
         print(f"  Threshold (P99): {profile.latency_threshold_ms}ms")
         print(f"  Target: {profile.latency_target_ms}ms")
         print(f"  Percentiles: {profile.latency_percentiles}")
-        print(f"\nThroughput Requirements:")
+        print("\nThroughput Requirements:")
         print(f"  Minimum: {profile.throughput_min_fps} FPS")
         print(f"  Target: {profile.throughput_target_fps} FPS")
         print("\nConstraints:")
-        print(
-            f"  Power Budget: {profile.power_budget_w}W"
-            if profile.power_budget_w
-            else "  Power Budget: None"
-        )
+        print(f"  Power Budget: {profile.power_budget_w}W" if profile.power_budget_w else "  Power Budget: None")
         print(f"  Thermal Limit: {profile.thermal_limit_c}C")
-        print(
-            f"  Memory Limit: {profile.memory_limit_mb}MB"
-            if profile.memory_limit_mb
-            else "  Memory Limit: None"
-        )
+        print(f"  Memory Limit: {profile.memory_limit_mb}MB" if profile.memory_limit_mb else "  Memory Limit: None")
         print("\nBenchmark Settings:")
         print(f"  Batch Sizes: {profile.batch_sizes}")
         print(f"  Warmup Iterations: {profile.warmup_iterations}")
         print(f"  Test Iterations: {profile.test_iterations}")
         print(f"  Runs: {profile.num_runs}")
-        print(f"\nMonitoring Settings:")
+        print("\nMonitoring Settings:")
         print(f"  Sample Interval: {profile.sample_interval_ms}ms")
         print(f"  Duration: {profile.duration_seconds}s")
         print("\nSupported Collectors:")
@@ -1972,7 +1758,7 @@ def run_profiles(args):
         )
         power = f"{details['power_budget_w']}W" if details["power_budget_w"] else "None"
         print(f"  Power budget: {power} | Tags: {', '.join(details['tags'][:3])}")
-    print(f"\nUse 'autoperfpy profiles --info <name>' for detailed information.")
+    print("\nUse 'autoperfpy profiles --info <name>' for detailed information.")
     return 0
 
 
@@ -2010,9 +1796,7 @@ def run_with_profile(args, _config):
         return None
 
     if args.validate_only:
-        print(
-            f"Profile '{profile_name}' validated successfully with collector '{args.collector}'"
-        )
+        print(f"Profile '{profile_name}' validated successfully with collector '{args.collector}'")
         return {
             "status": "validated",
             "profile": profile_name,
@@ -2041,9 +1825,7 @@ def run_with_profile(args, _config):
             from autoperfpy.collectors import NVMLCollector
         except ImportError as e:
             print(f"Error: NVML collector requires nvidia-ml-py. {e}", file=sys.stderr)
-            raise DependencyError(
-                "NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py"
-            ) from e
+            raise DependencyError("NVML collector requires nvidia-ml-py. Install with: pip install nvidia-ml-py") from e
             from trackiq_core.hardware import get_memory_metrics
 
         if get_memory_metrics() is None:
@@ -2056,17 +1838,13 @@ def run_with_profile(args, _config):
                 device_index = int(args.device)
             except ValueError:
                 pass  # device might be a name; NVML uses index
-        collector = NVMLCollector(
-            device_index=device_index, config=profile.get_synthetic_config() or {}
-        )
+        collector = NVMLCollector(device_index=device_index, config=profile.get_synthetic_config() or {})
     elif collector_type == CollectorType.PSUTIL:
         try:
             from autoperfpy.collectors import PsutilCollector
         except ImportError as e:
             print(f"Error: Psutil collector requires psutil. {e}", file=sys.stderr)
-            raise DependencyError(
-                "Psutil collector requires psutil. Install with: pip install psutil"
-            ) from e
+            raise DependencyError("Psutil collector requires psutil. Install with: pip install psutil") from e
         collector = PsutilCollector(config=profile.get_synthetic_config() or {})
     elif collector_type == CollectorType.TEGRASTATS:
         try:
@@ -2170,25 +1948,19 @@ def run_with_profile(args, _config):
 
     print("\nLatency (excluding warmup):")
     latency_status = "PASS" if latency_pass else "FAIL"
-    print(
-        f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]"
-    )
+    print(f"  P99: {latency_p99:.2f}ms (threshold: {profile.latency_threshold_ms}ms) [{latency_status}]")
     print(f"  P95: {summary.get('latency', {}).get('p95_ms', 0):.2f}ms")
     print(f"  P50: {summary.get('latency', {}).get('p50_ms', 0):.2f}ms")
     print(f"  Mean: {summary.get('latency', {}).get('mean_ms', 0):.2f}ms")
 
     print("\nThroughput:")
     throughput_status = "PASS" if throughput_pass else "FAIL"
-    print(
-        f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]"
-    )
+    print(f"  Mean: {throughput:.1f} FPS (min: {profile.throughput_min_fps} FPS) [{throughput_status}]")
 
-    print(f"\nPower:")
+    print("\nPower:")
     if profile.power_budget_w:
         power_status = "PASS" if power_pass else "FAIL"
-        print(
-            f"  Mean: {power_avg:.1f}W (budget: {profile.power_budget_w}W) [{power_status}]"
-        )
+        print(f"  Mean: {power_avg:.1f}W (budget: {profile.power_budget_w}W) [{power_status}]")
     else:
         print(f"  Mean: {power_avg:.1f}W (no budget constraint)")
 
@@ -2227,8 +1999,8 @@ def run_with_profile(args, _config):
     if getattr(args, "export_csv", None):
         csv_path = _output_path(args, args.export_csv)
         export_data = export.to_dict()
-        export_data.setdefault("inference_config", {})["batch_size"] = (
-            args.batch_size or (profile.batch_sizes[0] if profile.batch_sizes else 1)
+        export_data.setdefault("inference_config", {})["batch_size"] = args.batch_size or (
+            profile.batch_sizes[0] if profile.batch_sizes else 1
         )
         if _write_result_to_csv(export_data, csv_path):
             print(f"CSV exported to: {csv_path}")
@@ -2238,7 +2010,7 @@ def run_with_profile(args, _config):
     return export
 
 
-def _resolve_device(device_id: str) -> Optional[DeviceProfile]:
+def _resolve_device(device_id: str) -> DeviceProfile | None:
     """Resolve device ID (e.g. nvidia_0, cpu_0, 0) to a DeviceProfile."""
     return resolve_device(device_id)
 
@@ -2274,9 +2046,7 @@ def run_auto_benchmarks_cli(args) -> int:
             file=sys.stderr,
         )
     batch_sizes = []
-    for s in getattr(
-        args, "batch_sizes", ",".join(map(str, DEFAULT_BATCH_SIZES))
-    ).split(","):
+    for s in getattr(args, "batch_sizes", ",".join(map(str, DEFAULT_BATCH_SIZES))).split(","):
         try:
             batch_sizes.append(int(s.strip()))
         except ValueError:
@@ -2309,23 +2079,15 @@ def run_auto_benchmarks_cli(args) -> int:
         progress_callback=(
             None
             if args.quiet
-            else lambda i, t, d, c: print(
-                f"[{i}/{t}] {d.device_id} {c.precision} bs{c.batch_size}..."
-            )
+            else lambda i, t, d, c: print(f"[{i}/{t}] {d.device_id} {c.precision} bs{c.batch_size}...")
         ),
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        _save_trackiq_wrapped_json(
-            export_path, results, workload_name="auto_run_batch", workload_type="inference"
-        )
+        _save_trackiq_wrapped_json(export_path, results, workload_name="auto_run_batch", workload_type="inference")
         print(f"\n[OK] Exported {len(results)} runs to {export_path}")
     if getattr(args, "export_csv", None):
-        base = (
-            args.export_csv.rstrip(".csv")
-            if args.export_csv.endswith(".csv")
-            else args.export_csv
-        )
+        base = args.export_csv.rstrip(".csv") if args.export_csv.endswith(".csv") else args.export_csv
         for i, r in enumerate(results):
             if "error" in r:
                 continue
@@ -2386,9 +2148,7 @@ def run_manual_single(args):
     )
     if args.export:
         export_path = _output_path(args, args.export)
-        _save_trackiq_wrapped_json(
-            export_path, result, workload_name="manual_run", workload_type="inference"
-        )
+        _save_trackiq_wrapped_json(export_path, result, workload_name="manual_run", workload_type="inference")
         print(f"\n[OK] Exported to {export_path}")
     if getattr(args, "export_csv", None):
         csv_path = _output_path(args, args.export_csv)
@@ -2412,11 +2172,7 @@ def main():
     config = ConfigManager.load_or_default(args.config)
 
     # Backward compat: run with profile from env if no --profile and no manual/device
-    if (
-        args.command == "run"
-        and args.profile is None
-        and getattr(args, "device", None) is None
-    ):
+    if args.command == "run" and args.profile is None and getattr(args, "device", None) is None:
         env_profile = os.environ.get("AUTOPERFPY_PROFILE")
         if env_profile:
             args.profile = env_profile
@@ -2433,10 +2189,7 @@ def main():
                 result = run_with_profile(args, config)
                 if result is None:
                     return 1
-            elif (
-                getattr(args, "manual", False)
-                or getattr(args, "device", None) is not None
-            ):
+            elif getattr(args, "manual", False) or getattr(args, "device", None) is not None:
                 result = run_manual_single(args)
                 if result is None:
                     return 1

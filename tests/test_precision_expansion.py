@@ -130,15 +130,9 @@ def test_manual_run_precision_fallback_for_unsupported_device_precision(
 def test_cli_parser_accepts_new_precision_modes() -> None:
     """CLI parser should accept BF16/INT4/mixed in --precision."""
     parser = autoperf_cli.setup_parser()
-    args_bf16 = parser.parse_args(
-        ["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_BF16]
-    )
-    args_int4 = parser.parse_args(
-        ["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_INT4]
-    )
-    args_mixed = parser.parse_args(
-        ["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_MIXED]
-    )
+    args_bf16 = parser.parse_args(["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_BF16])
+    args_int4 = parser.parse_args(["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_INT4])
+    args_mixed = parser.parse_args(["run", "--manual", "--device", "cpu_0", "--precision", PRECISION_MIXED])
     assert args_bf16.precision == PRECISION_BF16
     assert args_int4.precision == PRECISION_INT4
     assert args_mixed.precision == PRECISION_MIXED

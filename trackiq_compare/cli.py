@@ -6,7 +6,6 @@ import sys
 import tempfile
 from dataclasses import asdict
 from pathlib import Path
-from typing import Dict
 
 from trackiq_compare.comparator import MetricComparator, SummaryGenerator
 from trackiq_compare.deps import (
@@ -20,7 +19,7 @@ from trackiq_compare.deps import (
 from trackiq_compare.reporters import HtmlReporter, TerminalReporter
 
 
-def _metrics_for_baseline(result) -> Dict[str, float]:
+def _metrics_for_baseline(result) -> dict[str, float]:
     """Extract numeric metrics suitable for trackiq_core baseline comparison."""
     metrics = {}
     for key, value in asdict(result.metrics).items():
@@ -40,22 +39,14 @@ def run_compare(args: argparse.Namespace) -> int:
 
     # Make label semantics explicit: labels are display aliases, not hardware detection.
     if args.label_a:
-        print(
-            f"[INFO] label-a is display-only. Actual Result A platform: "
-            f"{result_a.platform.hardware_name}"
-        )
+        print(f"[INFO] label-a is display-only. Actual Result A platform: " f"{result_a.platform.hardware_name}")
     if args.label_b:
-        print(
-            f"[INFO] label-b is display-only. Actual Result B platform: "
-            f"{result_b.platform.hardware_name}"
-        )
+        print(f"[INFO] label-b is display-only. Actual Result B platform: " f"{result_b.platform.hardware_name}")
 
     comparator = MetricComparator(label_a=label_a, label_b=label_b)
     comparison = comparator.compare(result_a, result_b)
 
-    summary = SummaryGenerator(
-        regression_threshold_percent=args.regression_threshold
-    ).generate(comparison)
+    summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
 
     if result_a.workload.workload_type != result_b.workload.workload_type:
         workload_warning = (
@@ -83,13 +74,9 @@ def run_report_pdf(args: argparse.Namespace) -> int:
 
     comparator = MetricComparator(label_a=label_a, label_b=label_b)
     comparison = comparator.compare(result_a, result_b)
-    summary = SummaryGenerator(
-        regression_threshold_percent=args.regression_threshold
-    ).generate(comparison)
+    summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
 
-    with tempfile.NamedTemporaryFile(
-        suffix=".html", delete=False, mode="w", encoding="utf-8"
-    ) as handle:
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as handle:
         html_path = handle.name
     try:
         HtmlReporter().generate(html_path, comparison, summary, result_a, result_b)
@@ -195,10 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--pdf-backend",
         choices=list(PDF_BACKENDS),
         default="auto",
-        help=(
-            "PDF backend strategy (default: auto). "
-            "auto uses weasyprint primary with matplotlib fallback."
-        ),
+        help=("PDF backend strategy (default: auto). " "auto uses weasyprint primary with matplotlib fallback."),
     )
     report_pdf.set_defaults(func=run_report_pdf)
 

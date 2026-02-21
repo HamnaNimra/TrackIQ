@@ -5,12 +5,10 @@ that distributed training produces consistent results. Outputs structured
 reports for easy comparison.
 """
 
-import json
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from minicluster.deps import save_json_file, ensure_parent_dir
+from minicluster.deps import ensure_parent_dir, save_json_file
 
 
 @dataclass
@@ -36,11 +34,11 @@ class CorrectnessReport:
     num_steps_compared: int
     num_steps_passed: int = 0
     num_steps_failed: int = 0
-    step_comparisons: List[StepComparison] = field(default_factory=list)
+    step_comparisons: list[StepComparison] = field(default_factory=list)
     overall_passed: bool = False
     summary: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert report to dictionary for JSON serialization."""
         return {
             "single_run_path": self.single_run_path,
@@ -66,9 +64,7 @@ class CorrectnessValidator:
         """
         self.tolerance = tolerance
 
-    def compare_runs(
-        self, single_metrics: Dict[str, Any], multi_metrics: Dict[str, Any]
-    ) -> CorrectnessReport:
+    def compare_runs(self, single_metrics: dict[str, Any], multi_metrics: dict[str, Any]) -> CorrectnessReport:
         """Compare single-process and multi-process run metrics.
 
         Args:
@@ -85,9 +81,7 @@ class CorrectnessValidator:
         multi_steps = multi_metrics.get("steps", [])
 
         if len(single_steps) != len(multi_steps):
-            raise ValueError(
-                f"Step count mismatch: single={len(single_steps)}, multi={len(multi_steps)}"
-            )
+            raise ValueError(f"Step count mismatch: single={len(single_steps)}, multi={len(multi_steps)}")
 
         if not single_steps:
             raise ValueError("No steps found in metrics")
@@ -196,7 +190,7 @@ class CorrectnessValidator:
         save_json_file(output_path, report.to_dict())
 
     def validate_file_pair(
-        self, single_run_path: str, multi_run_path: str, output_path: Optional[str] = None
+        self, single_run_path: str, multi_run_path: str, output_path: str | None = None
     ) -> CorrectnessReport:
         """Validate correctness using metrics files.
 

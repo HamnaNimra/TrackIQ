@@ -42,9 +42,7 @@ def _result(throughput: float, p99: float) -> TrackiqResult:
             communication_overhead_percent=None,
             power_consumption_watts=None,
         ),
-        regression=RegressionInfo(
-            baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
-        ),
+        regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
     )
 
 

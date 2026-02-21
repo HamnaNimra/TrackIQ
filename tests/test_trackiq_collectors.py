@@ -59,9 +59,7 @@ class TestSyntheticCollector:
         assert isinstance(export, CollectorExport)
         assert export.collector_name == "SyntheticCollector"
         assert len(export.samples) == 2
-        assert (
-            "latency" in export.summary or "latency_ms" in str(export.summary).lower()
-        )
+        assert "latency" in export.summary or "latency_ms" in str(export.summary).lower()
 
 
 class TestPlatformGpuMetrics:

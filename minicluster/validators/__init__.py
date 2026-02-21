@@ -1,18 +1,18 @@
 """Validators module for minicluster."""
 
 from minicluster.validators.correctness_validator import (
-    CorrectnessValidator,
     CorrectnessReport,
+    CorrectnessValidator,
     StepComparison,
 )
 
 try:
     from minicluster.validators.fault_injector import (
-        FaultInjector,
-        FaultInjectionReport,
         FaultDetectionResult,
-        FaultType,
         FaultInjectionConfig,
+        FaultInjectionReport,
+        FaultInjector,
+        FaultType,
     )
 except Exception as exc:  # pragma: no cover - optional dependency guard
     _FAULT_IMPORT_ERROR = exc
@@ -22,8 +22,7 @@ except Exception as exc:  # pragma: no cover - optional dependency guard
 
         def __init__(self, *args, **kwargs):
             raise ImportError(
-                "Fault injection requires optional ML dependencies. "
-                "Install with: pip install -e \".[ml]\""
+                "Fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"'
             ) from _FAULT_IMPORT_ERROR
 
     FaultInjectionReport = None  # type: ignore[assignment]

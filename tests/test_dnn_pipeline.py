@@ -1,18 +1,19 @@
 """Tests for DNN Pipeline analyzer and utilities."""
 
-import pytest
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from autoperfpy.analyzers.dnn_pipeline import DNNPipelineAnalyzer
 from autoperfpy.core.dnn_pipeline import (
+    DNNPipelineCalculator,
+    DNNPipelineParser,
+    EngineOptimizationMetrics,
+    InferenceRun,
     LayerTiming,
     MemoryTransfer,
-    InferenceRun,
-    EngineOptimizationMetrics,
-    DNNPipelineParser,
-    DNNPipelineCalculator,
 )
 
 
@@ -591,9 +592,7 @@ class TestDNNPipelineAnalyzer:
             {"transfer_type": "H2D", "size_bytes": 1024, "duration_ms": 0.2},
         ]
 
-        result = analyzer.analyze_from_data(
-            layer_timings, memory_transfers=memory_transfers, batch_size=4
-        )
+        result = analyzer.analyze_from_data(layer_timings, memory_transfers=memory_transfers, batch_size=4)
 
         assert result.metrics["batch_size"] == 4
         assert result.metrics["num_layers"] == 2

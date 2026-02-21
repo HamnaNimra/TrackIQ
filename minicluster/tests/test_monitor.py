@@ -1,7 +1,6 @@
 """Tests for minicluster monitor package."""
 
 import json
-from pathlib import Path
 
 from minicluster.monitor.anomaly_detector import Anomaly, AnomalyDetector
 from minicluster.monitor.health_reader import HealthReader
@@ -93,13 +92,8 @@ def test_anomaly_detector_detects_slow_worker() -> None:
 
 def test_anomaly_detector_detects_loss_divergence() -> None:
     detector = AnomalyDetector()
-    workers = [
-        WorkerSnapshot(i, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00")
-        for i in range(9)
-    ]
-    workers.append(
-        WorkerSnapshot(9, 1, 10.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00")
-    )
+    workers = [WorkerSnapshot(i, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00") for i in range(9)]
+    workers.append(WorkerSnapshot(9, 1, 10.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"))
     anomalies = detector.detect(_checkpoint(workers))
     assert any(a.anomaly_type == "loss_divergence" and a.worker_id == 9 for a in anomalies)
 

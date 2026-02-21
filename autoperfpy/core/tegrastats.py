@@ -27,8 +27,8 @@ Authors:
 
 import re
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
 
 @dataclass
@@ -39,7 +39,7 @@ class CPUCoreStats:
     utilization_percent: float
     frequency_mhz: int
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "core_id": self.core_id,
             "utilization_percent": self.utilization_percent,
@@ -54,7 +54,7 @@ class GPUStats:
     utilization_percent: float
     frequency_mhz: int
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "utilization_percent": self.utilization_percent,
             "frequency_mhz": self.frequency_mhz,
@@ -69,7 +69,7 @@ class MemoryStats:
     total_mb: int
     lfb_blocks: int  # Largest free block count
     lfb_size_mb: int  # Size of each lfb block
-    emc_frequency_mhz: Optional[int] = None
+    emc_frequency_mhz: int | None = None
 
     @property
     def utilization_percent(self) -> float:
@@ -85,7 +85,7 @@ class MemoryStats:
     def lfb_total_mb(self) -> int:
         return self.lfb_blocks * self.lfb_size_mb
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "used_mb": self.used_mb,
             "total_mb": self.total_mb,
@@ -102,28 +102,35 @@ class MemoryStats:
 class ThermalStats:
     """Thermal zone temperatures."""
 
-    cpu_temp_c: Optional[float] = None
-    gpu_temp_c: Optional[float] = None
-    aux_temp_c: Optional[float] = None
-    ao_temp_c: Optional[float] = None  # Always-On domain
-    tdiode_temp_c: Optional[float] = None
-    tj_temp_c: Optional[float] = None  # Junction temperature (max)
-    pll_temp_c: Optional[float] = None
-    board_temp_c: Optional[float] = None
+    cpu_temp_c: float | None = None
+    gpu_temp_c: float | None = None
+    aux_temp_c: float | None = None
+    ao_temp_c: float | None = None  # Always-On domain
+    tdiode_temp_c: float | None = None
+    tj_temp_c: float | None = None  # Junction temperature (max)
+    pll_temp_c: float | None = None
+    board_temp_c: float | None = None
 
     @property
     def max_temp_c(self) -> float:
         """Return the maximum temperature across all zones."""
         temps = [
-            t for t in [
-                self.cpu_temp_c, self.gpu_temp_c, self.aux_temp_c,
-                self.ao_temp_c, self.tdiode_temp_c, self.tj_temp_c,
-                self.pll_temp_c, self.board_temp_c
-            ] if t is not None
+            t
+            for t in [
+                self.cpu_temp_c,
+                self.gpu_temp_c,
+                self.aux_temp_c,
+                self.ao_temp_c,
+                self.tdiode_temp_c,
+                self.tj_temp_c,
+                self.pll_temp_c,
+                self.board_temp_c,
+            ]
+            if t is not None
         ]
         return max(temps) if temps else 0.0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "cpu_temp_c": self.cpu_temp_c,
             "gpu_temp_c": self.gpu_temp_c,
@@ -142,11 +149,11 @@ class TegrastatsSnapshot:
     """A single tegrastats reading."""
 
     timestamp: datetime
-    cpu_cores: List[CPUCoreStats]
+    cpu_cores: list[CPUCoreStats]
     gpu: GPUStats
     memory: MemoryStats
     thermal: ThermalStats
-    ape_frequency_mhz: Optional[int] = None  # Audio Processing Engine
+    ape_frequency_mhz: int | None = None  # Audio Processing Engine
     raw_line: str = ""
 
     @property
@@ -168,7 +175,7 @@ class TegrastatsSnapshot:
         """Number of CPU cores."""
         return len(self.cpu_cores)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "timestamp": self.timestamp.isoformat(),
             "cpu": {
@@ -211,7 +218,7 @@ class TegrastatsParser:
     }
 
     @classmethod
-    def parse_line(cls, line: str, timestamp: Optional[datetime] = None) -> TegrastatsSnapshot:
+    def parse_line(cls, line: str, timestamp: datetime | None = None) -> TegrastatsSnapshot:
         """Parse a single tegrastats output line.
 
         Args:
@@ -246,18 +253,20 @@ class TegrastatsParser:
         )
 
     @classmethod
-    def _parse_cpu(cls, line: str) -> List[CPUCoreStats]:
+    def _parse_cpu(cls, line: str) -> list[CPUCoreStats]:
         """Parse CPU core statistics."""
         cores = []
         cpu_match = cls.CPU_PATTERN.search(line)
         if cpu_match:
             cpu_str = cpu_match.group(1)
             for i, core_match in enumerate(cls.CPU_CORE_PATTERN.finditer(cpu_str)):
-                cores.append(CPUCoreStats(
-                    core_id=i,
-                    utilization_percent=float(core_match.group(1)),
-                    frequency_mhz=int(core_match.group(2)),
-                ))
+                cores.append(
+                    CPUCoreStats(
+                        core_id=i,
+                        utilization_percent=float(core_match.group(1)),
+                        frequency_mhz=int(core_match.group(2)),
+                    )
+                )
         return cores
 
     @classmethod
@@ -313,7 +322,7 @@ class TegrastatsParser:
         return thermal
 
     @classmethod
-    def _parse_ape(cls, line: str) -> Optional[int]:
+    def _parse_ape(cls, line: str) -> int | None:
         """Parse APE (Audio Processing Engine) frequency."""
         ape_match = cls.APE_PATTERN.search(line)
         if ape_match:
@@ -321,7 +330,7 @@ class TegrastatsParser:
         return None
 
     @classmethod
-    def parse_file(cls, filepath: str) -> List[TegrastatsSnapshot]:
+    def parse_file(cls, filepath: str) -> list[TegrastatsSnapshot]:
         """Parse a file containing tegrastats output.
 
         Args:
@@ -332,7 +341,7 @@ class TegrastatsParser:
         """
         snapshots = []
         try:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 for line in f:
                     line = line.strip()
                     # Validate line matches RAM pattern (actual tegrastats format)
@@ -359,7 +368,7 @@ class TegrastatsAggregateStats:
     cpu_avg_utilization: float
     cpu_max_utilization: float
     cpu_min_utilization: float
-    cpu_per_core_avg: List[float]
+    cpu_per_core_avg: list[float]
 
     # GPU aggregate stats
     gpu_avg_utilization: float
@@ -372,14 +381,14 @@ class TegrastatsAggregateStats:
     ram_max_used_mb: int
     ram_avg_utilization: float
     ram_total_mb: int
-    emc_avg_frequency_mhz: Optional[float]
+    emc_avg_frequency_mhz: float | None
 
     # Thermal aggregate stats
-    thermal_avg_temps: Dict[str, float]
-    thermal_max_temps: Dict[str, float]
+    thermal_avg_temps: dict[str, float]
+    thermal_max_temps: dict[str, float]
     thermal_max_observed: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "num_samples": self.num_samples,
             "duration_seconds": self.duration_seconds,
@@ -414,7 +423,7 @@ class TegrastatsCalculator:
     """Calculate aggregate statistics from tegrastats snapshots."""
 
     @staticmethod
-    def calculate_aggregates(snapshots: List[TegrastatsSnapshot]) -> TegrastatsAggregateStats:
+    def calculate_aggregates(snapshots: list[TegrastatsSnapshot]) -> TegrastatsAggregateStats:
         """Calculate aggregate statistics from a list of snapshots.
 
         Args:
@@ -463,11 +472,7 @@ class TegrastatsCalculator:
         num_cores = snapshots[0].num_cores if snapshots else 0
         per_core_avg = []
         for core_id in range(num_cores):
-            core_utils = [
-                s.cpu_cores[core_id].utilization_percent
-                for s in snapshots
-                if core_id < len(s.cpu_cores)
-            ]
+            core_utils = [s.cpu_cores[core_id].utilization_percent for s in snapshots if core_id < len(s.cpu_cores)]
             if core_utils:
                 per_core_avg.append(sum(core_utils) / len(core_utils))
 
@@ -498,10 +503,7 @@ class TegrastatsCalculator:
                 thermal_avg[zone] = sum(temps) / len(temps)
                 thermal_max[zone] = max(temps)
 
-        max_observed = max(
-            (s.thermal.max_temp_c for s in snapshots),
-            default=0.0
-        )
+        max_observed = max((s.thermal.max_temp_c for s in snapshots), default=0.0)
 
         return TegrastatsAggregateStats(
             num_samples=n,
@@ -526,9 +528,9 @@ class TegrastatsCalculator:
 
     @staticmethod
     def detect_thermal_throttling(
-        snapshots: List[TegrastatsSnapshot],
+        snapshots: list[TegrastatsSnapshot],
         throttle_temp_c: float = 85.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Detect potential thermal throttling events.
 
         Args:
@@ -558,17 +560,15 @@ class TegrastatsCalculator:
             "throttle_events": throttle_events,
             "throttle_percentage": (throttle_events / len(snapshots)) * 100,
             "max_temp_observed": max(s.thermal.max_temp_c for s in snapshots),
-            "avg_temp_during_throttle": (
-                sum(throttle_temps) / len(throttle_temps) if throttle_temps else 0.0
-            ),
+            "avg_temp_during_throttle": (sum(throttle_temps) / len(throttle_temps) if throttle_temps else 0.0),
             "throttle_threshold_c": throttle_temp_c,
         }
 
     @staticmethod
     def detect_memory_pressure(
-        snapshots: List[TegrastatsSnapshot],
+        snapshots: list[TegrastatsSnapshot],
         pressure_threshold_percent: float = 90.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Detect memory pressure events.
 
         Args:
@@ -586,10 +586,7 @@ class TegrastatsCalculator:
                 "avg_utilization": 0.0,
             }
 
-        pressure_events = sum(
-            1 for s in snapshots
-            if s.memory.utilization_percent >= pressure_threshold_percent
-        )
+        pressure_events = sum(1 for s in snapshots if s.memory.utilization_percent >= pressure_threshold_percent)
 
         return {
             "pressure_events": pressure_events,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from trackiq_core.reporting import (
     PDF_BACKEND_AUTO,
@@ -33,9 +33,9 @@ class PDFReportGenerator:
         self.author = author
         self.theme = theme
         self.pdf_backend = str(pdf_backend or PDF_BACKEND_AUTO).strip().lower()
-        self.metadata: Dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
         self._html_generator = None
-        self.last_render_outcome: Optional[PdfRenderOutcome] = None
+        self.last_render_outcome: PdfRenderOutcome | None = None
 
     def _get_html_generator(self):
         if self._html_generator is None:
@@ -74,23 +74,21 @@ class PDFReportGenerator:
         section: str = "General",
         description: str = "",
     ) -> None:
-        self._get_html_generator().add_html_figure(
-            html_content, caption, section, description
-        )
+        self._get_html_generator().add_html_figure(html_content, caption, section, description)
 
     def add_table(
         self,
         title: str,
-        headers: List[str],
-        rows: List[List[Any]],
+        headers: list[str],
+        rows: list[list[Any]],
         section: str = "General",
     ) -> None:
         self._get_html_generator().add_table(title, headers, rows, section)
 
     def add_charts_from_data(
         self,
-        samples: List[Dict],
-        summary: Dict[str, Any],
+        samples: list[dict],
+        summary: dict[str, Any],
     ) -> None:
         try:
             from .charts import (
@@ -109,16 +107,14 @@ class PDFReportGenerator:
         self,
         output_path: str,
         include_summary: bool = True,
-        backend: Optional[str] = None,
+        backend: str | None = None,
     ) -> str:
         os.makedirs(
             os.path.dirname(output_path) if os.path.dirname(output_path) else ".",
             exist_ok=True,
         )
         selected_backend = str(backend or self.pdf_backend or PDF_BACKEND_AUTO).lower()
-        with tempfile.NamedTemporaryFile(
-            suffix=".html", delete=False, mode="w", encoding="utf-8"
-        ) as handle:
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8") as handle:
             html_path = handle.name
         try:
             self._get_html_generator().generate_html(
@@ -145,9 +141,7 @@ class PDFReportGenerator:
         output_path: str,
         include_summary: bool = True,
     ) -> str:
-        return self._get_html_generator().generate_html(
-            output_path, include_summary=include_summary
-        )
+        return self._get_html_generator().generate_html(output_path, include_summary=include_summary)
 
     def clear(self) -> None:
         self.metadata = {}

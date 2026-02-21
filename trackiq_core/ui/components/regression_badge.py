@@ -1,6 +1,6 @@
 """Regression badge component."""
 
-from typing import Any, Dict
+from typing import Any
 
 from trackiq_core.schema import RegressionInfo
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
@@ -13,7 +13,7 @@ class RegressionBadge:
         self.regression = regression
         self.theme = theme
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return regression payload for testing and transport."""
         return {
             "status": self.regression.status,

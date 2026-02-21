@@ -39,9 +39,7 @@ def render_trackiq_result_html(
             f"<tr><th>Precision</th><td>{escape(str(result.kv_cache.precision))}</td></tr>"
         )
 
-    metric_rows = "".join(
-        f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>" for label, value in metrics
-    )
+    metric_rows = "".join(f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>" for label, value in metrics)
 
     return f"""<!doctype html>
 <html lang="en">

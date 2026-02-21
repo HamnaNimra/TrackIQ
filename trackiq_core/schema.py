@@ -6,8 +6,7 @@ MiniCluster, and consumed by comparison tooling.
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
-
+from typing import Any, Literal
 
 WorkloadType = Literal["inference", "training"]
 RegressionStatus = Literal["pass", "fail"]
@@ -42,24 +41,24 @@ class Metrics:
     latency_p95_ms: float
     latency_p99_ms: float
     memory_utilization_percent: float
-    communication_overhead_percent: Optional[float]
-    power_consumption_watts: Optional[float]
-    energy_per_step_joules: Optional[float] = None
-    performance_per_watt: Optional[float] = None
-    temperature_celsius: Optional[float] = None
-    ttft_ms: Optional[float] = None
-    tokens_per_sec: Optional[float] = None
-    decode_tpt_ms: Optional[float] = None
+    communication_overhead_percent: float | None
+    power_consumption_watts: float | None
+    energy_per_step_joules: float | None = None
+    performance_per_watt: float | None = None
+    temperature_celsius: float | None = None
+    ttft_ms: float | None = None
+    tokens_per_sec: float | None = None
+    decode_tpt_ms: float | None = None
 
 
 @dataclass
 class RegressionInfo:
     """Regression comparison metadata."""
 
-    baseline_id: Optional[str]
+    baseline_id: str | None
     delta_percent: float
     status: RegressionStatus
-    failed_metrics: List[str] = field(default_factory=list)
+    failed_metrics: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -73,7 +72,7 @@ class KVCacheInfo:
     num_heads: int
     head_size: int
     precision: str
-    samples: List[Dict[str, Any]] = field(default_factory=list)
+    samples: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -96,8 +95,8 @@ class TrackiqResult:
     workload: WorkloadInfo
     metrics: Metrics
     regression: RegressionInfo
-    kv_cache: Optional[KVCacheInfo] = None
-    tool_payload: Optional[Dict[str, Any]] = None
+    kv_cache: KVCacheInfo | None = None
+    tool_payload: dict[str, Any] | None = None
     schema_version: str = "1.1.0"
 
     def __post_init__(self) -> None:
@@ -125,20 +124,16 @@ class TrackiqResult:
                 "tpt_p50",
             )
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         """Convert to JSON-serializable dictionary."""
         payload = asdict(self)
         payload["timestamp"] = self.timestamp.isoformat()
         return payload
 
     @classmethod
-    def from_dict(cls, payload: Dict[str, object]) -> "TrackiqResult":
+    def from_dict(cls, payload: dict[str, object]) -> "TrackiqResult":
         """Build a TrackiqResult from dictionary data."""
-        metrics_payload = (
-            dict(payload.get("metrics", {}))
-            if isinstance(payload.get("metrics"), dict)
-            else {}
-        )
+        metrics_payload = dict(payload.get("metrics", {})) if isinstance(payload.get("metrics"), dict) else {}
         # Backward compatibility: older payloads may omit newer/nullable metric keys.
         metrics_payload.setdefault("communication_overhead_percent", None)
         metrics_payload.setdefault("power_consumption_watts", None)
@@ -160,15 +155,17 @@ class TrackiqResult:
             workload=WorkloadInfo(**payload["workload"]),  # type: ignore[arg-type]
             metrics=Metrics(**metrics_payload),
             regression=RegressionInfo(**payload["regression"]),  # type: ignore[arg-type]
-            kv_cache=KVCacheInfo(**kv_cache_payload)  # type: ignore[arg-type]
-            if isinstance(kv_cache_payload, dict)
-            else None,
+            kv_cache=(
+                KVCacheInfo(**kv_cache_payload)  # type: ignore[arg-type]
+                if isinstance(kv_cache_payload, dict)
+                else None
+            ),
             tool_payload=payload.get("tool_payload"),
             schema_version=str(payload.get("schema_version", "1.0.0")),
         )
 
 
-def _coerce_optional_float(value: object) -> Optional[float]:
+def _coerce_optional_float(value: object) -> float | None:
     """Return float(value) when possible, otherwise None."""
     if value is None:
         return None
@@ -178,7 +175,7 @@ def _coerce_optional_float(value: object) -> Optional[float]:
         return None
 
 
-def _coerce_first_optional_float(payload: Dict[str, Any], *keys: str) -> Optional[float]:
+def _coerce_first_optional_float(payload: dict[str, Any], *keys: str) -> float | None:
     """Return the first present key that can be coerced to float."""
     for key in keys:
         if key not in payload:

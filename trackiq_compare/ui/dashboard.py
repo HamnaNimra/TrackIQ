@@ -6,21 +6,20 @@ import json
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
+from trackiq_compare.comparator import MetricComparator, SummaryGenerator
+from trackiq_compare.reporters import HtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    ComparisonTable,
     DARK_THEME,
+    ComparisonTable,
     RegressionBadge,
     TrackiqDashboard,
     TrackiqTheme,
 )
-from trackiq_compare.comparator import MetricComparator, SummaryGenerator
-from trackiq_compare.reporters import HtmlReporter
 
-
-VENDOR_COLORS: Dict[str, str] = {
+VENDOR_COLORS: dict[str, str] = {
     "AMD": "#e53935",
     "NVIDIA": "#76b900",
     "Intel": "#0071c5",
@@ -34,10 +33,7 @@ VENDOR_COLORS: Dict[str, str] = {
 def detect_platform_vendor(hardware_name: str) -> str:
     """Detect normalized platform vendor from a hardware name string."""
     normalized = hardware_name.lower()
-    if any(
-        token in normalized
-        for token in ["amd", "radeon", "mi300", "mi250", "cdna", "rdna", "rocm"]
-    ):
+    if any(token in normalized for token in ["amd", "radeon", "mi300", "mi250", "cdna", "rdna", "rocm"]):
         return "AMD"
     if any(
         token in normalized
@@ -58,17 +54,9 @@ def detect_platform_vendor(hardware_name: str) -> str:
         return "Intel"
     if any(token in normalized for token in ["apple", "m1", "m2", "m3", "m4", "metal"]):
         return "Apple"
-    if any(
-        token in normalized
-        for token in ["qualcomm", "snapdragon", "hexagon", "adreno"]
-    ):
+    if any(token in normalized for token in ["qualcomm", "snapdragon", "hexagon", "adreno"]):
         return "Qualcomm"
-    if (
-        "cpu" in normalized
-        or "ryzen" in normalized
-        or "intel core" in normalized
-        or "apple m" in normalized
-    ):
+    if "cpu" in normalized or "ryzen" in normalized or "intel core" in normalized or "apple m" in normalized:
         return "CPU"
     if "intel" in normalized:
         return "Intel"
@@ -81,11 +69,11 @@ class CompareDashboard(TrackiqDashboard):
     def __init__(
         self,
         result_a: TrackiqResult,
-        result_b: Optional[TrackiqResult] = None,
+        result_b: TrackiqResult | None = None,
         *,
-        label_a: Optional[str] = None,
-        label_b: Optional[str] = None,
-        result: Optional[List[TrackiqResult]] = None,
+        label_a: str | None = None,
+        label_b: str | None = None,
+        result: list[TrackiqResult] | None = None,
         theme: TrackiqTheme = DARK_THEME,
         title: str = "TrackIQ Compare Dashboard",
         regression_threshold_percent: float = 5.0,
@@ -106,7 +94,7 @@ class CompareDashboard(TrackiqDashboard):
         self.regression_threshold_percent = float(regression_threshold_percent)
         super().__init__(result=[left, right], theme=theme, title=title)
 
-    def _vendors(self) -> Tuple[str, str]:
+    def _vendors(self) -> tuple[str, str]:
         return (
             detect_platform_vendor(self.result_a.platform.hardware_name),
             detect_platform_vendor(self.result_b.platform.hardware_name),
@@ -122,16 +110,34 @@ class CompareDashboard(TrackiqDashboard):
         vendor_a, vendor_b = self._vendors()
         return vendor_a != vendor_b
 
-    def _competitive_metric_rows(self) -> List[Dict[str, Any]]:
+    def _competitive_metric_rows(self) -> list[dict[str, Any]]:
         metrics_a = self.result_a.metrics
         metrics_b = self.result_b.metrics
-        rows: List[Dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         candidates = [
             ("performance_per_watt", metrics_a.performance_per_watt, metrics_b.performance_per_watt, "high", 2),
-            ("throughput_samples_per_sec", metrics_a.throughput_samples_per_sec, metrics_b.throughput_samples_per_sec, "high", 1),
+            (
+                "throughput_samples_per_sec",
+                metrics_a.throughput_samples_per_sec,
+                metrics_b.throughput_samples_per_sec,
+                "high",
+                1,
+            ),
             ("latency_p99_ms", metrics_a.latency_p99_ms, metrics_b.latency_p99_ms, "low", 1),
-            ("memory_utilization_percent", metrics_a.memory_utilization_percent, metrics_b.memory_utilization_percent, "context", 0),
-            ("communication_overhead_percent", metrics_a.communication_overhead_percent, metrics_b.communication_overhead_percent, "low", 1),
+            (
+                "memory_utilization_percent",
+                metrics_a.memory_utilization_percent,
+                metrics_b.memory_utilization_percent,
+                "context",
+                0,
+            ),
+            (
+                "communication_overhead_percent",
+                metrics_a.communication_overhead_percent,
+                metrics_b.communication_overhead_percent,
+                "low",
+                1,
+            ),
         ]
         for name, a_val, b_val, direction, weight in candidates:
             if a_val is None or b_val is None:
@@ -161,19 +167,17 @@ class CompareDashboard(TrackiqDashboard):
             )
         return rows
 
-    def _competitive_verdict(self, rows: List[Dict[str, Any]]) -> str:
+    def _competitive_verdict(self, rows: list[dict[str, Any]]) -> str:
         score_a = 0
         score_b = 0
-        details: List[str] = []
+        details: list[str] = []
         for row in rows:
             if row["winner"] == self.label_a:
                 score_a += int(row["weight"])
             elif row["winner"] == self.label_b:
                 score_b += int(row["weight"])
             if row["winner"] in (self.label_a, self.label_b) and row["delta_percent"] != float("inf"):
-                details.append(
-                    f"{row['metric']}: {row['winner']} by {abs(row['delta_percent']):.2f}%"
-                )
+                details.append(f"{row['metric']}: {row['winner']} by {abs(row['delta_percent']):.2f}%")
             elif row["winner"] == "context":
                 details.append(
                     f"{row['metric']}: context metric ({self.label_a}={row['a']:.2f}, {self.label_b}={row['b']:.2f})"
@@ -188,8 +192,7 @@ class CompareDashboard(TrackiqDashboard):
         return (
             f"Overall winner: {overall}. "
             f"Weighted score ({self.label_a}={score_a}, {self.label_b}={score_b}), "
-            f"with performance_per_watt weighted 2x. "
-            + " | ".join(details)
+            f"with performance_per_watt weighted 2x. " + " | ".join(details)
         )
 
     def _render_platform_comparison_mode(self) -> None:
@@ -260,9 +263,7 @@ class CompareDashboard(TrackiqDashboard):
             st.markdown(f"- Tool: `{self.result_a.tool_name} {self.result_a.tool_version}`")
             st.markdown(f"- Hardware: `{self.result_a.platform.hardware_name}`")
             st.markdown(f"- Framework: `{self.result_a.platform.framework} {self.result_a.platform.framework_version}`")
-            st.markdown(
-                f"- Workload: `{self.result_a.workload.name}` ({self.result_a.workload.workload_type})"
-            )
+            st.markdown(f"- Workload: `{self.result_a.workload.name}` ({self.result_a.workload.workload_type})")
             st.markdown(f"- Batch Size: `{self.result_a.workload.batch_size}`")
             st.markdown(f"- Steps: `{self.result_a.workload.steps}`")
         with right:
@@ -270,13 +271,11 @@ class CompareDashboard(TrackiqDashboard):
             st.markdown(f"- Tool: `{self.result_b.tool_name} {self.result_b.tool_version}`")
             st.markdown(f"- Hardware: `{self.result_b.platform.hardware_name}`")
             st.markdown(f"- Framework: `{self.result_b.platform.framework} {self.result_b.platform.framework_version}`")
-            st.markdown(
-                f"- Workload: `{self.result_b.workload.name}` ({self.result_b.workload.workload_type})"
-            )
+            st.markdown(f"- Workload: `{self.result_b.workload.name}` ({self.result_b.workload.workload_type})")
             st.markdown(f"- Batch Size: `{self.result_b.workload.batch_size}`")
             st.markdown(f"- Steps: `{self.result_b.workload.steps}`")
 
-    def _render_metric_graphs(self, rows: List[Dict[str, Any]]) -> None:
+    def _render_metric_graphs(self, rows: list[dict[str, Any]]) -> None:
         """Render chart-based metric comparison visuals."""
         import streamlit as st
 
@@ -285,10 +284,7 @@ class CompareDashboard(TrackiqDashboard):
             return
 
         plot_rows = [
-            row
-            for row in rows
-            if isinstance(row.get("a"), (int, float))
-            and isinstance(row.get("b"), (int, float))
+            row for row in rows if isinstance(row.get("a"), (int, float)) and isinstance(row.get("b"), (int, float))
         ]
         if not plot_rows:
             st.info("No numeric metrics available for graph rendering.")
@@ -351,7 +347,7 @@ class CompareDashboard(TrackiqDashboard):
             fig_delta.add_hline(y=0, line_dash="dash", line_color="#6b7280")
             st.plotly_chart(fig_delta, use_container_width=True)
 
-        weighted: List[Tuple[str, int]] = []
+        weighted: list[tuple[str, int]] = []
         for row in plot_rows:
             winner = str(row.get("winner", "tie"))
             weight = int(row.get("weight", 0))
@@ -362,9 +358,7 @@ class CompareDashboard(TrackiqDashboard):
         score_a = sum(weight for label, weight in weighted if label == self.label_a)
         score_b = sum(weight for label, weight in weighted if label == self.label_b)
         fig_score = go.Figure(
-            data=[
-                go.Bar(x=[self.label_a, self.label_b], y=[score_a, score_b], marker_color=["#3b82f6", "#22c55e"])
-            ]
+            data=[go.Bar(x=[self.label_a, self.label_b], y=[score_a, score_b], marker_color=["#3b82f6", "#22c55e"])]
         )
         fig_score.update_layout(
             title="Weighted Winner Score",
@@ -373,7 +367,7 @@ class CompareDashboard(TrackiqDashboard):
         )
         st.plotly_chart(fig_score, use_container_width=True)
 
-    def build_components(self) -> Dict[str, object]:
+    def build_components(self) -> dict[str, object]:
         """Build testable comparison dashboard components."""
         return {
             "comparison_table": ComparisonTable(
@@ -409,9 +403,7 @@ class CompareDashboard(TrackiqDashboard):
 
         comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
         comparison = comparator.compare(self.result_a, self.result_b)
-        summary = SummaryGenerator(
-            regression_threshold_percent=self.regression_threshold_percent
-        ).generate(comparison)
+        summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report_path = str(Path(tmpdir) / "trackiq_compare_report.html")

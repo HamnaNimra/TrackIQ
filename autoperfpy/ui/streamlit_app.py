@@ -26,8 +26,9 @@ import os
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import streamlit as st
 
@@ -37,6 +38,7 @@ if __name__ == "__main__":
 
 try:
     import pandas as pd
+
     from autoperfpy.reports import charts as shared_charts
 
 except ImportError as e:
@@ -56,7 +58,7 @@ st.set_page_config(
 MAX_UI_AUTO_RUNS = 12
 
 
-def load_json_data(filepath: str) -> Optional[Dict[str, Any]]:
+def load_json_data(filepath: str) -> dict[str, Any] | None:
     """Load collector export data from JSON file.
 
     Args:
@@ -66,14 +68,14 @@ def load_json_data(filepath: str) -> Optional[Dict[str, Any]]:
         Dictionary with collector data or None if loading fails
     """
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         st.error(f"Failed to load JSON file: {e}")
         return None
 
 
-def load_csv_data(filepath: str) -> Optional[pd.DataFrame]:
+def load_csv_data(filepath: str) -> pd.DataFrame | None:
     """Load benchmark data from CSV file.
 
     Args:
@@ -89,7 +91,7 @@ def load_csv_data(filepath: str) -> Optional[pd.DataFrame]:
         return None
 
 
-def generate_synthetic_demo_data() -> Dict[str, Any]:
+def generate_synthetic_demo_data() -> dict[str, Any]:
     """Generate synthetic demo data for demonstration purposes.
 
     Returns:
@@ -188,64 +190,46 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
             },
             "cpu": {
                 "mean_percent": round(
-                    sum(s["metrics"]["cpu_percent"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["cpu_percent"] for s in steady_samples) / len(steady_samples),
                     1,
                 ),
-                "max_percent": round(
-                    max(s["metrics"]["cpu_percent"] for s in steady_samples), 1
-                ),
+                "max_percent": round(max(s["metrics"]["cpu_percent"] for s in steady_samples), 1),
             },
             "gpu": {
                 "mean_percent": round(
-                    sum(s["metrics"]["gpu_percent"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["gpu_percent"] for s in steady_samples) / len(steady_samples),
                     1,
                 ),
-                "max_percent": round(
-                    max(s["metrics"]["gpu_percent"] for s in steady_samples), 1
-                ),
+                "max_percent": round(max(s["metrics"]["gpu_percent"] for s in steady_samples), 1),
             },
             "memory": {
                 "mean_mb": round(
-                    sum(s["metrics"]["memory_used_mb"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["memory_used_mb"] for s in steady_samples) / len(steady_samples),
                     0,
                 ),
-                "max_mb": round(
-                    max(s["metrics"]["memory_used_mb"] for s in steady_samples), 0
-                ),
-                "min_mb": round(
-                    min(s["metrics"]["memory_used_mb"] for s in steady_samples), 0
-                ),
+                "max_mb": round(max(s["metrics"]["memory_used_mb"] for s in steady_samples), 0),
+                "min_mb": round(min(s["metrics"]["memory_used_mb"] for s in steady_samples), 0),
             },
             "power": {
                 "mean_w": round(
-                    sum(s["metrics"]["power_w"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["power_w"] for s in steady_samples) / len(steady_samples),
                     1,
                 ),
                 "max_w": round(max(s["metrics"]["power_w"] for s in steady_samples), 1),
             },
             "temperature": {
                 "mean_c": round(
-                    sum(s["metrics"]["temperature_c"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["temperature_c"] for s in steady_samples) / len(steady_samples),
                     1,
                 ),
-                "max_c": round(
-                    max(s["metrics"]["temperature_c"] for s in steady_samples), 1
-                ),
+                "max_c": round(max(s["metrics"]["temperature_c"] for s in steady_samples), 1),
             },
             "throughput": {
                 "mean_fps": round(
-                    sum(s["metrics"]["throughput_fps"] for s in steady_samples)
-                    / len(steady_samples),
+                    sum(s["metrics"]["throughput_fps"] for s in steady_samples) / len(steady_samples),
                     1,
                 ),
-                "min_fps": round(
-                    min(s["metrics"]["throughput_fps"] for s in steady_samples), 1
-                ),
+                "min_fps": round(min(s["metrics"]["throughput_fps"] for s in steady_samples), 1),
             },
         },
         "config": {
@@ -256,7 +240,7 @@ def generate_synthetic_demo_data() -> Dict[str, Any]:
     }
 
 
-def samples_to_dataframe(samples: List[Dict]) -> pd.DataFrame:
+def samples_to_dataframe(samples: list[dict]) -> pd.DataFrame:
     """Convert samples list to pandas DataFrame.
 
     Uses shared implementation from autoperfpy.reports.charts.
@@ -274,7 +258,7 @@ def samples_to_dataframe(samples: List[Dict]) -> pd.DataFrame:
     return df
 
 
-def get_platform_metadata() -> Dict[str, Any]:
+def get_platform_metadata() -> dict[str, Any]:
     """Get device name, CPU, GPU, SoC, power mode for display."""
     meta = {
         "device_name": "Unknown",
@@ -290,7 +274,7 @@ def get_platform_metadata() -> Dict[str, Any]:
     except Exception:
         pass
     try:
-        from trackiq_core.hardware import query_nvidia_smi, get_memory_metrics
+        from trackiq_core.hardware import get_memory_metrics, query_nvidia_smi
 
         name_out = query_nvidia_smi(["name"], timeout=2)
         if name_out:
@@ -304,7 +288,7 @@ def get_platform_metadata() -> Dict[str, Any]:
     return meta
 
 
-def get_detected_devices() -> List[Dict[str, Any]]:
+def get_detected_devices() -> list[dict[str, Any]]:
     """Get all detected devices for UI (Phase 5)."""
     try:
         from trackiq_core.hardware import get_all_devices
@@ -315,7 +299,7 @@ def get_detected_devices() -> List[Dict[str, Any]]:
         return []
 
 
-def result_to_csv_path(result: Dict[str, Any]) -> Optional[str]:
+def result_to_csv_path(result: dict[str, Any]) -> str | None:
     """Convert run result dict to a temp CSV file path for analyzers. Returns path or None."""
     content = result_to_csv_content(result)
     if not content:
@@ -333,7 +317,7 @@ def result_to_csv_path(result: Dict[str, Any]) -> Optional[str]:
         return None
 
 
-def result_to_csv_content(result: Dict[str, Any]) -> Optional[str]:
+def result_to_csv_content(result: dict[str, Any]) -> str | None:
     """Convert run result dict to CSV string (same format as CLI --export-csv). Returns None if no samples."""
     samples = result.get("samples", [])
     if not samples:
@@ -355,17 +339,17 @@ def result_to_csv_content(result: Dict[str, Any]) -> Optional[str]:
 
 def run_auto_benchmarks_ui(
     duration_seconds: int,
-    precisions: List[str],
-    batch_sizes: List[int],
+    precisions: list[str],
+    batch_sizes: list[int],
     max_configs_per_device: int = 6,
-    device_ids_filter: Optional[List[str]] = None,
-    progress_callback: Optional[Callable[..., None]] = None,
+    device_ids_filter: list[str] | None = None,
+    progress_callback: Callable[..., None] | None = None,
     max_total_runs: int = MAX_UI_AUTO_RUNS,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
     try:
-        from autoperfpy.device_config import get_devices_and_configs_auto
         from autoperfpy.auto_runner import run_auto_benchmarks
+        from autoperfpy.device_config import get_devices_and_configs_auto
 
         pairs = get_devices_and_configs_auto(
             precisions=precisions,
@@ -391,11 +375,11 @@ def run_auto_benchmarks_ui(
 
 def estimate_auto_benchmark_plan_ui(
     duration_seconds: int,
-    precisions: List[str],
-    batch_sizes: List[int],
+    precisions: list[str],
+    batch_sizes: list[int],
     max_configs_per_device: int = 6,
-    device_ids_filter: Optional[List[str]] = None,
-) -> Dict[str, int]:
+    device_ids_filter: list[str] | None = None,
+) -> dict[str, int]:
     """Estimate run count and wall-clock time for auto-benchmark UI selections."""
     try:
         from autoperfpy.device_config import get_devices_and_configs_auto
@@ -417,19 +401,17 @@ def estimate_auto_benchmark_plan_ui(
         return {"planned_runs": 0, "capped_runs": 0, "estimated_seconds": 0}
 
 
-def run_benchmark_from_ui(
-    duration_seconds: int, device: str, precision: str
-) -> Optional[Dict[str, Any]]:
+def run_benchmark_from_ui(duration_seconds: int, device: str, precision: str) -> dict[str, Any] | None:
     """Run benchmark from UI (Phase 5 manual: uses detected device + inference config)."""
     try:
+        from autoperfpy.auto_runner import run_single_benchmark
         from autoperfpy.device_config import (
             DEFAULT_ITERATIONS,
             DEFAULT_WARMUP_RUNS,
-            InferenceConfig,
             PRECISION_FP32,
+            InferenceConfig,
             resolve_device,
         )
-        from autoperfpy.auto_runner import run_single_benchmark
     except ImportError:
         return _run_synthetic_fallback_ui(duration_seconds, device, precision)
     target = resolve_device(device or "cpu_0")
@@ -454,9 +436,7 @@ def run_benchmark_from_ui(
     return result
 
 
-def _run_synthetic_fallback_ui(
-    duration_seconds: int, device: str, precision: str
-) -> Optional[Dict[str, Any]]:
+def _run_synthetic_fallback_ui(duration_seconds: int, device: str, precision: str) -> dict[str, Any] | None:
     """Fallback: run synthetic benchmark from UI when Phase 5 runner unavailable."""
     try:
         from autoperfpy.device_config import DEFAULT_WARMUP_RUNS
@@ -480,7 +460,7 @@ def _run_synthetic_fallback_ui(
     return data
 
 
-def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -> tuple:
+def _generate_report_directly(data: dict[str, Any], report_type: str = "HTML") -> tuple:
     """Generate HTML report directly without using CLI subprocess.
 
     The HTML report includes a 'Print / Save as PDF' button that users can
@@ -535,40 +515,26 @@ def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -
 
     lat = summary.get("latency", {})
     if lat:
-        report.add_summary_item(
-            "P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral"
-        )
-        report.add_summary_item(
-            "P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral"
-        )
-        report.add_summary_item(
-            "Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral"
-        )
+        report.add_summary_item("P99 Latency", f"{lat.get('p99_ms', 0):.2f}", "ms", "neutral")
+        report.add_summary_item("P50 Latency", f"{lat.get('p50_ms', 0):.2f}", "ms", "neutral")
+        report.add_summary_item("Mean Latency", f"{lat.get('mean_ms', 0):.2f}", "ms", "neutral")
 
     thr = summary.get("throughput", {})
     if thr:
-        report.add_summary_item(
-            "Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral"
-        )
+        report.add_summary_item("Mean Throughput", f"{thr.get('mean_fps', 0):.1f}", "FPS", "neutral")
 
     pwr = summary.get("power", {})
     if pwr and pwr.get("mean_w") is not None:
-        report.add_summary_item(
-            "Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral"
-        )
+        report.add_summary_item("Mean Power", f"{pwr.get('mean_w', 0):.1f}", "W", "neutral")
 
     # Add GPU/CPU utilization if available
     gpu = summary.get("gpu", {})
     if gpu and gpu.get("mean_percent") is not None:
-        report.add_summary_item(
-            "Avg GPU", f"{gpu.get('mean_percent', 0):.1f}", "%", "neutral"
-        )
+        report.add_summary_item("Avg GPU", f"{gpu.get('mean_percent', 0):.1f}", "%", "neutral")
 
     cpu = summary.get("cpu", {})
     if cpu and cpu.get("mean_percent") is not None:
-        report.add_summary_item(
-            "Avg CPU", f"{cpu.get('mean_percent', 0):.1f}", "%", "neutral"
-        )
+        report.add_summary_item("Avg CPU", f"{cpu.get('mean_percent', 0):.1f}", "%", "neutral")
 
     # Add all Plotly charts (same as UI)
     shared_charts.add_charts_to_html_report(report, df, summary)
@@ -584,7 +550,7 @@ def _generate_report_directly(data: Dict[str, Any], report_type: str = "HTML") -
         shutil.rmtree(out_dir, ignore_errors=True)
 
 
-def render_summary_metrics(data: Dict[str, Any]):
+def render_summary_metrics(data: dict[str, Any]):
     """Render summary metrics cards.
 
     Args:
@@ -622,7 +588,7 @@ def render_summary_metrics(data: Dict[str, Any]):
         st.metric("Avg Power", f"{mean_power} W" if mean_power != "N/A" else "N/A")
 
 
-def render_latency_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
+def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     """Render latency analysis section.
 
     Args:
@@ -662,7 +628,7 @@ def render_latency_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
         pcol6.metric("Max", f"{latency.get('max_ms', 'N/A')} ms")
 
 
-def render_utilization_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
+def render_utilization_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     """Render CPU/GPU utilization analysis.
 
     Args:
@@ -693,7 +659,7 @@ def render_utilization_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
             st.plotly_chart(fig, width="stretch")
 
 
-def render_power_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
+def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     """Render power and thermal analysis.
 
     Args:
@@ -744,7 +710,7 @@ def render_power_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
             pcol4.metric("Max Temp", f"{temp.get('max_c', 'N/A')} C")
 
 
-def render_memory_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
+def render_memory_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     """Render memory usage analysis.
 
     Args:
@@ -767,17 +733,13 @@ def render_memory_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
 
     with col2:
         # Memory gauge (from shared charts)
-        total_mb = (
-            float(df["memory_total_mb"].iloc[0])
-            if "memory_total_mb" in df.columns and len(df) > 0
-            else None
-        )
+        total_mb = float(df["memory_total_mb"].iloc[0]) if "memory_total_mb" in df.columns and len(df) > 0 else None
         fig = shared_charts.create_memory_gauge(summary, total_mb)
         if fig:
             st.plotly_chart(fig, width="stretch")
 
 
-def render_throughput_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
+def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     """Render throughput analysis.
 
     Args:
@@ -813,7 +775,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: Dict[str, Any]):
                 st.metric("Efficiency", f"{efficiency:.2f} FPS/W")
 
 
-def render_multi_run_comparison(runs: List[Dict[str, Any]]):
+def render_multi_run_comparison(runs: list[dict[str, Any]]):
     """Render multi-run comparison view with platform_metadata and inference_config (Phase 5).
 
     Args:
@@ -822,16 +784,11 @@ def render_multi_run_comparison(runs: List[Dict[str, Any]]):
     st.subheader("Multi-Run Comparison")
 
     if len(runs) < 2:
-        st.info(
-            "Upload multiple run files or run a benchmark (one or more devices) to enable comparison"
-        )
+        st.info("Upload multiple run files or run a benchmark (one or more devices) to enable comparison")
         return
 
     # Run labels: run_label > collector_name > Run N
-    run_names = [
-        r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
-        for i, r in enumerate(runs)
-    ]
+    run_names = [r.get("run_label") or r.get("collector_name") or f"Run {i+1}" for i, r in enumerate(runs)]
 
     # Latency comparison
     col1, col2 = st.columns(2)
@@ -1009,14 +966,9 @@ def main():
                     key="bench_devices",
                     help="Select at least one device. Same as CLI: autoperfpy run --device <id>",
                 )
-                selected_device_ids = [
-                    all_device_ids[device_labels.index(label)]
-                    for label in selected_labels
-                ]
+                selected_device_ids = [all_device_ids[device_labels.index(label)] for label in selected_labels]
             else:
-                st.caption(
-                    "No devices detected; enter a device ID (e.g. cpu_0, nvidia_0)."
-                )
+                st.caption("No devices detected; enter a device ID (e.g. cpu_0, nvidia_0).")
                 device_ui = st.text_input(
                     "Device",
                     value="cpu_0",
@@ -1108,9 +1060,7 @@ def main():
                         if "data_list" not in st.session_state:
                             st.session_state["data_list"] = []
                         st.session_state["data_list"] = results
-                        st.success(
-                            f"Completed {len(results)} runs. Results loaded below."
-                        )
+                        st.success(f"Completed {len(results)} runs. Results loaded below.")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:
@@ -1139,9 +1089,7 @@ def main():
             if "data_list" in st.session_state and st.session_state["data_list"]:
                 data_list = st.session_state["data_list"]
             else:
-                st.info(
-                    "Select one or more devices, set options, then click **Run benchmark**."
-                )
+                st.info("Select one or more devices, set options, then click **Run benchmark**.")
         else:
             st.info("Using synthetic demo data")
             data_list = [generate_synthetic_demo_data()]
@@ -1177,38 +1125,26 @@ def main():
                 )
                 ra_device_id = ra_options[ra_idx][0]
             else:
-                ra_device_id = st.text_input(
-                    "Device (e.g. cpu_0, nvidia_0)", value="cpu_0", key="ra_device_txt"
-                )
-            ra_duration = st.number_input(
-                "Duration (seconds)", min_value=5, max_value=120, value=10, key="ra_dur"
-            )
+                ra_device_id = st.text_input("Device (e.g. cpu_0, nvidia_0)", value="cpu_0", key="ra_device_txt")
+            ra_duration = st.number_input("Duration (seconds)", min_value=5, max_value=120, value=10, key="ra_dur")
 
         col_rep, col_an = st.columns(2)
         with col_rep:
             st.subheader("Generate report")
-            st.caption(
-                "Download as HTML. Use the 'Print / Save as PDF' button in the report for PDF."
-            )
+            st.caption("Download as HTML. Use the 'Print / Save as PDF' button in the report for PDF.")
             if st.button("Generate HTML Report"):
                 data_for_report = None
                 if report_analyze_source == "Use current data above" and data_list:
                     data_for_report = data_list[0]
                 elif report_analyze_source == "Run quick benchmark":
                     with st.spinner("Running quick benchmark..."):
-                        data_for_report = run_benchmark_from_ui(
-                            ra_duration, ra_device_id, "fp32"
-                        )
+                        data_for_report = run_benchmark_from_ui(ra_duration, ra_device_id, "fp32")
                 if data_for_report:
                     try:
-                        report_bytes, report_basename = _generate_report_directly(
-                            data_for_report, "HTML"
-                        )
+                        report_bytes, report_basename = _generate_report_directly(data_for_report, "HTML")
                         if report_bytes:
                             st.success("Report generated! Download below.")
-                            st.info(
-                                "Tip: Open the HTML file and click 'Print / Save as PDF' button to create a PDF."
-                            )
+                            st.info("Tip: Open the HTML file and click 'Print / Save as PDF' button to create a PDF.")
                             st.download_button(
                                 "Download HTML Report",
                                 data=report_bytes,
@@ -1237,16 +1173,14 @@ def main():
                     data_for_analyze = data_list[0]
                 elif report_analyze_source == "Run quick benchmark":
                     with st.spinner("Running quick benchmark..."):
-                        data_for_analyze = run_benchmark_from_ui(
-                            ra_duration, ra_device_id, "fp32"
-                        )
+                        data_for_analyze = run_benchmark_from_ui(ra_duration, ra_device_id, "fp32")
                 if data_for_analyze:
                     csv_path = result_to_csv_path(data_for_analyze)
                     if csv_path:
                         try:
                             from autoperfpy.analyzers import (
-                                PercentileLatencyAnalyzer,
                                 EfficiencyAnalyzer,
+                                PercentileLatencyAnalyzer,
                                 VariabilityAnalyzer,
                             )
                             from autoperfpy.config import ConfigManager
@@ -1266,17 +1200,9 @@ def main():
                                     result = analyzer.analyze(csv_path)
                                 else:
                                     analyzer = VariabilityAnalyzer(config)
-                                    result = analyzer.analyze(
-                                        csv_path, latency_col="latency_ms"
-                                    )
-                                with st.expander(
-                                    f"**{atype.capitalize()}**", expanded=True
-                                ):
-                                    st.json(
-                                        result.metrics
-                                        if hasattr(result, "metrics")
-                                        else {}
-                                    )
+                                    result = analyzer.analyze(csv_path, latency_col="latency_ms")
+                                with st.expander(f"**{atype.capitalize()}**", expanded=True):
+                                    st.json(result.metrics if hasattr(result, "metrics") else {})
                         finally:
                             try:
                                 os.unlink(csv_path)
@@ -1307,14 +1233,11 @@ def main():
     # Main content
     if not data_list:
         if data_source == "Run Benchmark":
-            st.info(
-                "Configure benchmark settings in the sidebar and click **Run benchmark** to start."
-            )
+            st.info("Configure benchmark settings in the sidebar and click **Run benchmark** to start.")
         else:
             st.info("Please upload a data file or select Demo Data to get started")
 
-        st.markdown(
-            """
+        st.markdown("""
         ### Supported Data Formats
 
         **JSON (Collector Export)**
@@ -1339,8 +1262,7 @@ def main():
            ```
 
         2. Upload the results file or use Demo Data to visualize
-        """
-        )
+        """)
         return
 
     # Use first dataset as primary
@@ -1381,20 +1303,12 @@ def main():
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown("**Device**")
-                st.text(
-                    platform_meta.get("device_name")
-                    or inference_cfg.get("accelerator")
-                    or "N/A"
-                )
+                st.text(platform_meta.get("device_name") or inference_cfg.get("accelerator") or "N/A")
                 st.markdown("**GPU**")
-                st.text(
-                    platform_meta.get("gpu_model") or platform_meta.get("gpu", "N/A")
-                )
+                st.text(platform_meta.get("gpu_model") or platform_meta.get("gpu", "N/A"))
             with c2:
                 st.markdown("**CPU**")
-                st.text(
-                    platform_meta.get("cpu_model") or platform_meta.get("cpu", "N/A")
-                )
+                st.text(platform_meta.get("cpu_model") or platform_meta.get("cpu", "N/A"))
                 st.markdown("**Precision**")
                 st.text(inference_cfg.get("precision") or "N/A")
             with c3:
@@ -1449,9 +1363,7 @@ def main():
     # Footer
     st.divider()
     st.markdown(
-        "<div style='text-align: center; color: gray;'>"
-        "AutoPerfPy Dashboard | Performance Analysis Toolkit"
-        "</div>",
+        "<div style='text-align: center; color: gray;'>" "AutoPerfPy Dashboard | Performance Analysis Toolkit" "</div>",
         unsafe_allow_html=True,
     )
 

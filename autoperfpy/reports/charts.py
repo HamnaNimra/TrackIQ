@@ -9,7 +9,7 @@ Plotly via add_interactive_charts_to_html_report (or add_charts_to_html_report
 with chart_engine="chartjs") for a polished, example-style look.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 try:
     import plotly.express as px
@@ -35,7 +35,7 @@ def is_available() -> bool:
     return PLOTLY_AVAILABLE and PANDAS_AVAILABLE
 
 
-def samples_to_dataframe(samples: List[Dict]) -> "pd.DataFrame":
+def samples_to_dataframe(samples: list[dict]) -> "pd.DataFrame":
     """Convert collector samples to a pandas DataFrame.
 
     Args:
@@ -97,7 +97,7 @@ def ensure_throughput_column(df: "pd.DataFrame") -> None:
     df["throughput_fps"] = 1000.0 / df["latency_ms"].replace(0, np.nan)
 
 
-def compute_summary_from_dataframe(df: "pd.DataFrame") -> Dict[str, Any]:
+def compute_summary_from_dataframe(df: "pd.DataFrame") -> dict[str, Any]:
     """Compute summary statistics from a DataFrame when summary is missing.
 
     Produces a dict compatible with chart helpers and report generators (e.g.
@@ -119,7 +119,7 @@ def compute_summary_from_dataframe(df: "pd.DataFrame") -> Dict[str, Any]:
             return 0.0
         return float(np.percentile(arr, p))
 
-    summary: Dict[str, Any] = {"sample_count": len(df)}
+    summary: dict[str, Any] = {"sample_count": len(df)}
 
     if "latency_ms" in df.columns:
         lat = df["latency_ms"].dropna()
@@ -224,7 +224,7 @@ def create_latency_timeline(
 
 def create_latency_histogram(
     df: "pd.DataFrame",
-    summary: Dict[str, Any],
+    summary: dict[str, Any],
     exclude_warmup: bool = True,
     nbins: int = 50,
 ) -> Optional["go.Figure"]:
@@ -324,7 +324,7 @@ def create_utilization_timeline(df: "pd.DataFrame") -> Optional["go.Figure"]:
     return fig
 
 
-def create_utilization_summary_bar(summary: Dict[str, Any]) -> Optional["go.Figure"]:
+def create_utilization_summary_bar(summary: dict[str, Any]) -> Optional["go.Figure"]:
     """Create utilization summary bar chart (mean vs max).
 
     Args:
@@ -477,8 +477,8 @@ def create_memory_timeline(df: "pd.DataFrame") -> Optional["go.Figure"]:
 
 
 def create_memory_gauge(
-    summary: Dict[str, Any],
-    total_mb: Optional[float] = None,
+    summary: dict[str, Any],
+    total_mb: float | None = None,
 ) -> Optional["go.Figure"]:
     """Create memory usage gauge indicator.
 
@@ -532,7 +532,7 @@ def create_memory_gauge(
 
 def create_throughput_timeline(
     df: "pd.DataFrame",
-    summary: Dict[str, Any],
+    summary: dict[str, Any],
     exclude_warmup: bool = True,
 ) -> Optional["go.Figure"]:
     """Create throughput over time chart with mean line.
@@ -583,8 +583,8 @@ def create_throughput_timeline(
 
 
 def create_latency_comparison_bar(
-    runs: List[Dict[str, Any]],
-    run_names: Optional[List[str]] = None,
+    runs: list[dict[str, Any]],
+    run_names: list[str] | None = None,
 ) -> Optional["go.Figure"]:
     """Create latency comparison bar chart across multiple runs.
 
@@ -599,10 +599,7 @@ def create_latency_comparison_bar(
         return None
 
     if run_names is None:
-        run_names = [
-            r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
-            for i, r in enumerate(runs)
-        ]
+        run_names = [r.get("run_label") or r.get("collector_name") or f"Run {i+1}" for i, r in enumerate(runs)]
 
     latency_data = []
     for i, run in enumerate(runs):
@@ -634,8 +631,8 @@ def create_latency_comparison_bar(
 
 
 def create_throughput_comparison_bar(
-    runs: List[Dict[str, Any]],
-    run_names: Optional[List[str]] = None,
+    runs: list[dict[str, Any]],
+    run_names: list[str] | None = None,
 ) -> Optional["go.Figure"]:
     """Create throughput comparison bar chart across multiple runs.
 
@@ -650,10 +647,7 @@ def create_throughput_comparison_bar(
         return None
 
     if run_names is None:
-        run_names = [
-            r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
-            for i, r in enumerate(runs)
-        ]
+        run_names = [r.get("run_label") or r.get("collector_name") or f"Run {i+1}" for i, r in enumerate(runs)]
 
     throughput_data = []
     for i, run in enumerate(runs):
@@ -689,7 +683,7 @@ def create_throughput_comparison_bar(
 def _downsample_for_chart(
     df: "pd.DataFrame",
     x_col: str,
-    y_cols: List[str],
+    y_cols: list[str],
     max_points: int = 500,
 ) -> "pd.DataFrame":
     """Downsample DataFrame for line charts to avoid huge payloads."""
@@ -705,7 +699,7 @@ def _downsample_for_chart(
 def add_interactive_charts_to_html_report(
     report: Any,
     df: "pd.DataFrame",
-    summary: Dict[str, Any],
+    summary: dict[str, Any],
 ) -> None:
     """Add Chart.js interactive charts and a Summary Statistics table to the report.
 
@@ -734,9 +728,7 @@ def add_interactive_charts_to_html_report(
     # ----- Latency -----
     if "latency_ms" in df.columns and has_elapsed:
         report.add_section("Latency", section_descriptions["Latency"])
-        plot_df = _downsample_for_chart(
-            df, "elapsed_seconds", ["latency_ms"], max_points=500
-        )
+        plot_df = _downsample_for_chart(df, "elapsed_seconds", ["latency_ms"], max_points=500)
         labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
         report.add_interactive_line_chart(
             labels=labels,
@@ -755,20 +747,13 @@ def add_interactive_charts_to_html_report(
         if len(plot_df_hist) > 0:
             hist, bin_edges = _histogram_bins(plot_df_hist.tolist(), nbins=20)
             if hist and len(bin_edges) > 1:
-                bin_labels = [
-                    f"{bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}"
-                    for i in range(len(bin_edges) - 1)
-                ]
+                bin_labels = [f"{bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}" for i in range(len(bin_edges) - 1)]
                 report.add_interactive_bar_chart(
                     labels=bin_labels,
                     datasets=[{"label": "Count", "data": hist}],
                     title="Latency Distribution",
                     section="Latency",
-                    description=(
-                        "Excluding warmup samples."
-                        if exclude_warmup
-                        else "Distribution of latency values."
-                    ),
+                    description=("Excluding warmup samples." if exclude_warmup else "Distribution of latency values."),
                     x_label="Latency (ms)",
                     y_label="Count",
                 )
@@ -850,9 +835,7 @@ def add_interactive_charts_to_html_report(
         if "temperature_c" in plot_df.columns:
             report.add_interactive_line_chart(
                 labels=labels,
-                datasets=[
-                    {"label": "Temperature", "data": plot_df["temperature_c"].tolist()}
-                ],
+                datasets=[{"label": "Temperature", "data": plot_df["temperature_c"].tolist()}],
                 title="Temperature Over Time",
                 section="Power & Thermal",
                 description="Temperature (°C) vs time.",
@@ -864,15 +847,11 @@ def add_interactive_charts_to_html_report(
     # ----- Memory -----
     if "memory_used_mb" in df.columns and has_elapsed:
         report.add_section("Memory", section_descriptions["Memory"])
-        plot_df = _downsample_for_chart(
-            df, "elapsed_seconds", ["memory_used_mb"], max_points=500
-        )
+        plot_df = _downsample_for_chart(df, "elapsed_seconds", ["memory_used_mb"], max_points=500)
         labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
         report.add_interactive_line_chart(
             labels=labels,
-            datasets=[
-                {"label": "Memory Used", "data": plot_df["memory_used_mb"].tolist()}
-            ],
+            datasets=[{"label": "Memory Used", "data": plot_df["memory_used_mb"].tolist()}],
             title="Memory Over Time",
             section="Memory",
             description="Memory used (MB) vs time.",
@@ -892,7 +871,7 @@ def add_interactive_charts_to_html_report(
                 data=[round(used, 1), round(free, 1)],
                 title="Memory Summary",
                 section="Memory",
-                description="Mean usage vs free (total {:.0f} MB).".format(total_mb),
+                description=f"Mean usage vs free (total {total_mb:.0f} MB).",
                 doughnut=True,
             )
 
@@ -900,9 +879,7 @@ def add_interactive_charts_to_html_report(
     if "throughput_fps" in df.columns and has_elapsed:
         exclude_warmup = "is_warmup" in df.columns
         plot_df = df[~df["is_warmup"]] if exclude_warmup else df
-        plot_df = _downsample_for_chart(
-            plot_df, "elapsed_seconds", ["throughput_fps"], max_points=500
-        )
+        plot_df = _downsample_for_chart(plot_df, "elapsed_seconds", ["throughput_fps"], max_points=500)
         if len(plot_df) > 0:
             report.add_section("Throughput", section_descriptions["Throughput"])
             labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
@@ -922,9 +899,7 @@ def add_interactive_charts_to_html_report(
                 title="Throughput Over Time",
                 section="Throughput",
                 description=(
-                    "Throughput (FPS) vs time, excluding warmup."
-                    if exclude_warmup
-                    else "Throughput (FPS) vs time."
+                    "Throughput (FPS) vs time, excluding warmup." if exclude_warmup else "Throughput (FPS) vs time."
                 ),
                 x_label="Time (s)",
                 y_label="Throughput (FPS)",
@@ -932,7 +907,7 @@ def add_interactive_charts_to_html_report(
             )
 
     # ----- Summary Statistics table -----
-    rows: List[List[Union[str, int, float]]] = []
+    rows: list[list[str | int | float]] = []
     lat = summary.get("latency", {})
     for label, key, fmt, unit in [
         ("P50 Latency", "p50_ms", ".2f", "ms"),
@@ -964,9 +939,7 @@ def add_interactive_charts_to_html_report(
     if v is not None:
         rows.append(["Mean Memory", format(float(v), ".0f"), "MB"])
     if rows:
-        report.add_section(
-            "Summary Statistics", section_descriptions["Summary Statistics"]
-        )
+        report.add_section("Summary Statistics", section_descriptions["Summary Statistics"])
         report.add_table(
             title="Key metrics",
             headers=["Metric", "Value", "Unit"],
@@ -975,7 +948,7 @@ def add_interactive_charts_to_html_report(
         )
 
 
-def _histogram_bins(values: List[float], nbins: int = 30) -> tuple:
+def _histogram_bins(values: list[float], nbins: int = 30) -> tuple:
     """Return (counts per bin, bin edges)."""
     if not values or not PANDAS_AVAILABLE:
         return [], []
@@ -993,8 +966,8 @@ def _histogram_bins(values: List[float], nbins: int = 30) -> tuple:
 
 def build_all_charts(
     df: "pd.DataFrame",
-    summary: Dict[str, Any],
-) -> Dict[str, List[tuple]]:
+    summary: dict[str, Any],
+) -> dict[str, list[tuple]]:
     """Build all available charts organized by section.
 
     Args:
@@ -1004,7 +977,7 @@ def build_all_charts(
     Returns:
         Dict mapping section name to list of (caption, figure) tuples
     """
-    sections: Dict[str, List[tuple]] = {}
+    sections: dict[str, list[tuple]] = {}
 
     # Latency
     latency_charts = []
@@ -1044,11 +1017,7 @@ def build_all_charts(
     fig = create_memory_timeline(df)
     if fig:
         memory_charts.append(("Memory Over Time", fig))
-    total_mb = (
-        float(df["memory_total_mb"].iloc[0])
-        if "memory_total_mb" in df.columns and len(df) > 0
-        else None
-    )
+    total_mb = float(df["memory_total_mb"].iloc[0]) if "memory_total_mb" in df.columns and len(df) > 0 else None
     fig = create_memory_gauge(summary, total_mb)
     if fig:
         memory_charts.append(("Memory Summary", fig))
@@ -1069,7 +1038,7 @@ def build_all_charts(
 def add_charts_to_html_report(
     report: Any,
     df: "pd.DataFrame",
-    summary: Dict[str, Any],
+    summary: dict[str, Any],
     chart_engine: str = "chartjs",
 ) -> None:
     """Add charts to an HTMLReportGenerator.
@@ -1175,9 +1144,7 @@ def add_charts_to_html_report(
     if power_charts:
         report.add_section("Power & Thermal", section_descriptions["Power & Thermal"])
         for caption, fig in power_charts:
-            report.add_html_figure(
-                _fig_to_html(fig, caption), caption, "Power & Thermal"
-            )
+            report.add_html_figure(_fig_to_html(fig, caption), caption, "Power & Thermal")
 
     # Memory section
     memory_charts = []
@@ -1185,11 +1152,7 @@ def add_charts_to_html_report(
         fig = create_memory_timeline(df)
         if fig:
             memory_charts.append(("Memory Over Time", fig))
-        total_mb = (
-            float(df["memory_total_mb"].iloc[0])
-            if "memory_total_mb" in df.columns and len(df) > 0
-            else None
-        )
+        total_mb = float(df["memory_total_mb"].iloc[0]) if "memory_total_mb" in df.columns and len(df) > 0 else None
         fig = create_memory_gauge(summary, total_mb)
         if fig:
             memory_charts.append(("Memory Usage", fig))

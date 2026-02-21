@@ -1,6 +1,7 @@
 """Shared utilities, analyzers, compare, core base classes."""
 
 from .base import BaseAnalyzer, BaseBenchmark, BaseMonitor
+
 try:
     from .analysis_utils import DataLoader, LatencyStats, PerformanceComparator
 except Exception:  # pragma: no cover - optional dependency path (e.g., missing pandas)
@@ -9,28 +10,30 @@ except Exception:  # pragma: no cover - optional dependency path (e.g., missing 
     PerformanceComparator = None
 try:
     from .efficiency import (
-        EfficiencyMetrics,
-        EfficiencyCalculator,
         BatchEfficiencyAnalyzer,
+        EfficiencyCalculator,
+        EfficiencyMetrics,
     )
 except Exception:  # pragma: no cover - optional dependency path (e.g., missing numpy)
     EfficiencyMetrics = None
     EfficiencyCalculator = None
     BatchEfficiencyAnalyzer = None
+from trackiq_core.schemas import AnalysisResult
+
+from .compare import MetricComparison, RegressionDetector, RegressionThreshold
 from .errors import (
-    TrackIQError,
-    HardwareNotFoundError,
     ConfigError,
     DependencyError,
+    HardwareNotFoundError,
     ProfileValidationError,
+    TrackIQError,
 )
-from trackiq_core.schemas import AnalysisResult
-from .compare import RegressionDetector, RegressionThreshold, MetricComparison
+
 try:
     from .analyzers import (
-        PercentileLatencyAnalyzer,
-        LogAnalyzer,
         EfficiencyAnalyzer,
+        LogAnalyzer,
+        PercentileLatencyAnalyzer,
         VariabilityAnalyzer,
     )
 except Exception:  # pragma: no cover - optional dependency path
@@ -57,9 +60,7 @@ __all__ = [
 if DataLoader is not None:
     __all__.extend(["DataLoader", "LatencyStats", "PerformanceComparator"])
 if EfficiencyMetrics is not None:
-    __all__.extend(
-        ["EfficiencyMetrics", "EfficiencyCalculator", "BatchEfficiencyAnalyzer"]
-    )
+    __all__.extend(["EfficiencyMetrics", "EfficiencyCalculator", "BatchEfficiencyAnalyzer"])
 if PercentileLatencyAnalyzer is not None:
     __all__.extend(
         [

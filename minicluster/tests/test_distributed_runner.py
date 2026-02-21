@@ -4,26 +4,24 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
 import torch
 
 from minicluster.runner import (
     RunConfig,
-    RunMetrics,
     SimpleMLP,
     create_synthetic_dataset,
-    train_single_process,
+    load_metrics,
     run_distributed,
     save_metrics,
-    load_metrics,
+    train_single_process,
 )
-from trackiq_core.serializer import load_trackiq_result
 from minicluster.runner.distributed_runner import (
-    WorkerSnapshot,
     HealthCheckpoint,
+    WorkerSnapshot,
     determine_worker_status,
     write_health_checkpoint,
 )
+from trackiq_core.serializer import load_trackiq_result
 
 
 class TestSimpleMLP:
@@ -70,9 +68,7 @@ class TestSyntheticDataset:
 
     def test_dataset_shape(self):
         """Test dataset has correct shapes."""
-        dataset = create_synthetic_dataset(
-            num_samples=100, input_size=10, output_size=3, seed=42
-        )
+        dataset = create_synthetic_dataset(num_samples=100, input_size=10, output_size=3, seed=42)
         x, y = dataset[0]
         assert x.shape == (10,)
         assert y.shape == (3,)

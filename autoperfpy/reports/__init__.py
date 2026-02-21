@@ -1,9 +1,9 @@
 """Reporting and visualization module for TrackIQ."""
 
-from .visualizer import PerformanceVisualizer
-from .pdf_generator import PDFReportGenerator, PDF_BACKENDS, PDF_BACKEND_AUTO
-from .html_generator import HTMLReportGenerator
 from . import charts
+from .html_generator import HTMLReportGenerator
+from .pdf_generator import PDF_BACKEND_AUTO, PDF_BACKENDS, PDFReportGenerator
+from .visualizer import PerformanceVisualizer
 
 __all__ = [
     "PerformanceVisualizer",

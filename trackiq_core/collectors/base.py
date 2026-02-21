@@ -24,8 +24,8 @@ Example usage:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -39,10 +39,10 @@ class CollectorSample:
     """
 
     timestamp: float
-    metrics: Dict[str, Any]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert sample to dictionary format.
 
         Returns:
@@ -69,13 +69,13 @@ class CollectorExport:
     """
 
     collector_name: str
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    samples: List[CollectorSample] = field(default_factory=list)
-    summary: Dict[str, Any] = field(default_factory=dict)
-    config: Dict[str, Any] = field(default_factory=dict)
+    start_time: float | None = None
+    end_time: float | None = None
+    samples: list[CollectorSample] = field(default_factory=list)
+    summary: dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert export to dictionary format.
 
         Returns:
@@ -113,7 +113,7 @@ class CollectorBase(ABC):
         _config: Configuration dictionary
     """
 
-    def __init__(self, name: str, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, name: str, config: dict[str, Any] | None = None):
         """Initialize the collector.
 
         Args:
@@ -121,10 +121,10 @@ class CollectorBase(ABC):
             config: Optional configuration dictionary
         """
         self.name = name
-        self._samples: List[CollectorSample] = []
+        self._samples: list[CollectorSample] = []
         self._is_running: bool = False
-        self._start_time: Optional[float] = None
-        self._end_time: Optional[float] = None
+        self._start_time: float | None = None
+        self._end_time: float | None = None
         self._config = config or {}
 
     @abstractmethod
@@ -133,7 +133,7 @@ class CollectorBase(ABC):
         pass
 
     @abstractmethod
-    def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def sample(self, timestamp: float) -> dict[str, Any] | None:
         """Collect a single sample at the given timestamp."""
         pass
 
@@ -147,14 +147,9 @@ class CollectorBase(ABC):
         """Export all collected data."""
         pass
 
-    def _store_sample(self, timestamp: float, metrics: Dict[str, Any],
-                      metadata: Optional[Dict[str, Any]] = None) -> None:
+    def _store_sample(self, timestamp: float, metrics: dict[str, Any], metadata: dict[str, Any] | None = None) -> None:
         """Store a sample in the internal buffer."""
-        sample = CollectorSample(
-            timestamp=timestamp,
-            metrics=metrics,
-            metadata=metadata or {}
-        )
+        sample = CollectorSample(timestamp=timestamp, metrics=metrics, metadata=metadata or {})
         self._samples.append(sample)
 
     def get_sample_count(self) -> int:

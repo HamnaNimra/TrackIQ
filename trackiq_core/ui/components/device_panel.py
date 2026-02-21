@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from trackiq_core.hardware.devices import (
     DEVICE_TYPE_AMD_GPU,
@@ -26,7 +27,7 @@ from trackiq_core.hardware.gpu import (
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
 
 
-def _nvidia_metrics(_: int) -> Optional[Dict[str, Any]]:
+def _nvidia_metrics(_: int) -> dict[str, Any] | None:
     mem = get_memory_metrics()
     perf = get_performance_metrics()
     if mem is None and perf is None:
@@ -34,7 +35,7 @@ def _nvidia_metrics(_: int) -> Optional[Dict[str, Any]]:
     return {**(mem or {}), **(perf or {})}
 
 
-METRICS_DISPATCH: Dict[str, Callable[[int], Optional[Dict[str, Any]]]] = {
+METRICS_DISPATCH: dict[str, Callable[[int], dict[str, Any] | None]] = {
     DEVICE_TYPE_NVIDIA_GPU: _nvidia_metrics,
     DEVICE_TYPE_AMD_GPU: lambda idx: get_amd_gpu_metrics(idx),
     DEVICE_TYPE_INTEL_GPU: lambda idx: get_intel_gpu_metrics(),
@@ -50,7 +51,7 @@ class DevicePanel:
 
     def __init__(
         self,
-        devices: List[DeviceProfile],
+        devices: list[DeviceProfile],
         show_live_metrics: bool = True,
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
@@ -59,13 +60,13 @@ class DevicePanel:
         self.theme = theme
         self.selected_device_index = 0
 
-    def _selected_device(self) -> Optional[DeviceProfile]:
+    def _selected_device(self) -> DeviceProfile | None:
         if not self.devices:
             return None
         idx = max(0, min(self.selected_device_index, len(self.devices) - 1))
         return self.devices[idx]
 
-    def _live_metrics(self, device: Optional[DeviceProfile]) -> Optional[Dict[str, Any]]:
+    def _live_metrics(self, device: DeviceProfile | None) -> dict[str, Any] | None:
         if not self.show_live_metrics or device is None:
             return None
         handler = METRICS_DISPATCH.get(device.device_type)
@@ -76,18 +77,16 @@ class DevicePanel:
         except Exception:
             return None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return serializable device panel payload."""
         selected = self._selected_device()
         return {
             "devices": [device.to_dict() for device in self.devices],
-            "selected_device_index": (
-                self.selected_device_index if self.devices else None
-            ),
+            "selected_device_index": (self.selected_device_index if self.devices else None),
             "live_metrics": self._live_metrics(selected),
         }
 
-    def _temperature_state(self, temperature: Optional[float]) -> str:
+    def _temperature_state(self, temperature: float | None) -> str:
         if temperature is None:
             return "N/A"
         if temperature < 70:
@@ -96,14 +95,10 @@ class DevicePanel:
             return "amber"
         return "red"
 
-    def _render_util_temp_power_memory(self, live: Dict[str, Any], label_prefix: str) -> None:
+    def _render_util_temp_power_memory(self, live: dict[str, Any], label_prefix: str) -> None:
         import streamlit as st
 
-        util = (
-            live.get("utilization")
-            or live.get("gpu_utilization")
-            or live.get("cpu_utilization")
-        )
+        util = live.get("utilization") or live.get("gpu_utilization") or live.get("cpu_utilization")
         temp = live.get("temperature")
         power = live.get("power")
         used = live.get("gpu_memory_used_mb")
@@ -116,9 +111,7 @@ class DevicePanel:
             color = (
                 self.theme.pass_color
                 if temp_state == "green"
-                else self.theme.warning_color
-                if temp_state == "amber"
-                else self.theme.fail_color
+                else self.theme.warning_color if temp_state == "amber" else self.theme.fail_color
             )
             st.metric("Temperature (°C)", f"{float(temp):.1f}")
             st.markdown(
@@ -128,7 +121,11 @@ class DevicePanel:
         if power is not None:
             st.metric("Power Draw (W)", f"{float(power):.1f}")
         if used is not None and total is not None:
-            pct = float(percent) if percent is not None else (float(used) / float(total) * 100.0 if float(total) > 0 else 0.0)
+            pct = (
+                float(percent)
+                if percent is not None
+                else (float(used) / float(total) * 100.0 if float(total) > 0 else 0.0)
+            )
             st.caption(f"Memory Used: {float(used):.0f}/{float(total):.0f} MB")
             st.progress(max(0.0, min(1.0, pct / 100.0)))
 
@@ -211,4 +208,3 @@ class DevicePanel:
                 "<div class='trackiq-card'>Live metrics not available for this device</div>",
                 unsafe_allow_html=True,
             )
-

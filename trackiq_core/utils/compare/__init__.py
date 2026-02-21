@@ -1,9 +1,9 @@
 """Regression detection and metric comparison."""
 
 from .regression import (
+    MetricComparison,
     RegressionDetector,
     RegressionThreshold,
-    MetricComparison,
 )
 
 __all__ = [

@@ -2,11 +2,12 @@
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any
 
 # Optional YAML; allow runtime to have pyyaml
 try:
     import yaml
+
     _YAML_AVAILABLE = True
 except ImportError:
     _YAML_AVAILABLE = False
@@ -18,7 +19,7 @@ def ensure_parent_dir(filepath: str) -> None:
     os.makedirs(parent, exist_ok=True)
 
 
-def load_yaml_file(filepath: str) -> Dict[str, Any]:
+def load_yaml_file(filepath: str) -> dict[str, Any]:
     """Load a YAML file into a dictionary.
 
     Args:
@@ -29,12 +30,12 @@ def load_yaml_file(filepath: str) -> Dict[str, Any]:
     """
     if not _YAML_AVAILABLE:
         raise ImportError("PyYAML is required for load_yaml_file")
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data if data is not None else {}
 
 
-def load_json_file(filepath: str) -> Dict[str, Any]:
+def load_json_file(filepath: str) -> dict[str, Any]:
     """Load a JSON file into a dictionary.
 
     Args:
@@ -43,12 +44,12 @@ def load_json_file(filepath: str) -> Dict[str, Any]:
     Returns:
         Loaded config as dict; empty dict if file is empty
     """
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         data = json.load(f)
     return data if data is not None else {}
 
 
-def save_yaml_file(filepath: str, data: Dict[str, Any]) -> None:
+def save_yaml_file(filepath: str, data: dict[str, Any]) -> None:
     """Save a dictionary to a YAML file."""
     if not _YAML_AVAILABLE:
         raise ImportError("PyYAML is required for save_yaml_file")
@@ -57,7 +58,7 @@ def save_yaml_file(filepath: str, data: Dict[str, Any]) -> None:
         yaml.dump(data, f, default_flow_style=False)
 
 
-def save_json_file(filepath: str, data: Dict[str, Any], indent: int = 2) -> None:
+def save_json_file(filepath: str, data: dict[str, Any], indent: int = 2) -> None:
     """Save a dictionary to a JSON file."""
     ensure_parent_dir(filepath)
     with open(filepath, "w", encoding="utf-8") as f:

@@ -1,17 +1,18 @@
 """Validation helpers for canonical TrackIQ results."""
 
-from typing import Any, Dict, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from trackiq_core.schema import TrackiqResult
 
 
-def _require_keys(container: Dict[str, Any], keys: Iterable[str], prefix: str) -> None:
+def _require_keys(container: dict[str, Any], keys: Iterable[str], prefix: str) -> None:
     for key in keys:
         if key not in container:
             raise ValueError(f"Missing required field: {prefix}{key}")
 
 
-def validate_trackiq_result(data: Dict[str, Any]) -> None:
+def validate_trackiq_result(data: dict[str, Any]) -> None:
     """Validate a loaded TrackiqResult payload.
 
     Raises:
@@ -111,9 +112,7 @@ def validate_trackiq_result(data: Dict[str, Any]) -> None:
     ):
         raise TypeError("Field 'regression.failed_metrics' must be list[str]")
 
-    if "tool_payload" in data and data["tool_payload"] is not None and not isinstance(
-        data["tool_payload"], dict
-    ):
+    if "tool_payload" in data and data["tool_payload"] is not None and not isinstance(data["tool_payload"], dict):
         raise TypeError("Field 'tool_payload' must be object or null")
 
     if "kv_cache" in data and data["kv_cache"] is not None:

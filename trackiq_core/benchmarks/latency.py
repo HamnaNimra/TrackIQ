@@ -1,7 +1,9 @@
 """Latency benchmarking modules for TrackIQ."""
 
+from typing import Any
+
 import numpy as np
-from typing import Dict, Any, List, Optional
+
 from trackiq_core.utils.base import BaseBenchmark
 
 
@@ -19,11 +21,11 @@ class BatchingTradeoffBenchmark(BaseBenchmark):
 
     def run(
         self,
-        batch_sizes: Optional[List[int]] = None,
+        batch_sizes: list[int] | None = None,
         num_images: int = 1000,
         base_overhead: float = 0.01,
         time_per_image: float = 0.005,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run batching trade-off benchmark.
 
         Args:
@@ -60,7 +62,7 @@ class BatchingTradeoffBenchmark(BaseBenchmark):
         self.results = results
         return results
 
-    def get_optimal_batch_size(self, optimize_for: str = "latency") -> Optional[int]:
+    def get_optimal_batch_size(self, optimize_for: str = "latency") -> int | None:
         """Get optimal batch size.
 
         Args:
@@ -97,7 +99,7 @@ class LLMLatencyBenchmark(BaseBenchmark):
         prompt_tokens: int = 512,
         output_tokens: int = 256,
         num_runs: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Run LLM latency benchmark.
 
         Args:
@@ -128,8 +130,7 @@ class LLMLatencyBenchmark(BaseBenchmark):
             "tpt_p95": float(np.percentile(tpt_times, 95)),
             "tpt_p99": float(np.percentile(tpt_times, 99)),
             "throughput_tokens_per_sec": 1000.0 / float(np.mean(tpt_times)),
-            "total_time_ms": float(np.mean(ttft_times))
-            + (output_tokens * float(np.mean(tpt_times))),
+            "total_time_ms": float(np.mean(ttft_times)) + (output_tokens * float(np.mean(tpt_times))),
         }
 
         return self.results

@@ -11,9 +11,9 @@ Provides subcommands for:
 import argparse
 import sys
 
-from minicluster.runner import RunConfig, run_distributed, save_metrics
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
+from minicluster.runner import RunConfig, run_distributed, save_metrics
 from trackiq_core.reporting import (
     PDF_BACKENDS,
     PdfBackendError,
@@ -276,10 +276,7 @@ def setup_report_parser(subparsers):
         "--pdf-backend",
         choices=list(PDF_BACKENDS),
         default="auto",
-        help=(
-            "PDF backend strategy (default: auto). "
-            "auto uses weasyprint primary with matplotlib fallback."
-        ),
+        help=("PDF backend strategy (default: auto). " "auto uses weasyprint primary with matplotlib fallback."),
     )
     pdf_parser.set_defaults(func=cmd_report_pdf)
 
@@ -305,9 +302,7 @@ def cmd_run(args):
         print(f"  Learning rate: {config.learning_rate}")
 
     print("\nStarting distributed training run...")
-    metrics = run_distributed(
-        config, health_checkpoint_path=args.health_checkpoint_path
-    )
+    metrics = run_distributed(config, health_checkpoint_path=args.health_checkpoint_path)
 
     save_metrics(metrics, args.output)
     print("\n[OK] Run complete!")
@@ -323,9 +318,7 @@ def cmd_validate(args):
         from minicluster.validators.correctness_validator import CorrectnessValidator
 
         validator = CorrectnessValidator(tolerance=args.tolerance)
-        report = validator.validate_file_pair(
-            args.single_run, args.multi_run, output_path=args.output
-        )
+        report = validator.validate_file_pair(args.single_run, args.multi_run, output_path=args.output)
 
         validator.print_report(report, verbose=args.verbose)
 
@@ -348,8 +341,7 @@ def cmd_fault_test(args):
         from minicluster.validators.fault_injector import FaultInjector
     except Exception as exc:
         print(
-            "Error: fault injection requires optional ML dependencies. "
-            "Install with: pip install -e \".[ml]\"",
+            "Error: fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"',
             file=sys.stderr,
         )
         raise SystemExit(2) from exc

@@ -6,6 +6,7 @@ import sys
 
 import pytest
 
+from trackiq_core.hardware import gpu as gpu_mod
 from trackiq_core.hardware.devices import (
     DEVICE_TYPE_AMD_GPU,
     DEVICE_TYPE_APPLE_SILICON,
@@ -19,8 +20,7 @@ from trackiq_core.hardware.devices import (
     detect_apple_silicon,
     get_all_devices,
 )
-from trackiq_core.hardware import gpu as gpu_mod
-from trackiq_core.ui.components.device_panel import DevicePanel, METRICS_DISPATCH
+from trackiq_core.ui.components.device_panel import METRICS_DISPATCH, DevicePanel
 
 
 def test_detect_amd_gpus_empty_when_rocm_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:

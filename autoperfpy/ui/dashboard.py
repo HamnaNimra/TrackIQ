@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
@@ -31,7 +31,7 @@ class AutoPerfDashboard(TrackiqDashboard):
         """AutoPerf dashboard should only load AutoPerfPy results."""
         return ["autoperfpy"]
 
-    def build_components(self) -> Dict[str, object]:
+    def build_components(self) -> dict[str, object]:
         """Build component instances for testing and rendering."""
         result = self._primary_result()
         return {
@@ -44,7 +44,7 @@ class AutoPerfDashboard(TrackiqDashboard):
             ),
         }
 
-    def _tool_payload(self) -> Dict[str, Any]:
+    def _tool_payload(self) -> dict[str, Any]:
         result = self._primary_result()
         return result.tool_payload if isinstance(result.tool_payload, dict) else {}
 

@@ -5,7 +5,7 @@ inference configurations across devices.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from trackiq_core.hardware.devices import (
     DEVICE_TYPE_AMD_GPU,
@@ -35,7 +35,7 @@ PRECISIONS = [
 ]
 
 # Conservative default capability map by accelerator category.
-DEFAULT_DEVICE_PRECISION_CAPABILITIES: Dict[str, List[str]] = {
+DEFAULT_DEVICE_PRECISION_CAPABILITIES: dict[str, list[str]] = {
     DEVICE_TYPE_NVIDIA_GPU: [
         PRECISION_FP32,
         PRECISION_FP16,
@@ -111,7 +111,7 @@ class InferenceConfig:
     warmup_runs: int = DEFAULT_WARMUP_RUNS
     iterations: int = DEFAULT_ITERATIONS
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export for JSON and UI."""
         return {
             "precision": self.precision,
@@ -128,10 +128,10 @@ def normalize_precision_label(precision: str) -> str:
     return str(precision or "").strip().lower()
 
 
-def normalize_precision_list(precisions: Optional[List[str]]) -> List[str]:
+def normalize_precision_list(precisions: list[str] | None) -> list[str]:
     """Normalize, de-duplicate, and filter precision labels to supported values."""
     values = precisions or PRECISIONS
-    normalized: List[str] = []
+    normalized: list[str] = []
     for value in values:
         item = normalize_precision_label(value)
         if item in PRECISIONS and item not in normalized:
@@ -139,7 +139,7 @@ def normalize_precision_list(precisions: Optional[List[str]]) -> List[str]:
     return normalized
 
 
-def get_supported_precisions_for_device(device: DeviceProfile) -> List[str]:
+def get_supported_precisions_for_device(device: DeviceProfile) -> list[str]:
     """Return supported precisions for a device profile.
 
     Device metadata may override defaults using `metadata["supported_precisions"]`.
@@ -150,11 +150,7 @@ def get_supported_precisions_for_device(device: DeviceProfile) -> List[str]:
         normalized_override = normalize_precision_list([str(item) for item in override])
         if normalized_override:
             return normalized_override
-    return list(
-        DEFAULT_DEVICE_PRECISION_CAPABILITIES.get(
-            device.device_type, [PRECISION_FP32]
-        )
-    )
+    return list(DEFAULT_DEVICE_PRECISION_CAPABILITIES.get(device.device_type, [PRECISION_FP32]))
 
 
 def is_precision_supported(device: DeviceProfile, precision: str) -> bool:
@@ -180,15 +176,15 @@ def resolve_precision_for_device(
 
 
 def enumerate_inference_configs(
-    devices: List[DeviceProfile],
-    precisions: Optional[List[str]] = None,
-    batch_sizes: Optional[List[int]] = None,
+    devices: list[DeviceProfile],
+    precisions: list[str] | None = None,
+    batch_sizes: list[int] | None = None,
     streams: int = 1,
     warmup_runs: int = DEFAULT_WARMUP_RUNS,
     iterations: int = DEFAULT_ITERATIONS,
-    max_configs_per_device: Optional[int] = 6,
+    max_configs_per_device: int | None = 6,
     fallback_precision: str = PRECISION_FP32,
-) -> List[Tuple[DeviceProfile, InferenceConfig]]:
+) -> list[tuple[DeviceProfile, InferenceConfig]]:
     """Enumerate (device, inference_config) for all devices and selected options.
 
     If max_configs_per_device is set, limits combinations per device
@@ -210,12 +206,10 @@ def enumerate_inference_configs(
     if not normalized_precisions:
         normalized_precisions = [normalize_precision_label(fallback_precision)]
     batch_sizes = batch_sizes or DEFAULT_BATCH_SIZES
-    result: List[Tuple[DeviceProfile, InferenceConfig]] = []
+    result: list[tuple[DeviceProfile, InferenceConfig]] = []
     for device in devices:
         supported_precisions = get_supported_precisions_for_device(device)
-        selected_precisions = [
-            item for item in normalized_precisions if item in supported_precisions
-        ]
+        selected_precisions = [item for item in normalized_precisions if item in supported_precisions]
         if not selected_precisions:
             selected_precisions = [
                 resolve_precision_for_device(
@@ -227,10 +221,7 @@ def enumerate_inference_configs(
         count = 0
         for prec in selected_precisions:
             for bs in batch_sizes:
-                if (
-                    max_configs_per_device is not None
-                    and count >= max_configs_per_device
-                ):
+                if max_configs_per_device is not None and count >= max_configs_per_device:
                     break
                 result.append(
                     (

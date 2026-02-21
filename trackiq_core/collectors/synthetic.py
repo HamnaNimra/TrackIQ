@@ -37,7 +37,7 @@ Example usage:
 import math
 import random
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from trackiq_core.utils.stats import percentile as _percentile
 
@@ -105,9 +105,7 @@ class SyntheticCollector(CollectorBase):
         "cycle_period_samples": 50,  # Period for cyclic pattern
     }
 
-    def __init__(
-        self, config: Optional[Dict[str, Any]] = None, name: str = "SyntheticCollector"
-    ):
+    def __init__(self, config: dict[str, Any] | None = None, name: str = "SyntheticCollector"):
         """Initialize the synthetic collector.
 
         Args:
@@ -149,7 +147,7 @@ class SyntheticCollector(CollectorBase):
         self._prev_temp = self._cfg["base_temperature_c"]
         self._current_memory = self._cfg["base_memory_mb"]
 
-    def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def sample(self, timestamp: float) -> dict[str, Any] | None:
         """Generate a synthetic sample at the given timestamp.
 
         Produces realistic metrics including latency, CPU/GPU utilization,
@@ -187,8 +185,7 @@ class SyntheticCollector(CollectorBase):
             "gpu_percent": self._generate_gpu(workload_factor),
             "memory_used_mb": self._generate_memory(),
             "memory_total_mb": self._cfg["total_memory_mb"],
-            "memory_percent": (self._current_memory / self._cfg["total_memory_mb"])
-            * 100,
+            "memory_percent": (self._current_memory / self._cfg["total_memory_mb"]) * 100,
             "power_w": self._generate_power(),
             "temperature_c": self._generate_temperature(),
             "throughput_fps": self._generate_throughput(workload_factor),
@@ -400,7 +397,7 @@ class SyntheticCollector(CollectorBase):
 
         return max(1.0, base + noise)
 
-    def _calculate_summary(self) -> Dict[str, Any]:
+    def _calculate_summary(self) -> dict[str, Any]:
         """Calculate summary statistics for all collected samples.
 
         Returns:
@@ -420,22 +417,14 @@ class SyntheticCollector(CollectorBase):
 
         # Exclude warmup samples for latency stats
         warmup_count = self._cfg["warmup_samples"]
-        steady_latencies = (
-            latencies[warmup_count:] if len(latencies) > warmup_count else latencies
-        )
+        steady_latencies = latencies[warmup_count:] if len(latencies) > warmup_count else latencies
 
         return {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (
-                (self._end_time - self._start_time) if self._end_time else None
-            ),
+            "duration_seconds": ((self._end_time - self._start_time) if self._end_time else None),
             "latency": {
-                "mean_ms": (
-                    sum(steady_latencies) / len(steady_latencies)
-                    if steady_latencies
-                    else 0
-                ),
+                "mean_ms": (sum(steady_latencies) / len(steady_latencies) if steady_latencies else 0),
                 "min_ms": min(steady_latencies, default=0),
                 "max_ms": max(steady_latencies, default=0),
                 "p50_ms": _percentile(steady_latencies, 50),
@@ -451,9 +440,7 @@ class SyntheticCollector(CollectorBase):
                 "max_percent": max(gpu_values, default=0),
             },
             "memory": {
-                "mean_mb": (
-                    sum(memory_values) / len(memory_values) if memory_values else 0
-                ),
+                "mean_mb": (sum(memory_values) / len(memory_values) if memory_values else 0),
                 "max_mb": max(memory_values, default=0),
                 "min_mb": min(memory_values, default=0),
             },
@@ -466,11 +453,7 @@ class SyntheticCollector(CollectorBase):
                 "max_c": max(temp_values, default=0),
             },
             "throughput": {
-                "mean_fps": (
-                    sum(throughput_values) / len(throughput_values)
-                    if throughput_values
-                    else 0
-                ),
+                "mean_fps": (sum(throughput_values) / len(throughput_values) if throughput_values else 0),
                 "min_fps": min(throughput_values, default=0),
             },
         }

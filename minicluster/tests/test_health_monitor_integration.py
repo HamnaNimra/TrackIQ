@@ -49,4 +49,3 @@ def test_health_monitor_end_to_end(tmp_path) -> None:
     worker_snapshots = payload.get("tool_payload", {}).get("worker_snapshots")
     assert isinstance(worker_snapshots, list)
     assert len(worker_snapshots) > 0
-

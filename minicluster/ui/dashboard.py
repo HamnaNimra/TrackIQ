@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 from minicluster.monitor.health_reader import HealthReader
 from trackiq_core.schema import TrackiqResult
@@ -34,11 +34,11 @@ class MiniClusterDashboard(TrackiqDashboard):
         """MiniCluster dashboard should only load MiniCluster results."""
         return ["minicluster"]
 
-    def _tool_payload(self) -> Dict[str, Any]:
+    def _tool_payload(self) -> dict[str, Any]:
         result = self._primary_result()
         return result.tool_payload if isinstance(result.tool_payload, dict) else {}
 
-    def _payload_from_checkpoint(self, checkpoint: Any) -> Dict[str, Any]:
+    def _payload_from_checkpoint(self, checkpoint: Any) -> dict[str, Any]:
         workers = [
             {
                 "worker_id": worker.worker_id,
@@ -65,15 +65,13 @@ class MiniClusterDashboard(TrackiqDashboard):
             "faults_detected": self._tool_payload().get("faults_detected"),
         }
 
-    def _render_dynamic_sections(self, payload: Dict[str, Any]) -> None:
+    def _render_dynamic_sections(self, payload: dict[str, Any]) -> None:
         """Render worker grid and loss chart from the provided payload."""
         import streamlit as st
 
         result = self._primary_result()
         workers = payload.get("workers", [])
-        steps_data: List[Dict[str, Any]] = (
-            payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
-        )
+        steps_data: list[dict[str, Any]] = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
         steps = [int(item.get("step", idx)) for idx, item in enumerate(steps_data)]
         losses = [float(item.get("loss", 0.0)) for item in steps_data]
 
@@ -99,7 +97,7 @@ class MiniClusterDashboard(TrackiqDashboard):
         else:
             st.info("Loss curve unavailable in tool payload.")
 
-    def _render_config_section(self, payload: Dict[str, Any]) -> None:
+    def _render_config_section(self, payload: dict[str, Any]) -> None:
         """Render run configuration and execution context."""
         import streamlit as st
 
@@ -123,11 +121,9 @@ class MiniClusterDashboard(TrackiqDashboard):
             st.markdown(f"- Seed: `{config.get('seed', 'N/A')}`")
             st.markdown(f"- TDP (W): `{config.get('tdp_watts', 'N/A')}`")
             st.markdown(f"- Loss Tolerance: `{config.get('loss_tolerance', 'N/A')}`")
-            st.markdown(
-                f"- Regression Threshold (%): `{config.get('regression_threshold', 'N/A')}`"
-            )
+            st.markdown(f"- Regression Threshold (%): `{config.get('regression_threshold', 'N/A')}`")
 
-    def _render_training_graphs(self, payload: Dict[str, Any]) -> None:
+    def _render_training_graphs(self, payload: dict[str, Any]) -> None:
         """Render graph-heavy training timelines from step payload."""
         import streamlit as st
 
@@ -136,7 +132,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             st.info("No per-step data available for training graphs.")
             return
 
-        rows: List[Dict[str, float]] = []
+        rows: list[dict[str, float]] = []
         for idx, item in enumerate(steps_data):
             if not isinstance(item, dict):
                 continue
@@ -236,13 +232,11 @@ class MiniClusterDashboard(TrackiqDashboard):
                 else:  # pragma: no cover
                     st.experimental_rerun()
 
-    def build_components(self) -> Dict[str, object]:
+    def build_components(self) -> dict[str, object]:
         """Build component instances for testable, reusable rendering."""
         result = self._primary_result()
         payload = self._tool_payload()
-        steps_data: List[Dict[str, Any]] = (
-            payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
-        )
+        steps_data: list[dict[str, Any]] = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
         steps = [int(item.get("step", idx)) for idx, item in enumerate(steps_data)]
         losses = [float(item.get("loss", 0.0)) for item in steps_data]
         workers = payload.get("workers", [])

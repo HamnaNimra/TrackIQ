@@ -86,4 +86,3 @@ def write_synthetic_pair(path_a: Path, path_b: Path) -> tuple[TrackiqResult, Tra
     save_trackiq_result(result_a, str(path_a))
     save_trackiq_result(result_b, str(path_b))
     return result_a, result_b
-

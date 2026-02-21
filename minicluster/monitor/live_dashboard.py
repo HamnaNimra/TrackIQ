@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List
 
 from minicluster.monitor.anomaly_detector import AnomalyDetector
 from minicluster.monitor.health_reader import HealthReader
@@ -27,7 +26,7 @@ class LiveDashboard(TrackiqDashboard):
         self.health_checkpoint_path = health_checkpoint_path
         self.reader = HealthReader(health_checkpoint_path)
         self.detector = AnomalyDetector()
-        self._history: Dict[int, List[Dict[str, float]]] = {}
+        self._history: dict[int, list[dict[str, float]]] = {}
         self._start_time = time.time()
 
         placeholder_result = TrackiqResult(
@@ -55,9 +54,7 @@ class LiveDashboard(TrackiqDashboard):
                 communication_overhead_percent=None,
                 power_consumption_watts=None,
             ),
-            regression=RegressionInfo(
-                baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
-            ),
+            regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
         )
         super().__init__(result=placeholder_result, theme=theme, title="MiniCluster Live Monitor")
 
@@ -107,11 +104,7 @@ class LiveDashboard(TrackiqDashboard):
                     f"Completed: {checkpoint.completed_steps}/{checkpoint.total_steps} | "
                     f"Elapsed: {elapsed:.1f}s | ETA: {eta_sec:.1f}s"
                 )
-                frac = (
-                    checkpoint.completed_steps / checkpoint.total_steps
-                    if checkpoint.total_steps > 0
-                    else 0.0
-                )
+                frac = checkpoint.completed_steps / checkpoint.total_steps if checkpoint.total_steps > 0 else 0.0
                 st.progress(max(0.0, min(1.0, frac)))
 
             with worker_slot.container():

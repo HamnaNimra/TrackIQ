@@ -37,9 +37,7 @@ def demo_synthetic_collector(num_samples: int = 50, output_file: str = None):
 
     print(f"Collecting {num_samples} samples...")
     print()
-    print(
-        f"{'Sample':>6} {'Latency':>10} {'CPU':>8} {'GPU':>8} {'Power':>8} {'Temp':>8} {'Warmup':>8}"
-    )
+    print(f"{'Sample':>6} {'Latency':>10} {'CPU':>8} {'GPU':>8} {'Power':>8} {'Temp':>8} {'Warmup':>8}")
     print("-" * 60)
 
     for i in range(num_samples):
@@ -95,9 +93,7 @@ def demo_psutil_collector(num_samples: int = 20, output_file: str = None):
     collector.start()
     info = collector.get_system_info()
     print(f"System: {info['platform']['system']} {info['platform']['release']}")
-    print(
-        f"CPU: {info['cpu']['cores_logical']} logical cores ({info['cpu']['cores_physical']} physical)"
-    )
+    print(f"CPU: {info['cpu']['cores_logical']} logical cores ({info['cpu']['cores_physical']} physical)")
     print(f"Memory: {info['memory']['total_gb']:.1f} GB")
     print()
 
@@ -108,11 +104,7 @@ def demo_psutil_collector(num_samples: int = 20, output_file: str = None):
         timestamp = time.time()
         metrics = collector.sample(timestamp)
 
-        temp_str = (
-            f"{metrics.get('temperature_c', 0):.1f}C"
-            if metrics.get("temperature_c")
-            else "N/A"
-        )
+        temp_str = f"{metrics.get('temperature_c', 0):.1f}C" if metrics.get("temperature_c") else "N/A"
 
         print(
             f"{i:>6} "
@@ -176,14 +168,8 @@ def demo_nvml_collector(num_samples: int = 20, output_file: str = None):
         timestamp = time.time()
         metrics = collector.sample(timestamp)
 
-        power_str = (
-            f"{metrics.get('power_w', 0):.1f}W" if metrics.get("power_w") else "N/A"
-        )
-        temp_str = (
-            f"{metrics.get('temperature_c', 0):.1f}C"
-            if metrics.get("temperature_c")
-            else "N/A"
-        )
+        power_str = f"{metrics.get('power_w', 0):.1f}W" if metrics.get("power_w") else "N/A"
+        temp_str = f"{metrics.get('temperature_c', 0):.1f}C" if metrics.get("temperature_c") else "N/A"
 
         print(
             f"{i:>6} "
@@ -223,16 +209,10 @@ def demo_tegrastats_collector(filepath: str = None, output_file: str = None):
     if filepath is None:
         # Check if live tegrastats is available
         if TegrastatsCollector.is_available():
-            print(
-                "tegrastats is available. Run with --file <path> to analyze a log file."
-            )
-            print(
-                "Or the collector can be used in live mode on Jetson/DriveOS platforms."
-            )
+            print("tegrastats is available. Run with --file <path> to analyze a log file.")
+            print("Or the collector can be used in live mode on Jetson/DriveOS platforms.")
         else:
-            print(
-                "tegrastats not found. This collector requires a Jetson/DriveOS platform."
-            )
+            print("tegrastats not found. This collector requires a Jetson/DriveOS platform.")
             print("Provide a tegrastats log file with --file <path>")
         return
 
