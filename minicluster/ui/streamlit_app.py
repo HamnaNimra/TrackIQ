@@ -145,3 +145,7 @@ def main() -> None:
     dashboard.render_sidebar()
     dashboard.render_body()
     dashboard.render_footer()
+
+
+if __name__ == "__main__":
+    main()

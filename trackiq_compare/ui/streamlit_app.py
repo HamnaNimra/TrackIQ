@@ -141,3 +141,7 @@ def main() -> None:
     dash.render_sidebar()
     dash.render_body()
     dash.render_footer()
+
+
+if __name__ == "__main__":
+    main()
