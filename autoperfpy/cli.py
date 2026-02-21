@@ -12,7 +12,7 @@ import tempfile
 import time
 from datetime import datetime
 from turtle import st
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from autoperfpy.config import ConfigManager
 from autoperfpy.analyzers import (
@@ -809,6 +809,24 @@ def _save_trackiq_wrapped_json(
     save_trackiq_result(result, path)
 
 
+def _normalize_report_input_data(data: object) -> Dict[str, Any]:
+    """Normalize report JSON inputs to legacy benchmark payload shape.
+
+    Report generation historically consumed raw benchmark exports where fields
+    like ``summary`` and ``samples`` lived at the top level. Newer outputs may
+    be wrapped as canonical ``TrackiqResult`` objects with benchmark data in
+    ``tool_payload``.
+    """
+    if isinstance(data, dict) and isinstance(data.get("tool_payload"), dict):
+        payload = dict(data["tool_payload"])
+        if "collector_name" not in payload and data.get("tool_name"):
+            payload["collector_name"] = str(data.get("tool_name"))
+        return payload
+    if isinstance(data, dict):
+        return data
+    return {}
+
+
 def _write_result_to_csv(result: dict, path: str) -> bool:
     """Write run result samples to a CSV file. Returns True if written."""
     samples = result.get("samples", [])
@@ -1334,7 +1352,7 @@ def run_report_html(args, config):
         if getattr(args, "json", None):
             # Load benchmark export JSON (from autoperfpy run --export)
             with open(args.json, encoding="utf-8") as f:
-                data = json.load(f)
+                data = _normalize_report_input_data(json.load(f))
 
             # Check if this is distributed validation data
             if "comparisons" in data and "summary" in data and "config" in data:
@@ -1730,7 +1748,7 @@ def run_report_pdf(args, config):
 
         if getattr(args, "json", None):
             with open(args.json, encoding="utf-8") as f:
-                data = json.load(f)
+                data = _normalize_report_input_data(json.load(f))
             samples = data.get("samples", [])
             summary = data.get("summary", {})
             report.add_metadata("Collector", data.get("collector_name", "-"))

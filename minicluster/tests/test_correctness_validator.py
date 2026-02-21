@@ -1,6 +1,7 @@
 """Tests for correctness_validator module."""
 
 import json
+import math
 import tempfile
 from pathlib import Path
 
@@ -182,3 +183,15 @@ class TestCorrectnessValidator:
         validator_strict = CorrectnessValidator(tolerance=0.01)
         report_strict = validator_strict.compare_runs(metrics1_dict, metrics2_dict)
         assert report_strict.overall_passed is False
+
+    def test_zero_baseline_loss_with_nonzero_multi_fails(self):
+        """Non-zero multi loss must fail when baseline loss is exactly zero."""
+        single_metrics = {"steps": [{"step": 0, "loss": 0.0}]}
+        multi_metrics = {"steps": [{"step": 0, "loss": 0.1}]}
+
+        validator = CorrectnessValidator(tolerance=0.01)
+        report = validator.compare_runs(single_metrics, multi_metrics)
+
+        assert report.overall_passed is False
+        assert report.num_steps_failed == 1
+        assert math.isinf(report.step_comparisons[0].delta_percent)

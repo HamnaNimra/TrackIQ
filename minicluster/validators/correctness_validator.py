@@ -105,7 +105,10 @@ class CorrectnessValidator:
 
             # Calculate absolute and relative delta
             delta = abs(single_loss - multi_loss)
-            delta_percent = (delta / abs(single_loss)) * 100 if single_loss != 0 else 0
+            if single_loss == 0:
+                delta_percent = 0.0 if delta == 0 else float("inf")
+            else:
+                delta_percent = (delta / abs(single_loss)) * 100
 
             # Check if within tolerance (as percentage)
             passed = delta_percent <= (self.tolerance * 100)

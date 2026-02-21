@@ -806,16 +806,16 @@
             <div style="margin-top: 64px;">
                 <div class="problem-grid">
                     <div class="problem-card">
-                        <h3>Performance Was Always an Afterthought</h3>
-                        <p>In autonomous driving systems, 5G infrastructure, and edge AI deployments, a common pattern emerges: teams build amazing models, deploy them, then discover performance issues weeks later. By then, it's too late-debugging happens in production instead of catching regressions in CI/CD.</p>
+                        <h3>Everyone Measures Performance Differently</h3>
+                        <p>We kept running into the same frustrating loop: one team benchmarks inference, another validates training, someone else compares baselines, and none of the outputs line up. People spend hours translating results instead of fixing real issues. When the numbers don't speak the same language, regressions turn into debates and slip past CI/CD.</p>
                     </div>
                     <div class="problem-card">
-                        <h3>Everyone Reinvents the Wheel</h3>
-                        <p>Every project, same story: someone writes custom scripts to parse logs, calculate percentiles, compare baselines. No reusable toolkit. No systematic approach. Teams waste 5-10 hours per week on manual performance analysis that should be automated.</p>
+                        <h3>We Keep Rebuilding the Same Scripts</h3>
+                        <p>Every new project starts with good intentions, then someone ends up writing one-off scripts to parse logs, compute percentiles, and compare runs. A few weeks later, a different team does it all again. That repetition quietly burns 5-10 hours a week that should go into improving models and systems.</p>
                     </div>
                     <div class="problem-card">
-                        <h3>The Tools That Exist Don't Fit</h3>
-                        <p>MLPerf is too complex for everyday use. Profiling tools are GUI-only and don't automate. Low-level APIs require expert knowledge. There's a massive gap between "quick script" and "enterprise monitoring platform"-nothing production-ready for teams who just need reliable performance validation.</p>
+                        <h3>Most Tools Are Either Too Heavy or Too Manual</h3>
+                        <p>The options usually fall into two extremes: powerful frameworks that are hard to adopt, or low-level tools that need lots of glue code. Teams get stuck choosing between complexity and fragility. What’s missing is a practical middle ground that works in real CI/CD workflows.</p>
                     </div>
                 </div>
             </div>
@@ -1576,6 +1576,3 @@
     </section>
 </body>
 </html>
-
-
-
