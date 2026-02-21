@@ -50,7 +50,7 @@ Install optional stacks as needed:
 py -3.12 -m pip install -e ".[ui]"
 
 # distributed training / torch features
-py -3.12 -m pip install -e ".[ml]"
+C
 
 # GPU/NVML integrations
 py -3.12 -m pip install -e ".[gpu]"
@@ -114,6 +114,7 @@ python launch_dashboard.py
 ```
 
 Unified mode now includes:
+
 - AutoPerfPy run configuration (manual/auto), result browser, and graph-rich dashboard
 - MiniCluster run configuration (workers/steps/batch/lr/seed/tdp) and quick smoke run
 - Compare configuration (browse/manual inputs, labels, regression threshold) with comparison graphs
