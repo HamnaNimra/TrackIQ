@@ -40,12 +40,12 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def _placeholder_result(tool_name: str, workload_type: str = "inference") -> TrackiqResult:
     """Create placeholder result for browser-mode dashboards."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     return TrackiqResult(
         tool_name=tool_name,
         tool_version="browser",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         platform=PlatformInfo(
             hardware_name="Unknown",
             os="Unknown",

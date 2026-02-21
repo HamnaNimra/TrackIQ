@@ -61,14 +61,19 @@ py -3.12 -m trackiq_compare.cli --help
 
 ### AutoPerfPy
 
-Main use: edge/inference benchmark runs and analysis.
+Main use: edge/inference benchmark runs, profile-driven validation, and report generation.
 
 ```bash
 autoperfpy devices --list
 autoperfpy run --auto --duration 30 --export output/autoperf_result.json
+autoperfpy run --profile automotive_safety --batch-size 4 --precision bf16 --export output/autoperf_profile_result.json
+autoperfpy run --manual --device cpu_0 --precision int4 --duration 10 --export output/autoperf_manual_result.json
 autoperfpy analyze latency --csv output/results.csv
 autoperfpy report html --json output/autoperf_result.json --output output/autoperf_report.html
+autoperfpy report pdf --json output/autoperf_result.json --output output/autoperf_report.pdf --pdf-backend auto
 ```
+
+Precision modes include `fp32`, `fp16`, `bf16`, `int8`, `int4`, and `mixed` with capability-aware fallback per device.
 
 Dashboard options:
 
@@ -76,8 +81,11 @@ Dashboard options:
 # tool-owned app
 streamlit run autoperfpy/ui/streamlit_app.py
 
-# unified launcher
-python dashboard.py --tool autoperfpy --result output/autoperf_result.json
+# unified launcher (note the `--` before dashboard args)
+python -m streamlit run dashboard.py -- --tool autoperfpy --result output/autoperf_result.json
+
+# unified launcher browser mode (pick file in UI)
+python -m streamlit run dashboard.py -- --tool autoperfpy
 ```
 
 ### MiniCluster
@@ -88,6 +96,7 @@ Main use: distributed training correctness/performance/fault validation.
 minicluster run --workers 2 --steps 50 --output minicluster_results/run_metrics.json
 minicluster run --workers 2 --steps 50 --health-checkpoint-path ./minicluster_results/health.json
 minicluster monitor status --checkpoint ./minicluster_results/health.json
+minicluster report pdf --result minicluster_results/run_metrics.json --output minicluster_results/report.pdf --pdf-backend auto
 ```
 
 Dashboard options:
@@ -96,8 +105,8 @@ Dashboard options:
 # tool-owned app
 streamlit run minicluster/ui/streamlit_app.py
 
-# unified launcher
-python dashboard.py --tool minicluster --result minicluster_results/run_metrics.json
+# unified launcher (note the `--` before dashboard args)
+python -m streamlit run dashboard.py -- --tool minicluster --result minicluster_results/run_metrics.json
 ```
 
 ### TrackIQ Compare
@@ -108,6 +117,7 @@ Main use: compare two canonical results and generate terminal/HTML reports.
 trackiq-compare run output/autoperf_result.json minicluster_results/run_metrics.json
 trackiq-compare run output/autoperf_result.json minicluster_results/run_metrics.json --html output/comparison.html
 trackiq-compare run output/autoperf_result.json minicluster_results/run_metrics.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
+trackiq-compare report pdf output/autoperf_result.json minicluster_results/run_metrics.json --output output/comparison.pdf --pdf-backend auto
 ```
 
 Baseline flows:
@@ -123,8 +133,8 @@ Dashboard options:
 # tool-owned app
 streamlit run trackiq_compare/ui/streamlit_app.py
 
-# unified launcher
-python dashboard.py --tool compare --result-a output/autoperf_result.json --result-b minicluster_results/run_metrics.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
+# unified launcher (note the `--` before dashboard args)
+python -m streamlit run dashboard.py -- --tool compare --result-a output/autoperf_result.json --result-b minicluster_results/run_metrics.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
 ```
 
 ## Canonical Result Contract

@@ -36,7 +36,7 @@ Acceptance criteria:
 
 ## High Priority Backlog
 
-### 2) LLM metrics wired into canonical schema `[P1] [OPEN]`
+### 2) LLM metrics wired into canonical schema `[P1] [Done]`
 
 Problem: LLM/KV concepts exist, but schema-first integration is incomplete.
 
@@ -52,7 +52,7 @@ Acceptance criteria:
 - LLM run produces non-null LLM fields.
 - `trackiq-compare` can compare LLM-specific metrics without code changes beyond winner rules.
 
-### 3) Multi-run trend analysis `[P1] [OPEN]`
+### 3) Multi-run trend analysis `[P1] [Done]`
 
 Problem: current comparison is mostly pairwise; historical trends across many runs are missing.
 
@@ -68,7 +68,7 @@ Acceptance criteria:
 - Plot at least throughput, p99 latency, and perf/watt over time.
 - Supports at least 10+ runs without UI failure.
 
-### 4) PDF report generation consistency `[P1] [OPEN]`
+### 4) PDF report generation consistency `[P1] [DONE]`
 
 Problem: HTML is strong; PDF path needs standardization and reliability.
 
@@ -317,3 +317,4 @@ Tasks:
 3. `[P1]` Start LLM schema integration (`ttft_ms`, KV metrics) behind additive fields.
 4. `[P1]` Implement initial multi-run trend component in `trackiq_core/ui`.
 5. `[P0]` Keep docs/case study synchronized with shipped behavior after each merge.
+
