@@ -85,6 +85,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         run_dashboard(_CompareDashboardAdapter, result=[result_a, result_b])  # type: ignore[arg-type]
         return 0
     except Exception as exc:
+        # Compare mode fallback: interactive compare app when paths are omitted.
+        if args.tool == "compare" and (
+            not getattr(args, "result_a", None) or not getattr(args, "result_b", None)
+        ):
+            from trackiq_compare.ui import streamlit_app
+
+            streamlit_app.main()
+            return 0
         raise SystemExit(f"Failed to launch dashboard: {exc}") from exc
 
 
