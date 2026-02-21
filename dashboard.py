@@ -43,13 +43,25 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         if args.tool == "autoperfpy":
-            result_path = _validate_path(args.result, "--result")
-            run_dashboard(AutoPerfDashboard, result_path=result_path)
+            # Library-first result viewer when result is provided.
+            # Interactive benchmark workflow fallback when no result is provided.
+            if args.result:
+                result_path = _validate_path(args.result, "--result")
+                run_dashboard(AutoPerfDashboard, result_path=result_path)
+            else:
+                from autoperfpy.ui import streamlit_app
+
+                streamlit_app.main()
             return 0
 
         if args.tool == "minicluster":
-            result_path = _validate_path(args.result, "--result")
-            run_dashboard(MiniClusterDashboard, result_path=result_path)
+            if args.result:
+                result_path = _validate_path(args.result, "--result")
+                run_dashboard(MiniClusterDashboard, result_path=result_path)
+            else:
+                from minicluster.ui import streamlit_app
+
+                streamlit_app.main()
             return 0
 
         result_a_path = _validate_path(args.result_a, "--result-a")
@@ -78,4 +90,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
