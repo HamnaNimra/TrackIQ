@@ -61,6 +61,14 @@ python -m trackiq_compare run result_a.json result_b.json \
   --label-a "AMD MI300X" --label-b "NVIDIA A100"
 ```
 
+### Dashboard
+
+Launch the shared compare dashboard from two canonical result files:
+
+```bash
+python dashboard.py --tool compare --result-a output/autoperf_power.json --result-b minicluster_power.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
+```
+
 ### 4) Save baseline from a result
 
 ```bash

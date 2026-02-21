@@ -299,6 +299,14 @@ autoperfpy ui --data results.json --port 8501
 autoperfpy ui --no-browser
 ```
 
+### Dashboard
+
+Launch the shared TrackIQ dashboard for an AutoPerfPy canonical result:
+
+```bash
+python dashboard.py --tool autoperfpy --result output/autoperf_power.json
+```
+
 ---
 
 ## 📁 Project Structure

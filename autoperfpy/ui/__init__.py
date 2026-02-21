@@ -7,4 +7,6 @@ Components:
     - streamlit_app: Interactive Streamlit dashboard for metrics visualization
 """
 
-__all__ = []
+from autoperfpy.ui.dashboard import AutoPerfDashboard
+
+__all__ = ["AutoPerfDashboard"]
