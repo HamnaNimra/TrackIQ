@@ -93,7 +93,9 @@ def run_report_html(
                     status,
                 )
 
-                report.add_section("Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses")
+                report.add_section(
+                    "Step-by-Step Loss Comparison", "Comparison of single-process vs multi-process losses"
+                )
                 comparisons = data["comparisons"]
                 table_data = []
                 for comparison in comparisons:
@@ -237,7 +239,10 @@ def run_report_html(
                 fig = viz.plot_latency_percentiles(latencies_by_workload)
                 report.add_figure(fig, "Latency Percentiles by Workload", "Latency Analysis")
 
-                data_dict = {workload: df[df["workload"] == workload]["latency_ms"].tolist() for workload in df["workload"].unique()}
+                data_dict = {
+                    workload: df[df["workload"] == workload]["latency_ms"].tolist()
+                    for workload in df["workload"].unique()
+                }
                 fig = viz.plot_distribution(data_dict, "Latency Distribution Comparison")
                 report.add_figure(fig, "Latency Distribution", "Latency Analysis")
 
@@ -265,7 +270,9 @@ def run_report_html(
                     workloads = df["workload"].unique().tolist()
                     power_values = [df[df["workload"] == workload]["power_w"].mean() for workload in workloads]
                     if "latency_ms" in df.columns:
-                        perf_values = [1000 / df[df["workload"] == workload]["latency_ms"].mean() for workload in workloads]
+                        perf_values = [
+                            1000 / df[df["workload"] == workload]["latency_ms"].mean() for workload in workloads
+                        ]
                         fig = viz.plot_power_vs_performance(workloads, power_values, perf_values)
                         report.add_figure(fig, "Power vs Performance", "Power Analysis")
 
