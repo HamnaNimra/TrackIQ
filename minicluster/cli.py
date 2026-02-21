@@ -18,6 +18,7 @@ from typing import Optional
 from minicluster.runner import RunConfig, run_distributed, save_metrics, load_metrics
 from minicluster.validators import CorrectnessValidator, FaultInjector
 from minicluster.deps import RegressionDetector, RegressionThreshold
+from minicluster.monitor.cli import register_monitor_subcommand
 
 
 def setup_run_parser(subparsers):
@@ -435,6 +436,7 @@ Examples:
     setup_validate_parser(subparsers)
     setup_fault_test_parser(subparsers)
     setup_baseline_parser(subparsers)
+    register_monitor_subcommand(subparsers)
 
     return parser
 
@@ -450,6 +452,10 @@ def main():
 
     if args.command == "baseline":
         if not args.baseline_cmd:
+            parser.parse_args([args.command, "-h"])
+            sys.exit(1)
+    if args.command == "monitor":
+        if not getattr(args, "monitor_cmd", None):
             parser.parse_args([args.command, "-h"])
             sys.exit(1)
 
