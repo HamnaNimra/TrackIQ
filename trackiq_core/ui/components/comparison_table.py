@@ -92,19 +92,33 @@ class ComparisonTable:
         import streamlit as st
 
         data = self.to_dict()
-        st.subheader("Platform Comparison")
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};'>Platform Comparison</div>",
+            unsafe_allow_html=True,
+        )
         if data["platform_diff"]:
             st.json(data["platform_diff"])
         else:
             st.info("No platform differences detected.")
 
-        st.subheader("Metric Comparison")
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};margin-top:8px;'>Metric Comparison</div>",
+            unsafe_allow_html=True,
+        )
         MetricTable(
             [self.result_a, self.result_b],
             mode="comparison",
             theme=self.theme,
         ).render()
 
-        st.subheader("Summary")
-        st.write(data["summary"])
-
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};margin-top:8px;'>Summary</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            (
+                f"<div style='background:{self.theme.surface_color};padding:10px;"
+                f"border-radius:{self.theme.border_radius};'>{data['summary']}</div>"
+            ),
+            unsafe_allow_html=True,
+        )
