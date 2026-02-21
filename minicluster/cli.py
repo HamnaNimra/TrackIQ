@@ -19,6 +19,13 @@ from minicluster.runner import RunConfig, run_distributed, save_metrics, load_me
 from minicluster.validators import CorrectnessValidator, FaultInjector
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
+from trackiq_core.reporting import (
+    PDF_BACKENDS,
+    PdfBackendError,
+    render_pdf_from_html,
+    render_trackiq_result_html,
+)
+from trackiq_core.serializer import load_trackiq_result
 
 
 def setup_run_parser(subparsers):
@@ -242,6 +249,46 @@ def setup_baseline_parser(subparsers):
     compare_parser.set_defaults(func=cmd_baseline_compare)
 
 
+def setup_report_parser(subparsers):
+    """Setup `minicluster report` subcommands."""
+    parser = subparsers.add_parser(
+        "report",
+        help="Generate reports from canonical TrackiqResult files",
+        description="Render reports from saved run output JSON files",
+    )
+    report_subparsers = parser.add_subparsers(dest="report_cmd", help="Report subcommand")
+
+    pdf_parser = report_subparsers.add_parser(
+        "pdf",
+        help="Generate PDF report from canonical result JSON",
+    )
+    pdf_parser.add_argument(
+        "--result",
+        required=True,
+        help="Path to TrackiqResult JSON (e.g. output from `minicluster run --output ...`)",
+    )
+    pdf_parser.add_argument(
+        "--output",
+        default="./minicluster_results/report.pdf",
+        help="Output PDF file path (default: ./minicluster_results/report.pdf)",
+    )
+    pdf_parser.add_argument(
+        "--title",
+        default="MiniCluster Performance Report",
+        help="Report title",
+    )
+    pdf_parser.add_argument(
+        "--pdf-backend",
+        choices=list(PDF_BACKENDS),
+        default="auto",
+        help=(
+            "PDF backend strategy (default: auto). "
+            "auto uses weasyprint primary with matplotlib fallback."
+        ),
+    )
+    pdf_parser.set_defaults(func=cmd_report_pdf)
+
+
 def cmd_run(args):
     """Execute 'minicluster run' command."""
     config = RunConfig(
@@ -401,6 +448,35 @@ def cmd_baseline_compare(args):
         sys.exit(1)
 
 
+def cmd_report_pdf(args):
+    """Execute `minicluster report pdf` command."""
+    try:
+        result = load_trackiq_result(args.result)
+    except FileNotFoundError:
+        print(f"Error: Result file not found: {args.result}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive parse guard
+        print(f"Error: Invalid TrackiqResult input: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        html = render_trackiq_result_html(result, title=args.title)
+        outcome = render_pdf_from_html(
+            html_content=html,
+            output_path=args.output,
+            backend=args.pdf_backend,
+            title=args.title,
+            author="minicluster",
+        )
+    except PdfBackendError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if outcome.used_fallback:
+        print("[WARN] Primary PDF backend unavailable; used matplotlib fallback.")
+    print(f"[OK] PDF report generated: {outcome.output_path}")
+
+
 def setup_main_parser() -> argparse.ArgumentParser:
     """Setup main argument parser with all subcommands.
 
@@ -436,6 +512,7 @@ Examples:
     setup_validate_parser(subparsers)
     setup_fault_test_parser(subparsers)
     setup_baseline_parser(subparsers)
+    setup_report_parser(subparsers)
     register_monitor_subcommand(subparsers)
 
     return parser
@@ -452,6 +529,10 @@ def main():
 
     if args.command == "baseline":
         if not args.baseline_cmd:
+            parser.parse_args([args.command, "-h"])
+            sys.exit(1)
+    if args.command == "report":
+        if not getattr(args, "report_cmd", None):
             parser.parse_args([args.command, "-h"])
             sys.exit(1)
     if args.command == "monitor":

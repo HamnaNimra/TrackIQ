@@ -1779,6 +1779,7 @@ def run_report_pdf(args, config):
         report = PDFReportGenerator(
             title=args.title,
             author=args.author,
+            pdf_backend=getattr(args, "pdf_backend", PDF_BACKEND_AUTO),
         )
 
         data_source = (
@@ -1834,7 +1835,15 @@ def run_report_pdf(args, config):
             if _write_result_to_csv(data, csv_out):
                 print(f"[OK] CSV exported to: {csv_out}")
 
-            output_path = report.generate_pdf(_output_path(args, args.output))
+            output_path = report.generate_pdf(
+                _output_path(args, args.output),
+                backend=getattr(args, "pdf_backend", PDF_BACKEND_AUTO),
+            )
+            if report.last_render_outcome and report.last_render_outcome.used_fallback:
+                print(
+                    "[WARN] Primary PDF backend unavailable; used matplotlib fallback.",
+                    file=sys.stderr,
+                )
             print(f"\n[OK] PDF report generated: {output_path}")
             return {"output_path": output_path}
 
@@ -1872,9 +1881,20 @@ def run_report_pdf(args, config):
                 "No data file provided. Use --csv/--json or run without options to auto-run a benchmark.",
             )
 
-        output_path = report.generate_pdf(_output_path(args, args.output))
+        output_path = report.generate_pdf(
+            _output_path(args, args.output),
+            backend=getattr(args, "pdf_backend", PDF_BACKEND_AUTO),
+        )
+        if report.last_render_outcome and report.last_render_outcome.used_fallback:
+            print(
+                "[WARN] Primary PDF backend unavailable; used matplotlib fallback.",
+                file=sys.stderr,
+            )
         print(f"\n[OK] PDF report generated: {output_path}")
         return {"output_path": output_path}
+    except PdfBackendError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return None
     finally:
         if json_path_to_cleanup and os.path.exists(json_path_to_cleanup):
             try:
@@ -2456,7 +2476,7 @@ def main():
             return run_ui(args)
         elif args.command == "compare":
             return run_compare(args)
-    except (HardwareNotFoundError, DependencyError, ProfileValidationError) as e:
+    except (HardwareNotFoundError, DependencyError, ProfileValidationError, PdfBackendError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     except Exception as e:  # pylint: disable=broad-exception-caught
