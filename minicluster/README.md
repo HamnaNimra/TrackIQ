@@ -455,10 +455,10 @@ Ensure all imports from trackiq_core go through `deps.py` for clean decoupling.
 
 ## License
 
-Same as AutoPerfPy (see LICENSE in root)
+Same as TrackIQ repository (see `LICENSE` in repo root).
 
 ## References
 
 - [PyTorch Distributed](https://pytorch.org/docs/stable/distributed.html)
-- [TrackIQ Core Documentation](../../trackiq_core/README.md)
-- [AutoPerfPy](../autoperfpy/README.md)
+- [TrackIQ UI Usage](../trackiq_core/ui/USAGE.md)
+- [TrackIQ Root README](../README.md)

@@ -8,10 +8,10 @@
 
 ```text
 trackiq/
-├── trackiq_core/     -> shared schema + serializer + baseline utilities
-├── autoperfpy/       -> inference tool (emits TrackiqResult)
-├── minicluster/      -> training tool (emits TrackiqResult)
-└── trackiq_compare/  -> compares TrackiqResult outputs
+|- trackiq_core/     -> shared schema + serializer + baseline utilities
+|- autoperfpy/       -> inference tool (emits TrackiqResult)
+|- minicluster/      -> training tool (emits TrackiqResult)
+`- trackiq_compare/  -> compares TrackiqResult outputs
 ```
 
 ## Install
