@@ -15,6 +15,17 @@ Provides:
 from trackiq_core.utils.dict_utils import safe_get
 from trackiq_core.utils.stats import percentile, stats_from_values
 from trackiq_core.hardware.env import command_available, nvidia_smi_available
+from trackiq_core.hardware import (
+    DEVICE_TYPE_AMD_GPU,
+    DEVICE_TYPE_APPLE_SILICON,
+    detect_amd_gpus,
+    detect_apple_silicon,
+    get_amd_gpu_metrics,
+    get_intel_gpu_metrics,
+    get_apple_silicon_metrics,
+    get_cpu_metrics,
+    query_rocm_smi,
+)
 from trackiq_core.configs.config_io import (
     load_yaml_file,
     load_json_file,
@@ -86,6 +97,15 @@ __all__ = [
     "stats_from_values",
     "command_available",
     "nvidia_smi_available",
+    "DEVICE_TYPE_AMD_GPU",
+    "DEVICE_TYPE_APPLE_SILICON",
+    "detect_amd_gpus",
+    "detect_apple_silicon",
+    "get_amd_gpu_metrics",
+    "get_intel_gpu_metrics",
+    "get_apple_silicon_metrics",
+    "get_cpu_metrics",
+    "query_rocm_smi",
     # Config I/O
     "load_yaml_file",
     "load_json_file",

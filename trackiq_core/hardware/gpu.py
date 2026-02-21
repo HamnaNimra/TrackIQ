@@ -188,8 +188,8 @@ def get_intel_gpu_metrics() -> Optional[Dict[str, float]]:
                         power = float(power_val)
                 if utilization is not None or power is not None:
                     return {
-                        "utilization": utilization if utilization is not None else 0.0,
-                        "power": power if power is not None else 0.0,
+                        "utilization": utilization,  # type: ignore[typeddict-item]
+                        "power": power,  # type: ignore[typeddict-item]
                     }
         except Exception:
             pass
@@ -218,8 +218,8 @@ def get_intel_gpu_metrics() -> Optional[Dict[str, float]]:
         if utilization is None and power is None:
             return None
         return {
-            "utilization": utilization if utilization is not None else 0.0,
-            "power": power if power is not None else 0.0,
+            "utilization": utilization,  # type: ignore[typeddict-item]
+            "power": power,  # type: ignore[typeddict-item]
         }
     except Exception:
         return None
@@ -266,10 +266,10 @@ def get_apple_silicon_metrics() -> Optional[Dict[str, float]]:
         pass
 
     return {
-        "gpu_utilization": gpu_util if gpu_util is not None else 0.0,
+        "gpu_utilization": gpu_util,  # type: ignore[typeddict-item]
         "cpu_utilization": cpu_util if cpu_util is not None else 0.0,
         "memory_percent": mem_percent if mem_percent is not None else 0.0,
-        "power": power if power is not None else 0.0,
+        "power": power,  # type: ignore[typeddict-item]
     }
 
 
@@ -295,7 +295,7 @@ def get_cpu_metrics() -> Optional[Dict[str, float]]:
         return {
             "cpu_utilization": cpu_util,
             "memory_percent": mem_percent,
-            "temperature": temperature if temperature is not None else 0.0,
+            "temperature": temperature,  # type: ignore[typeddict-item]
         }
     except Exception:
-        return {"cpu_utilization": 0.0, "memory_percent": 0.0, "temperature": 0.0}
+        return {"cpu_utilization": 0.0, "memory_percent": 0.0, "temperature": None}  # type: ignore[typeddict-item]
