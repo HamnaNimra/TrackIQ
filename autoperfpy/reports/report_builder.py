@@ -509,6 +509,9 @@ def populate_multi_run_html_report(
     total_samples = 0
     best_run_name = None
     best_run_throughput = None
+    device_names: set[str] = set()
+    accelerator_names: set[str] = set()
+    precision_names: set[str] = set()
     overview_rows: list[list[str]] = []
     metadata_rows: list[list[str]] = []
     for idx, run in enumerate(valid_runs):
@@ -554,6 +557,8 @@ def populate_multi_run_html_report(
             device = str(inference.get("accelerator") or "")
         if _is_missing(device):
             device = "-"
+        if device != "-":
+            device_names.add(device)
 
         precision = "-"
         batch_size = "-"
@@ -564,6 +569,7 @@ def populate_multi_run_html_report(
         if isinstance(inference, dict):
             if not _is_missing(inference.get("precision")):
                 precision = str(inference.get("precision"))
+                precision_names.add(precision)
             if inference.get("batch_size") is not None and not _is_missing(inference.get("batch_size")):
                 batch_size = str(inference.get("batch_size"))
             if inference.get("streams") is not None and not _is_missing(inference.get("streams")):
@@ -574,6 +580,7 @@ def populate_multi_run_html_report(
                 iterations = str(inference.get("iterations"))
             if not _is_missing(inference.get("accelerator")):
                 accelerator = str(inference.get("accelerator"))
+                accelerator_names.add(accelerator)
 
         overview_rows.append(
             [
@@ -605,6 +612,12 @@ def populate_multi_run_html_report(
 
     report.add_summary_item("Runs", len(valid_runs), "", "neutral")
     report.add_summary_item("Total Samples", total_samples, "", "neutral")
+    if device_names:
+        report.add_metadata("Devices", ", ".join(sorted(device_names)))
+    if accelerator_names:
+        report.add_metadata("Accelerators", ", ".join(sorted(accelerator_names)))
+    if precision_names:
+        report.add_metadata("Precisions", ", ".join(sorted(precision_names)))
     if best_run_name is not None and best_run_throughput is not None:
         report.add_summary_item("Best Throughput Run", best_run_name, "", "good")
         report.add_summary_item("Best Throughput", f"{best_run_throughput:.2f}", "FPS", "good")

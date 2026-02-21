@@ -10,7 +10,8 @@ import platform as _platform
 import sys
 import tempfile
 from datetime import datetime, timezone
-from importlib.metadata import PackageNotFoundError, version as package_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from typing import Any
 
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
