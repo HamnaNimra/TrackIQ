@@ -213,6 +213,12 @@ class CorrectnessValidator:
         single_metrics = load_json_file(single_run_path)
         multi_metrics = load_json_file(multi_run_path)
 
+        # Support canonical TrackiqResult wrappers written by minicluster save path.
+        if isinstance(single_metrics, dict) and isinstance(single_metrics.get("tool_payload"), dict):
+            single_metrics = single_metrics["tool_payload"]
+        if isinstance(multi_metrics, dict) and isinstance(multi_metrics.get("tool_payload"), dict):
+            multi_metrics = multi_metrics["tool_payload"]
+
         report = self.compare_runs(single_metrics, multi_metrics)
         report.single_run_path = str(single_run_path)
         report.multi_run_path = str(multi_run_path)
