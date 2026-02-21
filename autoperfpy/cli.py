@@ -49,6 +49,25 @@ try:
 except PackageNotFoundError:
     AUTOPERFPY_CLI_VERSION = "1.0"
 
+DEFAULT_PROFILE_NAMES = [
+    "automotive_safety",
+    "edge_max_perf",
+    "edge_low_power",
+    "ci_smoke",
+]
+
+
+def _available_profile_names() -> list[str]:
+    """Return profile names for help text, with safe fallback."""
+    try:
+        names = [str(name).strip() for name in list_profiles()]
+        names = [name for name in names if name]
+        if names:
+            return sorted(dict.fromkeys(names))
+    except Exception:
+        pass
+    return list(DEFAULT_PROFILE_NAMES)
+
 
 def setup_parser() -> argparse.ArgumentParser:
     """Setup command-line argument parser.
@@ -127,10 +146,13 @@ Environment Variables:
         metavar="DIR",
         help="Directory for report and export files (default: output). Created if missing.",
     )
+    profile_names = _available_profile_names()
+    profile_list_help = ", ".join(profile_names)
+
     parser.add_argument(
         "--profile",
         "-p",
-        help="Performance profile to use (automotive_safety, edge_max_perf, edge_low_power, ci_smoke)",
+        help=f"Performance profile to use ({profile_list_help})",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -153,7 +175,10 @@ Environment Variables:
         "--profile",
         "-p",
         default=None,
-        help="Profile to use (e.g. ci_smoke). If omitted, auto mode runs on all detected devices.",
+        help=(
+            f"Profile to use ({profile_list_help}). "
+            "If omitted, auto mode runs on all detected devices."
+        ),
     )
     run_parser.add_argument(
         "--auto",
@@ -1047,7 +1072,7 @@ def main():
         elif args.command == "compare":
             return run_compare(args)
     except (HardwareNotFoundError, DependencyError, ProfileValidationError, PdfBackendError) as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
     except Exception as e:  # pylint: disable=broad-exception-caught
         print(f"❌ Error: {e}", file=sys.stderr)
