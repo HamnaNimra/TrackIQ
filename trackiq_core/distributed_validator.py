@@ -7,18 +7,37 @@ loss convergence using torch.distributed with Gloo backend.
 import json
 import multiprocessing
 import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import torch
-import torch.distributed as dist
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+try:
+    import torch
+    import torch.distributed as dist
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.utils.data import DataLoader, TensorDataset
+except Exception as exc:  # pragma: no cover - dependency guard
+    torch = None
+    dist = None
+    nn = None
+    optim = None
+    DataLoader = None
+    TensorDataset = None
+    _TORCH_IMPORT_ERROR = exc
+else:
+    _TORCH_IMPORT_ERROR = None
 
 from trackiq_core.utils.compare.regression import RegressionDetector, RegressionThreshold
+
+
+def _require_torch() -> None:
+    """Raise actionable dependency error when torch extras are missing."""
+    if _TORCH_IMPORT_ERROR is not None:
+        raise ImportError(
+            "PyTorch is required for distributed validation features. "
+            "Install with: pip install -e \".[ml]\""
+        ) from _TORCH_IMPORT_ERROR
 
 
 @dataclass
@@ -37,42 +56,56 @@ class DistributedValidationConfig:
     regression_threshold: float = 5.0  # Percent threshold for regression detection
 
 
-class SimpleMLP(nn.Module):
-    """Simple MLP model for validation."""
+if nn is not None:
 
-    def __init__(self, input_size: int, hidden_size: int, output_size: int, num_layers: int):
-        super().__init__()
-        layers = []
-        in_size = input_size
-        for _ in range(num_layers - 1):
-            layers.extend([
-                nn.Linear(in_size, hidden_size),
-                nn.ReLU(),
-            ])
-            in_size = hidden_size
-        layers.append(nn.Linear(in_size, output_size))
-        self.net = nn.Sequential(*layers)
+    class SimpleMLP(nn.Module):
+        """Simple MLP model for validation."""
 
-    def forward(self, x):
-        return self.net(x)
+        def __init__(self, input_size: int, hidden_size: int, output_size: int, num_layers: int):
+            super().__init__()
+            layers = []
+            in_size = input_size
+            for _ in range(num_layers - 1):
+                layers.extend(
+                    [
+                        nn.Linear(in_size, hidden_size),
+                        nn.ReLU(),
+                    ]
+                )
+                in_size = hidden_size
+            layers.append(nn.Linear(in_size, output_size))
+            self.net = nn.Sequential(*layers)
+
+        def forward(self, x):
+            return self.net(x)
+
+else:
+
+    class SimpleMLP:  # pragma: no cover - exercised only when torch missing
+        """Fallback type for optional torch dependency."""
+
+        def __init__(self, *args, **kwargs):
+            _require_torch()
 
 
 def create_synthetic_dataset(num_samples: int = 1000, input_size: int = 10, output_size: int = 1) -> TensorDataset:
     """Create synthetic regression dataset."""
+    _require_torch()
     # Ensure deterministic dataset creation
     torch.manual_seed(42)
-    
-    X = torch.randn(num_samples, input_size)
+
+    x_values = torch.randn(num_samples, input_size)
     # Simple linear relationship with noise
-    W = torch.randn(input_size, output_size)
-    y = X @ W + 0.1 * torch.randn(num_samples, output_size)
-    return TensorDataset(X, y)
+    weights = torch.randn(input_size, output_size)
+    y_values = x_values @ weights + 0.1 * torch.randn(num_samples, output_size)
+    return TensorDataset(x_values, y_values)
 
 
 def train_single_process(config: DistributedValidationConfig) -> List[float]:
     """Run training in single process mode."""
+    _require_torch()
     torch.manual_seed(42)  # Ensure deterministic training
-    
+
     model = SimpleMLP(config.input_size, config.hidden_size, config.output_size, config.num_layers)
     optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.MSELoss()
@@ -105,9 +138,10 @@ def train_single_process(config: DistributedValidationConfig) -> List[float]:
 
 def train_worker(rank: int, world_size: int, config: DistributedValidationConfig, losses_queue: multiprocessing.Queue):
     """Worker function for distributed training."""
+    _require_torch()
     # Initialize process group
-    os.environ['MASTER_ADDR'] = '127.0.0.1'
-    os.environ['MASTER_PORT'] = '12345'
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = "12345"
     # Some Windows/CPU PyTorch builds do not include libuv support.
     # Force the TCPStore path to avoid "use_libuv was requested" runtime failures.
     os.environ.setdefault("USE_LIBUV", "0")
@@ -162,8 +196,9 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
 
 def train_multi_process(config: DistributedValidationConfig) -> List[float]:
     """Run training in multi-process distributed mode."""
+    _require_torch()
     # Use multiprocessing to spawn processes
-    ctx = multiprocessing.get_context('spawn')
+    ctx = multiprocessing.get_context("spawn")
     losses_queue = ctx.Queue()
 
     processes = []
@@ -191,8 +226,8 @@ class DistributedValidator:
 
     def run_validation(
         self,
-        config: Optional[DistributedValidationConfig] = None
-    ) -> Dict[str, any]:
+        config: Optional[DistributedValidationConfig] = None,
+    ) -> Dict[str, Any]:
         """Run distributed validation.
 
         Args:
@@ -219,21 +254,27 @@ class DistributedValidator:
             single_loss = single_losses[i]
             multi_loss = multi_losses[i]
             delta = abs(single_loss - multi_loss)
-            rel_delta = delta / max(abs(single_loss), abs(multi_loss)) if max(abs(single_loss), abs(multi_loss)) > 0 else 0
+            rel_delta = (
+                delta / max(abs(single_loss), abs(multi_loss))
+                if max(abs(single_loss), abs(multi_loss)) > 0
+                else 0
+            )
 
             passed = rel_delta <= config.loss_tolerance
             if passed:
                 passed_steps += 1
 
-            comparisons.append({
-                "step": i,
-                "single_process_loss": single_loss,
-                "multi_process_loss": multi_loss,
-                "absolute_delta": delta,
-                "relative_delta": rel_delta,
-                "passed": passed,
-                "tolerance": config.loss_tolerance
-            })
+            comparisons.append(
+                {
+                    "step": i,
+                    "single_process_loss": single_loss,
+                    "multi_process_loss": multi_loss,
+                    "absolute_delta": delta,
+                    "relative_delta": rel_delta,
+                    "passed": passed,
+                    "tolerance": config.loss_tolerance,
+                }
+            )
 
         overall_pass = passed_steps == max_len
 
@@ -258,13 +299,13 @@ class DistributedValidator:
                 "passed_steps": passed_steps,
                 "failed_steps": max_len - passed_steps,
                 "pass_rate": passed_steps / max_len if max_len > 0 else 0,
-                "overall_pass": overall_pass
-            }
+                "overall_pass": overall_pass,
+            },
         }
 
         return result
 
-    def save_baseline(self, name: str, results: Dict[str, any]) -> None:
+    def save_baseline(self, name: str, results: Dict[str, Any]) -> None:
         """Save validation results as baseline."""
         # Extract loss metrics for regression detection
         metrics = {}
@@ -276,9 +317,9 @@ class DistributedValidator:
     def detect_regression(
         self,
         baseline_name: str,
-        results: Dict[str, any],
-        threshold: Optional[float] = None
-    ) -> Dict[str, any]:
+        results: Dict[str, Any],
+        threshold: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """Detect regression against baseline."""
         if threshold is None:
             threshold = results["config"]["regression_threshold"]
@@ -291,7 +332,7 @@ class DistributedValidator:
         regression_threshold = RegressionThreshold(
             latency_percent=threshold,
             throughput_percent=threshold,
-            p99_percent=threshold
+            p99_percent=threshold,
         )
 
         regression_result = self.regression_detector.detect_regressions(
@@ -302,9 +343,9 @@ class DistributedValidator:
 
     def generate_report(
         self,
-        results: Dict[str, any],
-        regression_results: Optional[Dict[str, any]] = None,
-        output_format: str = "json"
+        results: Dict[str, Any],
+        regression_results: Optional[Dict[str, Any]] = None,
+        output_format: str = "json",
     ) -> str:
         """Generate validation report."""
         if output_format == "json":
@@ -316,12 +357,12 @@ class DistributedValidator:
                 "DISTRIBUTED TRAINING VALIDATION REPORT",
                 "=" * 70,
                 "",
-                f"Configuration:",
+                "Configuration:",
                 f"  Steps: {results['config']['num_steps']}",
                 f"  Processes: {results['config']['num_processes']}",
                 f"  Tolerance: {results['config']['loss_tolerance']}",
                 "",
-                f"Results:",
+                "Results:",
                 f"  Total Steps: {results['summary']['total_steps']}",
                 f"  Passed: {results['summary']['passed_steps']}",
                 f"  Failed: {results['summary']['failed_steps']}",
@@ -330,13 +371,15 @@ class DistributedValidator:
             ]
 
             if regression_results:
-                lines.extend([
-                    "",
-                    "Regression Detection:",
-                    f"  Baseline: {regression_results.get('baseline', 'N/A')}",
-                    f"  Regressions: {len(regression_results.get('regressions', {}))}",
-                    f"  Status: {'REGRESSION' if regression_results.get('has_regressions') else 'OK'}"
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "Regression Detection:",
+                        f"  Baseline: {regression_results.get('baseline', 'N/A')}",
+                        f"  Regressions: {len(regression_results.get('regressions', {}))}",
+                        f"  Status: {'REGRESSION' if regression_results.get('has_regressions') else 'OK'}",
+                    ]
+                )
 
             lines.append("=" * 70)
             return "\n".join(lines)
