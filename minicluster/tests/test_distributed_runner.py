@@ -18,6 +18,12 @@ from minicluster.runner import (
     load_metrics,
 )
 from trackiq_core.serializer import load_trackiq_result
+from minicluster.runner.distributed_runner import (
+    WorkerSnapshot,
+    HealthCheckpoint,
+    determine_worker_status,
+    write_health_checkpoint,
+)
 
 
 class TestSimpleMLP:
@@ -242,3 +248,120 @@ def test_minicluster_power_profiler_integration_full_session(tmp_path):
 
     assert result.metrics.power_consumption_watts is not None
     assert result.metrics.performance_per_watt is not None
+
+
+def test_determine_worker_status_healthy() -> None:
+    """Status should be healthy when throughput is above threshold."""
+    worker = WorkerSnapshot(
+        worker_id=0,
+        step=1,
+        loss=0.2,
+        throughput_samples_per_sec=80.0,
+        allreduce_time_ms=1.0,
+        compute_time_ms=1.0,
+        status="healthy",
+        timestamp="2026-02-21T00:00:00",
+    )
+    assert determine_worker_status(worker, baseline_throughput=100.0) == "healthy"
+
+
+def test_determine_worker_status_slow() -> None:
+    """Status should be slow when throughput is below 70% baseline."""
+    worker = WorkerSnapshot(
+        worker_id=0,
+        step=1,
+        loss=0.2,
+        throughput_samples_per_sec=69.0,
+        allreduce_time_ms=1.0,
+        compute_time_ms=1.0,
+        status="healthy",
+        timestamp="2026-02-21T00:00:00",
+    )
+    assert determine_worker_status(worker, baseline_throughput=100.0) == "slow"
+
+
+def test_determine_worker_status_failed() -> None:
+    """Status should be failed when throughput is zero."""
+    worker = WorkerSnapshot(
+        worker_id=0,
+        step=1,
+        loss=0.2,
+        throughput_samples_per_sec=0.0,
+        allreduce_time_ms=1.0,
+        compute_time_ms=1.0,
+        status="healthy",
+        timestamp="2026-02-21T00:00:00",
+    )
+    assert determine_worker_status(worker, baseline_throughput=100.0) == "failed"
+
+
+def test_write_health_checkpoint_writes_valid_json(tmp_path) -> None:
+    """Checkpoint writer should emit valid JSON payload."""
+    out = tmp_path / "health.json"
+    checkpoint = HealthCheckpoint(
+        run_id="run-1",
+        total_steps=10,
+        completed_steps=1,
+        workers=[
+            WorkerSnapshot(
+                worker_id=0,
+                step=1,
+                loss=0.2,
+                throughput_samples_per_sec=100.0,
+                allreduce_time_ms=1.0,
+                compute_time_ms=1.0,
+                status="healthy",
+                timestamp="2026-02-21T00:00:00",
+            )
+        ],
+        timestamp="2026-02-21T00:00:01",
+        is_complete=False,
+    )
+    write_health_checkpoint(checkpoint, str(out))
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["run_id"] == "run-1"
+    assert payload["workers"][0]["worker_id"] == 0
+
+
+def test_write_health_checkpoint_atomic_output_not_partial(tmp_path) -> None:
+    """Repeated checkpoint writes should leave readable, non-partial output."""
+    out = tmp_path / "health.json"
+    for i in range(5):
+        checkpoint = HealthCheckpoint(
+            run_id="run-atomic",
+            total_steps=10,
+            completed_steps=i + 1,
+            workers=[],
+            timestamp=f"2026-02-21T00:00:0{i}",
+            is_complete=False,
+        )
+        write_health_checkpoint(checkpoint, str(out))
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        assert payload["completed_steps"] == i + 1
+    # Ensure temp files were replaced out of final path.
+    assert out.exists()
+
+
+def test_run_with_health_checkpoint_writes_complete_final_checkpoint(tmp_path) -> None:
+    """Run with checkpoint path should write final is_complete=true payload."""
+    checkpoint_path = tmp_path / "health.json"
+    config = RunConfig(num_steps=6, num_processes=1, seed=42)
+    metrics = run_distributed(config, health_checkpoint_path=str(checkpoint_path))
+    assert metrics is not None
+    assert checkpoint_path.exists()
+    payload = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    assert payload["is_complete"] is True
+    assert payload["completed_steps"] == 6
+
+
+def test_run_without_health_checkpoint_path_writes_no_checkpoint_file(tmp_path) -> None:
+    """Run without checkpoint path should not emit health checkpoint output."""
+    checkpoint_path = tmp_path / "health.json"
+    config = RunConfig(num_steps=6, num_processes=1, seed=42)
+    metrics_without = run_distributed(config, health_checkpoint_path=None)
+    metrics_default = run_distributed(config)
+
+    assert metrics_without is not None
+    assert metrics_default is not None
+    assert len(metrics_without.steps) == len(metrics_default.steps)
+    assert not checkpoint_path.exists()
