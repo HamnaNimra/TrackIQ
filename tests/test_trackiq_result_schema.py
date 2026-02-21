@@ -5,6 +5,7 @@ from datetime import datetime
 import pytest
 
 from trackiq_core.schema import (
+    KVCacheInfo,
     Metrics,
     PlatformInfo,
     RegressionInfo,
@@ -119,3 +120,42 @@ def test_new_power_fields_round_trip_through_dict_conversion() -> None:
     assert loaded.metrics.energy_per_step_joules == 12.5
     assert loaded.metrics.performance_per_watt == 3.2
     assert loaded.metrics.temperature_celsius == 71.4
+
+
+def test_kv_cache_round_trip_through_dict_conversion() -> None:
+    """KV cache schema block should round-trip in canonical result payload."""
+    source = _sample_result()
+    source.kv_cache = KVCacheInfo(
+        estimated_size_mb=256.0,
+        max_sequence_length=2048,
+        batch_size=1,
+        num_layers=32,
+        num_heads=32,
+        head_size=128,
+        precision="fp16",
+        samples=[{"sequence_length": 1024, "kv_cache_mb": 128.0}],
+    )
+    loaded = TrackiqResult.from_dict(source.to_dict())
+    assert loaded.kv_cache is not None
+    assert loaded.kv_cache.max_sequence_length == 2048
+    assert loaded.kv_cache.samples[0]["kv_cache_mb"] == 128.0
+
+
+def test_kv_cache_from_tool_payload_backcompat() -> None:
+    """from_dict should backfill kv_cache from tool_payload for legacy payloads."""
+    payload = _sample_result().to_dict()
+    payload["tool_payload"] = {
+        "kv_cache": {
+            "estimated_size_mb": 512.0,
+            "max_sequence_length": 4096,
+            "batch_size": 1,
+            "num_layers": 40,
+            "num_heads": 40,
+            "head_size": 128,
+            "precision": "fp16",
+            "samples": [{"sequence_length": 4096, "kv_cache_mb": 512.0}],
+        }
+    }
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.kv_cache is not None
+    assert loaded.kv_cache.estimated_size_mb == 512.0

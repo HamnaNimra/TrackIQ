@@ -113,6 +113,39 @@ def validate_trackiq_result(data: Dict[str, Any]) -> None:
     ):
         raise TypeError("Field 'tool_payload' must be object or null")
 
+    if "kv_cache" in data and data["kv_cache"] is not None:
+        kv_cache = data["kv_cache"]
+        if not isinstance(kv_cache, dict):
+            raise TypeError("Field 'kv_cache' must be object or null")
+        required = [
+            "estimated_size_mb",
+            "max_sequence_length",
+            "batch_size",
+            "num_layers",
+            "num_heads",
+            "head_size",
+            "precision",
+        ]
+        _require_keys(kv_cache, required, "kv_cache.")
+        for key in [
+            "estimated_size_mb",
+        ]:
+            if not isinstance(kv_cache[key], (int, float)):
+                raise TypeError(f"Field 'kv_cache.{key}' must be number")
+        for key in [
+            "max_sequence_length",
+            "batch_size",
+            "num_layers",
+            "num_heads",
+            "head_size",
+        ]:
+            if not isinstance(kv_cache[key], int):
+                raise TypeError(f"Field 'kv_cache.{key}' must be int")
+        if not isinstance(kv_cache["precision"], str):
+            raise TypeError("Field 'kv_cache.precision' must be str")
+        if "samples" in kv_cache and not isinstance(kv_cache["samples"], list):
+            raise TypeError("Field 'kv_cache.samples' must be list when provided")
+
 
 def validate_trackiq_result_obj(result: TrackiqResult) -> None:
     """Validate a TrackiqResult dataclass object."""

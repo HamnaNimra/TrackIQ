@@ -48,6 +48,7 @@ class AutoPerfDashboard(TrackiqDashboard):
         components["regression_badge"].render()
         components["metric_table"].render()
         components["power_gauge"].render()
+        self.render_kv_cache_section()
 
         result = self._primary_result()
         with st.expander("Raw Result", expanded=False):

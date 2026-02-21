@@ -183,6 +183,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 time.sleep(2)
 
         components["power_gauge"].render()
+        self.render_kv_cache_section()
 
         with st.expander("Fault Detection Report", expanded=False):
             faults = local_payload.get("faults_detected")

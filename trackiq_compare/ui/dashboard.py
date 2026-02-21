@@ -292,4 +292,5 @@ class CompareDashboard(TrackiqDashboard):
             file_name="trackiq_compare_report.html",
             mime="text/html",
         )
+        self.render_kv_cache_section()
         self.render_download_section()

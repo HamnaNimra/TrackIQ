@@ -60,6 +60,20 @@ class RegressionInfo:
 
 
 @dataclass
+class KVCacheInfo:
+    """Optional LLM KV cache telemetry captured during inference monitoring."""
+
+    estimated_size_mb: float
+    max_sequence_length: int
+    batch_size: int
+    num_layers: int
+    num_heads: int
+    head_size: int
+    precision: str
+    samples: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
 class TrackiqResult:
     """
     Canonical result object for TrackIQ tools.
@@ -79,6 +93,7 @@ class TrackiqResult:
     workload: WorkloadInfo
     metrics: Metrics
     regression: RegressionInfo
+    kv_cache: Optional[KVCacheInfo] = None
     tool_payload: Optional[Dict[str, Any]] = None
     schema_version: str = "1.1.0"
 
@@ -91,6 +106,9 @@ class TrackiqResult:
     @classmethod
     def from_dict(cls, payload: Dict[str, object]) -> "TrackiqResult":
         """Build a TrackiqResult from dictionary data."""
+        kv_cache_payload = payload.get("kv_cache")
+        if kv_cache_payload is None and isinstance(payload.get("tool_payload"), dict):
+            kv_cache_payload = payload["tool_payload"].get("kv_cache")  # type: ignore[index]
         return cls(
             tool_name=str(payload["tool_name"]),
             tool_version=str(payload["tool_version"]),
@@ -99,6 +117,9 @@ class TrackiqResult:
             workload=WorkloadInfo(**payload["workload"]),  # type: ignore[arg-type]
             metrics=Metrics(**payload["metrics"]),  # type: ignore[arg-type]
             regression=RegressionInfo(**payload["regression"]),  # type: ignore[arg-type]
+            kv_cache=KVCacheInfo(**kv_cache_payload)  # type: ignore[arg-type]
+            if isinstance(kv_cache_payload, dict)
+            else None,
             tool_payload=payload.get("tool_payload"),
             schema_version=str(payload.get("schema_version", "1.0.0")),
         )

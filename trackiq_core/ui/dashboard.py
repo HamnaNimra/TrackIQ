@@ -136,6 +136,37 @@ class TrackiqDashboard(ABC):
                 key=f"download_html_{base_name}",
             )
 
+    def render_kv_cache_section(self) -> None:
+        """Render LLM KV cache details when present in schema or tool payload."""
+        import streamlit as st
+
+        result = self._primary_result()
+        kv_cache = result.kv_cache
+        if kv_cache is None and isinstance(result.tool_payload, dict):
+            payload_cache = result.tool_payload.get("kv_cache")
+            if isinstance(payload_cache, dict):
+                kv_cache = payload_cache
+
+        if kv_cache is None:
+            return
+
+        st.markdown(
+            f"<div style='font-weight:700;color:{self.theme.text_color};'>KV Cache</div>",
+            unsafe_allow_html=True,
+        )
+
+        if hasattr(kv_cache, "__dict__"):
+            data = kv_cache.__dict__
+        else:
+            data = kv_cache
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Estimated Size (MB)", f"{float(data.get('estimated_size_mb', 0.0)):.2f}")
+        col2.metric("Max Sequence Length", int(data.get("max_sequence_length", 0)))
+        col3.metric("Precision", str(data.get("precision", "unknown")))
+        with st.expander("KV Cache Details", expanded=False):
+            st.json(data)
+
     def render_device_panel(self) -> None:
         """Render cached device panel in the sidebar."""
         import streamlit as st

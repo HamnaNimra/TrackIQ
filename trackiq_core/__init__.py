@@ -69,6 +69,7 @@ from trackiq_core.schema import (
     WorkloadInfo,
     Metrics,
     RegressionInfo,
+    KVCacheInfo,
 )
 from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
 from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
@@ -144,6 +145,7 @@ __all__ = [
     "WorkloadInfo",
     "Metrics",
     "RegressionInfo",
+    "KVCacheInfo",
     "save_trackiq_result",
     "load_trackiq_result",
     "validate_trackiq_result",
