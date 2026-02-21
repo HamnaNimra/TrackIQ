@@ -17,6 +17,7 @@ from minicluster.runner import (
     save_metrics,
     load_metrics,
 )
+from trackiq_core.serializer import load_trackiq_result
 
 
 class TestSimpleMLP:
@@ -228,3 +229,16 @@ class TestMultiProcessTraining:
         assert len(metrics1.steps) == len(metrics2.steps)
         for m1, m2 in zip(metrics1.steps, metrics2.steps):
             assert abs(m1.loss - m2.loss) < 1e-5
+
+
+def test_minicluster_power_profiler_integration_full_session(tmp_path):
+    """MiniCluster run/save path should populate canonical TrackiqResult power metrics."""
+    config = RunConfig(num_steps=6, num_processes=1, batch_size=16, seed=42, tdp_watts=150.0)
+    metrics = run_distributed(config)
+
+    output_path = tmp_path / "minicluster_result.json"
+    save_metrics(metrics, str(output_path))
+    result = load_trackiq_result(output_path)
+
+    assert result.metrics.power_consumption_watts is not None
+    assert result.metrics.performance_per_watt is not None
