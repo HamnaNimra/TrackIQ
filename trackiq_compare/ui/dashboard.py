@@ -263,6 +263,22 @@ class CompareDashboard(TrackiqDashboard):
             )
         return confidence_rows
 
+    def _build_html_report(self, _result: TrackiqResult) -> str:
+        """Generate the same compare HTML artifact used by CLI."""
+        comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
+        comparison = comparator.compare(self.result_a, self.result_b)
+        summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "trackiq_compare_report.html"
+            HtmlReporter().generate(
+                str(report_path),
+                comparison,
+                summary,
+                self.result_a,
+                self.result_b,
+            )
+            return report_path.read_text(encoding="utf-8")
+
     def _competitive_verdict(self, rows: list[dict[str, Any]]) -> str:
         score_a = 0
         score_b = 0

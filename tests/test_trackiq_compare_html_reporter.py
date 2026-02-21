@@ -87,7 +87,7 @@ def test_compare_html_report_includes_visualization_parity_sections(tmp_path) ->
     assert "Top Normalized Deltas" in html
     assert "Winner Distribution" in html
     assert "Confidence Distribution" in html
-    assert "conic-gradient(" in html
+    assert ("plotly-graph-div" in html) or ("conic-gradient(" in html)
     assert "Normalized Metric Deltas" in html
     assert "Metric Family Delta Waterfall" in html
     assert "Metric Availability Confidence Matrix" in html

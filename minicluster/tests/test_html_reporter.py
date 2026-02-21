@@ -66,7 +66,7 @@ def test_minicluster_html_reporter_multi_run_contains_consolidated_graphs(tmp_pa
     assert "Configuration Comparison" in html
     assert "Loss Curves Overlay" in html
     assert "Key-Metric Winner Share" in html
-    assert "conic-gradient(" in html
+    assert ("plotly-graph-div" in html) or ("conic-gradient(" in html)
     assert "w2-b32-s10-lr0.005" in html
 
 

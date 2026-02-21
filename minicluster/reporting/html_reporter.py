@@ -36,24 +36,27 @@ class MiniClusterHtmlReporter:
         run = self._run_data(result, default_label="run-1")
         metric_rows = self._single_metric_rows(result, run)
         config_rows = self._config_rows(run["config"])
-        loss_svg = self._line_chart_svg(
-            run["step_points"],
-            title="Loss by Step",
-            y_label="Loss",
-            color="#dc2626",
-            show_points=True,
-        )
-        throughput_svg = self._line_chart_svg(
-            run["throughput_points"],
-            title="Throughput by Step",
-            y_label="Samples/sec",
-            color="#2563eb",
-            show_points=True,
-        )
-        timing_svg = self._stacked_timing_svg(
-            run["timing_points"],
-            title="Per-Step Timing (Compute + AllReduce)",
-        )
+        if PLOTLY_AVAILABLE:
+            loss_chart, throughput_chart, timing_chart = self._single_plotly_charts(run)
+        else:
+            loss_chart = self._line_chart_svg(
+                run["step_points"],
+                title="Loss by Step",
+                y_label="Loss",
+                color="#dc2626",
+                show_points=True,
+            )
+            throughput_chart = self._line_chart_svg(
+                run["throughput_points"],
+                title="Throughput by Step",
+                y_label="Samples/sec",
+                color="#2563eb",
+                show_points=True,
+            )
+            timing_chart = self._stacked_timing_svg(
+                run["timing_points"],
+                title="Per-Step Timing (Compute + AllReduce)",
+            )
 
         return f"""<!doctype html>
 <html lang="en">
@@ -111,10 +114,10 @@ class MiniClusterHtmlReporter:
     <section class="card">
       <h2>Training Graphs</h2>
       <div class="charts-grid">
-        <div>{loss_svg}</div>
-        <div>{throughput_svg}</div>
+        <div>{loss_chart}</div>
+        <div>{throughput_chart}</div>
       </div>
-      <div class="chart-full">{timing_svg}</div>
+      <div class="chart-full">{timing_chart}</div>
     </section>
   </div>
 </body>
@@ -123,38 +126,41 @@ class MiniClusterHtmlReporter:
     def _render_multi_result_html(self, results: list[Any], title: str) -> str:
         run_data = [self._run_data(result, default_label=f"run-{idx + 1}") for idx, result in enumerate(results)]
         table_rows = self._consolidated_rows(run_data)
-        throughput_svg = self._bar_chart_svg(
-            [run["label"] for run in run_data],
-            [run["throughput"] for run in run_data],
-            title="Throughput by Config",
-            y_label="Samples/sec",
-            color="#2563eb",
-        )
-        loss_svg = self._bar_chart_svg(
-            [run["label"] for run in run_data],
-            [run["final_loss"] for run in run_data],
-            title="Final Loss by Config (lower is better)",
-            y_label="Loss",
-            color="#dc2626",
-        )
-        runtime_svg = self._bar_chart_svg(
-            [run["label"] for run in run_data],
-            [run["total_time_sec"] for run in run_data],
-            title="Total Runtime by Config",
-            y_label="Seconds",
-            color="#0891b2",
-        )
-        loss_overlay_svg = self._multi_line_chart_svg(
-            [(run["label"], run["step_points"]) for run in run_data],
-            title="Loss Curves Overlay",
-            y_label="Loss",
-        )
-        winners = self._winner_share(run_data)
-        winner_pie = self._pie_div(
-            winners,
-            title="Key-Metric Winner Share",
-            labels={run["label"]: run["label"] for run in run_data},
-        )
+        if PLOTLY_AVAILABLE:
+            throughput_chart, loss_chart, runtime_chart, winner_chart, overlay_chart = self._multi_plotly_charts(run_data)
+        else:
+            throughput_chart = self._bar_chart_svg(
+                [run["label"] for run in run_data],
+                [run["throughput"] for run in run_data],
+                title="Throughput by Config",
+                y_label="Samples/sec",
+                color="#2563eb",
+            )
+            loss_chart = self._bar_chart_svg(
+                [run["label"] for run in run_data],
+                [run["final_loss"] for run in run_data],
+                title="Final Loss by Config (lower is better)",
+                y_label="Loss",
+                color="#dc2626",
+            )
+            runtime_chart = self._bar_chart_svg(
+                [run["label"] for run in run_data],
+                [run["total_time_sec"] for run in run_data],
+                title="Total Runtime by Config",
+                y_label="Seconds",
+                color="#0891b2",
+            )
+            overlay_chart = self._multi_line_chart_svg(
+                [(run["label"], run["step_points"]) for run in run_data],
+                title="Loss Curves Overlay",
+                y_label="Loss",
+            )
+            winners = self._winner_share(run_data)
+            winner_chart = self._pie_div(
+                winners,
+                title="Key-Metric Winner Share",
+                labels={run["label"]: run["label"] for run in run_data},
+            )
 
         return f"""<!doctype html>
 <html lang="en">
@@ -199,14 +205,14 @@ class MiniClusterHtmlReporter:
     <section class="card">
       <h2>Consolidated Graphs</h2>
       <div class="charts-grid">
-        <div>{throughput_svg}</div>
-        <div>{loss_svg}</div>
+        <div>{throughput_chart}</div>
+        <div>{loss_chart}</div>
       </div>
       <div class="charts-grid">
-        <div>{runtime_svg}</div>
-        <div>{winner_pie}</div>
+        <div>{runtime_chart}</div>
+        <div>{winner_chart}</div>
       </div>
-      <div class="chart-full">{loss_overlay_svg}</div>
+      <div class="chart-full">{overlay_chart}</div>
     </section>
   </div>
 </body>
@@ -295,6 +301,304 @@ class MiniClusterHtmlReporter:
   }
 </style>
 """
+
+    def _single_plotly_charts(self, run: dict[str, Any]) -> tuple[str, str, str]:
+        """Build Plotly chart fragments for single-run report."""
+        if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
+            return (
+                self._line_chart_svg(run["step_points"], title="Loss by Step", y_label="Loss", color="#dc2626", show_points=True),
+                self._line_chart_svg(
+                    run["throughput_points"],
+                    title="Throughput by Step",
+                    y_label="Samples/sec",
+                    color="#2563eb",
+                    show_points=True,
+                ),
+                self._stacked_timing_svg(run["timing_points"], title="Per-Step Timing (Compute + AllReduce)"),
+            )
+
+        steps = [float(step) for step, value in run["step_points"] if value is not None]
+        losses = [float(value) for _, value in run["step_points"] if value is not None]
+        thr_steps = [float(step) for step, value in run["throughput_points"] if value is not None]
+        throughputs = [float(value) for _, value in run["throughput_points"] if value is not None]
+
+        include_js = True
+
+        if len(losses) >= 2:
+            fig_loss = go.Figure()
+            fig_loss.add_trace(
+                go.Scatter(
+                    x=steps,
+                    y=losses,
+                    mode="lines+markers",
+                    name="loss",
+                    line=dict(color="#dc2626", width=2),
+                )
+            )
+            fig_loss.update_layout(
+                title="Loss by Step",
+                template="plotly_white",
+                height=340,
+                margin=dict(l=40, r=16, t=48, b=36),
+                xaxis_title="Step",
+                yaxis_title="Loss",
+            )
+            loss_chart = self._wrap_plotly_chart(
+                "Loss by Step",
+                self._fig_to_html(fig_loss, include_plotlyjs=include_js),
+            )
+            include_js = False
+        else:
+            loss_chart = self._line_chart_svg(
+                run["step_points"],
+                title="Loss by Step",
+                y_label="Loss",
+                color="#dc2626",
+                show_points=True,
+            )
+
+        if len(throughputs) >= 2:
+            fig_thr = go.Figure()
+            fig_thr.add_trace(
+                go.Scatter(
+                    x=thr_steps,
+                    y=throughputs,
+                    mode="lines+markers",
+                    name="throughput",
+                    line=dict(color="#2563eb", width=2),
+                )
+            )
+            fig_thr.update_layout(
+                title="Throughput by Step",
+                template="plotly_white",
+                height=340,
+                margin=dict(l=40, r=16, t=48, b=36),
+                xaxis_title="Step",
+                yaxis_title="Samples/sec",
+            )
+            throughput_chart = self._wrap_plotly_chart(
+                "Throughput by Step",
+                self._fig_to_html(fig_thr, include_plotlyjs=include_js),
+            )
+            include_js = False
+        else:
+            throughput_chart = self._line_chart_svg(
+                run["throughput_points"],
+                title="Throughput by Step",
+                y_label="Samples/sec",
+                color="#2563eb",
+                show_points=True,
+            )
+
+        timing_rows = [(step, compute, allreduce) for step, compute, allreduce in run["timing_points"] if compute is not None and allreduce is not None]
+        if timing_rows:
+            timing_x = [float(step) for step, _, _ in timing_rows]
+            compute_vals = [float(compute) for _, compute, _ in timing_rows]
+            allreduce_vals = [float(allreduce) for _, _, allreduce in timing_rows]
+            if any((compute + allreduce) > 0 for compute, allreduce in zip(compute_vals, allreduce_vals)):
+                fig_timing = go.Figure()
+                fig_timing.add_trace(
+                    go.Bar(
+                        x=timing_x,
+                        y=compute_vals,
+                        name="compute_ms",
+                        marker_color="#2563eb",
+                    )
+                )
+                fig_timing.add_trace(
+                    go.Bar(
+                        x=timing_x,
+                        y=allreduce_vals,
+                        name="allreduce_ms",
+                        marker_color="#dc2626",
+                    )
+                )
+                fig_timing.update_layout(
+                    title="Per-Step Timing (Compute + AllReduce)",
+                    template="plotly_white",
+                    height=360,
+                    margin=dict(l=40, r=16, t=48, b=36),
+                    xaxis_title="Step",
+                    yaxis_title="Time (ms)",
+                    barmode="stack",
+                )
+                timing_chart = self._wrap_plotly_chart(
+                    "Per-Step Timing (Compute + AllReduce)",
+                    self._fig_to_html(fig_timing, include_plotlyjs=include_js),
+                )
+                include_js = False
+            else:
+                timing_chart = "<p>No positive timing values for Per-Step Timing (Compute + AllReduce).</p>"
+        else:
+            timing_chart = self._stacked_timing_svg(
+                run["timing_points"],
+                title="Per-Step Timing (Compute + AllReduce)",
+            )
+
+        return loss_chart, throughput_chart, timing_chart
+
+    def _multi_plotly_charts(
+        self,
+        run_data: list[dict[str, Any]],
+    ) -> tuple[str, str, str, str, str]:
+        """Build Plotly chart fragments for multi-run report."""
+        if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
+            labels = [run["label"] for run in run_data]
+            return (
+                self._bar_chart_svg(labels, [run["throughput"] for run in run_data], title="Throughput by Config", y_label="Samples/sec", color="#2563eb"),
+                self._bar_chart_svg(labels, [run["final_loss"] for run in run_data], title="Final Loss by Config (lower is better)", y_label="Loss", color="#dc2626"),
+                self._bar_chart_svg(labels, [run["total_time_sec"] for run in run_data], title="Total Runtime by Config", y_label="Seconds", color="#0891b2"),
+                self._pie_div(self._winner_share(run_data), title="Key-Metric Winner Share", labels={run["label"]: run["label"] for run in run_data}),
+                self._multi_line_chart_svg([(run["label"], run["step_points"]) for run in run_data], title="Loss Curves Overlay", y_label="Loss"),
+            )
+
+        labels = [str(run["label"]) for run in run_data]
+        include_js = True
+
+        fig_thr = go.Figure(
+            data=[
+                go.Bar(
+                    x=labels,
+                    y=[run["throughput"] if run["throughput"] is not None else 0.0 for run in run_data],
+                    marker_color="#2563eb",
+                )
+            ]
+        )
+        fig_thr.update_layout(
+            title="Throughput by Config",
+            template="plotly_white",
+            height=340,
+            margin=dict(l=40, r=16, t=48, b=48),
+            xaxis_title="Config",
+            yaxis_title="Samples/sec",
+        )
+        throughput_chart = self._wrap_plotly_chart(
+            "Throughput by Config",
+            self._fig_to_html(fig_thr, include_plotlyjs=include_js),
+        )
+        include_js = False
+
+        fig_loss = go.Figure(
+            data=[
+                go.Bar(
+                    x=labels,
+                    y=[run["final_loss"] if run["final_loss"] is not None else 0.0 for run in run_data],
+                    marker_color="#dc2626",
+                )
+            ]
+        )
+        fig_loss.update_layout(
+            title="Final Loss by Config (lower is better)",
+            template="plotly_white",
+            height=340,
+            margin=dict(l=40, r=16, t=48, b=48),
+            xaxis_title="Config",
+            yaxis_title="Loss",
+        )
+        loss_chart = self._wrap_plotly_chart(
+            "Final Loss by Config (lower is better)",
+            self._fig_to_html(fig_loss, include_plotlyjs=include_js),
+        )
+
+        fig_runtime = go.Figure(
+            data=[
+                go.Bar(
+                    x=labels,
+                    y=[run["total_time_sec"] if run["total_time_sec"] is not None else 0.0 for run in run_data],
+                    marker_color="#0891b2",
+                )
+            ]
+        )
+        fig_runtime.update_layout(
+            title="Total Runtime by Config",
+            template="plotly_white",
+            height=340,
+            margin=dict(l=40, r=16, t=48, b=48),
+            xaxis_title="Config",
+            yaxis_title="Seconds",
+        )
+        runtime_chart = self._wrap_plotly_chart(
+            "Total Runtime by Config",
+            self._fig_to_html(fig_runtime, include_plotlyjs=False),
+        )
+
+        winners = self._winner_share(run_data)
+        pie_labels = [label for label in labels if winners.get(label, 0) > 0]
+        pie_values = [int(winners.get(label, 0)) for label in pie_labels]
+        pie_colors = ["#2563eb", "#dc2626", "#0891b2", "#16a34a", "#7c3aed", "#ea580c"][: len(pie_labels)]
+        if pie_labels:
+            fig_winner = go.Figure(
+                data=[
+                    go.Pie(
+                        labels=pie_labels,
+                        values=pie_values,
+                        hole=0.45,
+                        marker=dict(colors=pie_colors),
+                        textinfo="label+percent",
+                    )
+                ]
+            )
+            fig_winner.update_layout(
+                title="Key-Metric Winner Share",
+                template="plotly_white",
+                height=340,
+                margin=dict(l=16, r=16, t=48, b=16),
+            )
+            winner_chart = self._wrap_plotly_chart(
+                "Key-Metric Winner Share",
+                self._fig_to_html(fig_winner, include_plotlyjs=False),
+            )
+        else:
+            winner_chart = "<p>No data available for Key-Metric Winner Share.</p>"
+
+        fig_overlay = go.Figure()
+        for idx, run in enumerate(run_data):
+            points = [(step, value) for step, value in run["step_points"] if value is not None]
+            if len(points) < 2:
+                continue
+            fig_overlay.add_trace(
+                go.Scatter(
+                    x=[float(step) for step, _ in points],
+                    y=[float(value) for _, value in points],
+                    mode="lines+markers",
+                    name=str(run["label"]),
+                )
+            )
+        if fig_overlay.data:
+            fig_overlay.update_layout(
+                title="Loss Curves Overlay",
+                template="plotly_white",
+                height=360,
+                margin=dict(l=40, r=16, t=48, b=36),
+                xaxis_title="Step",
+                yaxis_title="Loss",
+            )
+            overlay_chart = self._wrap_plotly_chart(
+                "Loss Curves Overlay",
+                self._fig_to_html(fig_overlay, include_plotlyjs=False),
+            )
+        else:
+            overlay_chart = "<p>No overlay data available for Loss Curves Overlay.</p>"
+
+        return throughput_chart, loss_chart, runtime_chart, winner_chart, overlay_chart
+
+    @staticmethod
+    def _wrap_plotly_chart(title: str, figure_html: str) -> str:
+        return (
+            f"<h3>{escape(title)}</h3>"
+            f"<div class='figure-html'>{figure_html}</div>"
+        )
+
+    @staticmethod
+    def _fig_to_html(fig: Any, *, include_plotlyjs: bool) -> str:
+        if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
+            return "<p>Plotly is unavailable.</p>"
+        include_mode: str | bool = "inline" if include_plotlyjs else False
+        return fig.to_html(
+            full_html=False,
+            include_plotlyjs=include_mode,
+            config={"displayModeBar": False, "responsive": True},
+        )
 
     def _single_metric_rows(self, result: Any, run: dict[str, Any]) -> str:
         metrics = [

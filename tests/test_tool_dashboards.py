@@ -189,3 +189,56 @@ def test_compare_dashboard_confidence_rows_reflect_missing_metrics() -> None:
     assert confidence_rows["throughput_samples_per_sec"]["confidence"] == "strong"
     assert confidence_rows["communication_overhead_percent"]["confidence"] == "insufficient"
     assert confidence_rows["power_consumption_watts"]["confidence"] == "insufficient"
+
+
+def test_compare_dashboard_download_html_uses_compare_report_builder() -> None:
+    """Compare dashboard HTML download path should match compare reporter content."""
+    left = _result(tool_name="autoperfpy", hardware="HW-A")
+    right = _result(tool_name="minicluster", workload_type="training", hardware="HW-B")
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    html = dash._build_html_report(left)
+
+    assert "TrackIQ Comparison Report" in html
+    assert "Metric Comparison" in html
+    assert "Visual Overview" in html
+
+
+def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -> None:
+    """MiniCluster dashboard HTML download path should match minicluster HTML reporter."""
+    payload = {
+        "config": {
+            "num_processes": 1,
+            "num_steps": 2,
+            "batch_size": 4,
+            "learning_rate": 0.01,
+            "hidden_size": 128,
+            "num_layers": 2,
+            "seed": 42,
+            "tdp_watts": 150.0,
+        },
+        "steps": [
+            {
+                "step": 0,
+                "loss": 1.1,
+                "throughput_samples_per_sec": 100.0,
+                "allreduce_time_ms": 1.0,
+                "compute_time_ms": 2.0,
+            },
+            {
+                "step": 1,
+                "loss": 1.0,
+                "throughput_samples_per_sec": 102.0,
+                "allreduce_time_ms": 1.2,
+                "compute_time_ms": 2.2,
+            },
+        ],
+        "total_time_sec": 0.2,
+        "final_loss": 1.0,
+    }
+    result = _result(tool_name="minicluster", workload_type="training", tool_payload=payload)
+    dash = MiniClusterDashboard(result=result)
+    html = dash._build_html_report(result)
+
+    assert "MiniCluster Performance Report" in html
+    assert "Training Graphs" in html
+    assert ("plotly-graph-div" in html) or ("<svg" in html)

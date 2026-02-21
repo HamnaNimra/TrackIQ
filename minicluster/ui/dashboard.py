@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 from minicluster.monitor.health_reader import HealthReader
+from minicluster.reporting import MiniClusterHtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
     DARK_THEME,
@@ -33,6 +36,17 @@ class MiniClusterDashboard(TrackiqDashboard):
     def expected_tool_names(self) -> list[str]:
         """MiniCluster dashboard should only load MiniCluster results."""
         return ["minicluster"]
+
+    def _build_html_report(self, result: TrackiqResult) -> str:
+        """Generate the same HTML artifact as `minicluster report html`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "minicluster_dashboard_report.html"
+            MiniClusterHtmlReporter().generate(
+                output_path=str(report_path),
+                results=[result],
+                title="MiniCluster Performance Report",
+            )
+            return report_path.read_text(encoding="utf-8")
 
     def _tool_payload(self) -> dict[str, Any]:
         result = self._primary_result()
