@@ -40,7 +40,10 @@ from dataclasses import dataclass, replace
 from statistics import mean
 from typing import Any, Dict, List, Optional, Protocol
 
-import psutil
+try:
+    import psutil
+except ModuleNotFoundError:  # pragma: no cover - exercised in minimal envs
+    psutil = None  # type: ignore[assignment]
 
 from trackiq_core.schema import Metrics
 
@@ -207,6 +210,11 @@ class SimulatedPowerReader:
         return True
 
     def read(self) -> PowerReading:
+        if psutil is None:
+            raise PowerSourceUnavailableError(
+                "SimulatedPowerReader unavailable: 'psutil' is not installed. "
+                "Install with `pip install psutil`."
+            )
         utilization = float(psutil.cpu_percent(interval=None))
         utilization = max(0.0, min(100.0, utilization))
         span = max(0.0, self.tdp_watts - self.idle_floor_watts)
@@ -386,4 +394,3 @@ def _extract_float(value: Any) -> Optional[float]:
         return float(value)
     match = re.search(r"-?\d+(?:\.\d+)?", str(value))
     return float(match.group(0)) if match else None
-
