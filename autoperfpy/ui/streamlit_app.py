@@ -952,7 +952,7 @@ def main():
                     PRECISIONS,
                 )
             except ImportError:
-                PRECISIONS = ["fp32", "fp16", "int8"]
+                PRECISIONS = ["fp32", "fp16", "bf16", "int8", "int4", "mixed"]
                 DEFAULT_BATCH_SIZES = [1, 4, 8]
 
             if detected:

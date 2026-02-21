@@ -130,7 +130,16 @@ class LLMKVCacheMonitor(BaseMonitor):
             Estimated KV cache size in MB
         """
         # KV cache = 2 * layers * batch * seq_len * heads * head_size * bytes_per_value
-        bytes_per_value = 2 if model_config.get("precision") == "fp16" else 4
+        precision = str(model_config.get("precision", "fp32")).lower()
+        bytes_per_value_map = {
+            "fp32": 4.0,
+            "fp16": 2.0,
+            "bf16": 2.0,
+            "int8": 1.0,
+            "int4": 0.5,
+            "mixed": 2.0,
+        }
+        bytes_per_value = bytes_per_value_map.get(precision, 4.0)
 
         kv_cache_bytes = (
             2  # K and V
