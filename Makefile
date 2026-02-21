@@ -80,4 +80,4 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache .coverage htmlcov .mypy_cache .tox
 	rm -rf .trackiq/baselines
-	@echo "✅ Cleaned up test artifacts"
+	@echo "Cleaned up test artifacts"

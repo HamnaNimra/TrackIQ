@@ -70,7 +70,7 @@ class TrackiqDashboard(ABC):
             )
         with col_toggle:
             is_dark = st.session_state["theme"] == DARK_THEME.name
-            if st.button("◐", use_container_width=True, key="trackiq_theme_toggle"):
+            if st.button("Theme", use_container_width=True, key="trackiq_theme_toggle"):
                 st.session_state["theme"] = (
                     LIGHT_THEME.name if is_dark else DARK_THEME.name
                 )
@@ -213,7 +213,7 @@ class TrackiqDashboard(ABC):
             pkg_version = "dev"
         st.markdown("---")
         st.markdown(
-            f"TrackIQ Core `{pkg_version}` | [Repository](https://github.com/trackiq/trackiq)"
+            f"TrackIQ Core `{pkg_version}` | [Repository](https://github.com/HamnaNimra/trackiq)"
         )
 
     def apply_theme(self, theme: TrackiqTheme) -> None:
