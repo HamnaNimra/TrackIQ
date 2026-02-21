@@ -1,4 +1,4 @@
-# AutoPerfPy
+# TrackIQ
 ## Performance Analysis & Optimization Toolkit
 
 A production-ready Python toolkit for **performance benchmarking, monitoring, and analysis** of ML inference workloads on edge devices and automotive platforms (NVIDIA Jetson, DRIVE, GPUs, and CPUs).
@@ -92,8 +92,8 @@ print(detector.generate_report("main", {"p99_ms": 52.0}))
 
 ```bash
 # Clone repository
-git clone https://github.com/HamnaNimra/AutoPerfPy.git
-cd AutoPerfPy
+git clone https://github.com/HamnaNimra/trackiq.git
+cd trackiq
 
 # Install package (includes all dependencies)
 pip install -e .
@@ -717,7 +717,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 **Hamna Nimra**
 - GitHub: [@HamnaNimra](https://github.com/HamnaNimra)
-- Repository: [AutoPerfPy](https://github.com/HamnaNimra/AutoPerfPy)
+- Repository: [trackiq](https://github.com/HamnaNimra/trackiq)
 
 ---
 

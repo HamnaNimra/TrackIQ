@@ -28,14 +28,14 @@ MiniCluster is a specialized validator within the TrackIQ framework that focuses
 
 ### Install from source
 ```bash
-cd AutoPerfPy
+cd trackiq
 pip install -e .
 pip install -e .[minicluster]  # If there's a minicluster extras group define
 ```
 
 Or directly include minicluster in your Python path:
 ```bash
-export PYTHONPATH="${PYTHONPATH}:/path/to/AutoPerfPy"
+export PYTHONPATH="${PYTHONPATH}:/path/to/trackiq"
 python -m minicluster --help
 ```
 

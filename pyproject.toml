@@ -37,8 +37,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/HamnaNimra/AutoPerfPy"
-Repository = "https://github.com/HamnaNimra/AutoPerfPy"
+Homepage = "https://github.com/HamnaNimra/trackiq"
+Repository = "https://github.com/HamnaNimra/trackiq"
 
 [project.optional-dependencies]
 dev = [

@@ -1,4 +1,4 @@
-"""Setup configuration for AutoPerfPy package."""
+"""Setup configuration for the TrackIQ repository packages."""
 
 from setuptools import setup, find_packages
 from pathlib import Path
@@ -16,7 +16,7 @@ setup(
     description="Performance analysis and benchmarking toolkit for NVIDIA GPU platforms and LLM workloads",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/HamnaNimra/AutoPerfPy",
+    url="https://github.com/HamnaNimra/trackiq",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
