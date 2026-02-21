@@ -5,8 +5,14 @@ from datetime import datetime
 from trackiq_compare.cli import main as cli_main
 from trackiq_compare.comparator.metric_comparator import MetricComparator
 from trackiq_compare.comparator.summary_generator import SummaryGenerator
-from trackiq_compare.deps import save_trackiq_result
-from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
+from trackiq_compare.deps import (
+    Metrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+    save_trackiq_result,
+)
 
 
 def _result(throughput: float, p99: float) -> TrackiqResult:
@@ -64,4 +70,3 @@ def test_cli_run_subcommand_executes_without_errors(tmp_path) -> None:
     save_trackiq_result(_result(102.0, 14.0), path_b)
     rc = cli_main(["run", str(path_a), str(path_b), "--label-a", "A", "--label-b", "B"])
     assert rc == 0
-
