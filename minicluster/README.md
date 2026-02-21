@@ -237,6 +237,30 @@ Launch the shared TrackIQ dashboard for a MiniCluster canonical result:
 python dashboard.py --tool minicluster --result minicluster_power.json
 ```
 
+### HTML Reports (Single + Consolidated)
+
+Generate a single-run HTML report with metrics and training graphs:
+
+```bash
+python -m minicluster report html \
+  --result ./minicluster_results/run_metrics.json \
+  --output ./minicluster_results/report.html
+```
+
+Generate a consolidated HTML report across multiple run configs:
+
+```bash
+python -m minicluster report html \
+  --result ./minicluster_results/run_cfg_a.json ./minicluster_results/run_cfg_b.json \
+  --output ./minicluster_results/report_consolidated.html
+```
+
+Consolidated HTML includes:
+- configuration comparison table
+- throughput/final-loss/runtime bar charts
+- key-metric winner-share pie chart
+- loss-curve overlay across configs
+
 ## Architecture
 
 ### Module Structure
