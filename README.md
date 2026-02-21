@@ -86,6 +86,9 @@ python -m streamlit run dashboard.py -- --tool autoperfpy --result output/autope
 
 # unified launcher browser mode (pick file in UI)
 python -m streamlit run dashboard.py -- --tool autoperfpy
+
+# convenience wrapper (no Streamlit `--` separator needed)
+python launch_dashboard.py --tool autoperfpy --result output/autoperf_result.json
 ```
 
 ### MiniCluster
@@ -107,6 +110,9 @@ streamlit run minicluster/ui/streamlit_app.py
 
 # unified launcher (note the `--` before dashboard args)
 python -m streamlit run dashboard.py -- --tool minicluster --result minicluster_results/run_metrics.json
+
+# convenience wrapper
+python launch_dashboard.py --tool minicluster --result minicluster_results/run_metrics.json
 ```
 
 ### TrackIQ Compare
@@ -135,6 +141,9 @@ streamlit run trackiq_compare/ui/streamlit_app.py
 
 # unified launcher (note the `--` before dashboard args)
 python -m streamlit run dashboard.py -- --tool compare --result-a output/autoperf_result.json --result-b minicluster_results/run_metrics.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
+
+# convenience wrapper
+python launch_dashboard.py --tool compare --result-a output/autoperf_result.json --result-b minicluster_results/run_metrics.json --label-a "AMD MI300X" --label-b "NVIDIA A100"
 ```
 
 ## Canonical Result Contract
