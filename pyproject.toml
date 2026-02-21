@@ -56,6 +56,7 @@ test = [
 ]
 
 [project.scripts]
+minicluster = "minicluster.cli:main"
 autoperfpy = "autoperfpy.cli:main"
 trackiq-compare = "trackiq_compare.cli:main"
 
