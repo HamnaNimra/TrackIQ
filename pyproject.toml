@@ -59,6 +59,7 @@ test = [
 minicluster = "minicluster.cli:main"
 autoperfpy = "autoperfpy.cli:main"
 trackiq-compare = "trackiq_compare.cli:main"
+trackiq_compare = "trackiq_compare.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["trackiq_core*", "autoperfpy*", "trackiq_compare*", "minicluster*"]
