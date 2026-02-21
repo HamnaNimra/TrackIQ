@@ -6,24 +6,25 @@ minicluster-compatible config and metrics serialization.
 
 import json
 import os
+import platform as _platform
 import tempfile
 import time
 import uuid
-import platform as _platform
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from minicluster.deps import ensure_parent_dir, load_json_file
 
 # Import from trackiq_core - the single source of truth for distributed training
 from trackiq_core.distributed_validator import (
     DistributedValidationConfig,
     SimpleMLP,
-    create_synthetic_dataset as _create_synthetic_dataset_impl,
-    train_multi_process as _train_multi_process_impl,
-    train_single_process as _train_single_process_impl,
 )
-
-from minicluster.deps import load_json_file, save_json_file, ensure_parent_dir
+from trackiq_core.distributed_validator import create_synthetic_dataset as _create_synthetic_dataset_impl
+from trackiq_core.distributed_validator import train_multi_process as _train_multi_process_impl
+from trackiq_core.distributed_validator import train_single_process as _train_single_process_impl
+from trackiq_core.power_profiler import PowerProfiler, SimulatedPowerReader
 from trackiq_core.schema import (
     Metrics,
     PlatformInfo,
@@ -31,8 +32,7 @@ from trackiq_core.schema import (
     TrackiqResult,
     WorkloadInfo,
 )
-from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
-from trackiq_core.power_profiler import PowerProfiler, SimulatedPowerReader
+from trackiq_core.serializer import load_trackiq_result, save_trackiq_result
 
 
 @dataclass
@@ -67,7 +67,7 @@ class HealthCheckpoint:
     run_id: str
     total_steps: int
     completed_steps: int
-    workers: List[WorkerSnapshot]
+    workers: list[WorkerSnapshot]
     timestamp: str  # ISO format
     is_complete: bool = False
 
@@ -76,21 +76,21 @@ class HealthCheckpoint:
 class RunMetrics:
     """Aggregated metrics for a training run (minicluster format)."""
 
-    config: Dict[str, Any]
+    config: dict[str, Any]
     num_workers: int
     num_steps: int
-    steps: List[StepMetrics] = field(default_factory=list)
+    steps: list[StepMetrics] = field(default_factory=list)
     total_time_sec: float = 0.0
     total_allreduce_time_ms: float = 0.0
     total_compute_time_ms: float = 0.0
     start_timestamp: str = ""
     end_timestamp: str = ""
-    power_metrics: Optional[Dict[str, Any]] = None
-    power_tool_payload: Optional[Dict[str, Any]] = None
-    worker_snapshots: List[Dict[str, Any]] = field(default_factory=list)
-    health_checkpoint_path: Optional[str] = None
+    power_metrics: dict[str, Any] | None = None
+    power_tool_payload: dict[str, Any] | None = None
+    worker_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    health_checkpoint_path: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "config": self.config,
@@ -109,9 +109,7 @@ class RunMetrics:
             "average_loss": sum(s.loss for s in self.steps) / len(self.steps) if self.steps else 0.0,
             "final_loss": self.steps[-1].loss if self.steps else 0.0,
             "average_throughput_samples_per_sec": (
-                sum(s.throughput_samples_per_sec for s in self.steps) / len(self.steps)
-                if self.steps
-                else 0.0
+                sum(s.throughput_samples_per_sec for s in self.steps) / len(self.steps) if self.steps else 0.0
             ),
         }
 
@@ -157,6 +155,7 @@ class RunConfig:
             regression_threshold=self.regression_threshold,
         )
 
+
 # Re-export SimpleMLP for convenience
 __all__ = [
     "SimpleMLP",
@@ -189,9 +188,7 @@ def create_synthetic_dataset(
     )
 
 
-def train_single_process(
-    config: RunConfig, health_checkpoint_path: Optional[str] = None
-) -> RunMetrics:
+def train_single_process(config: RunConfig, health_checkpoint_path: str | None = None) -> RunMetrics:
     """Train in single-process mode using trackiq_core implementation.
 
     Args:
@@ -224,7 +221,7 @@ def train_single_process(
         power_consumption_watts=None,
     )
     updated_metrics = profiler.to_metrics_update(base_metrics)
-    metrics_dict: Dict[str, Any] = {
+    metrics_dict: dict[str, Any] = {
         "losses": losses,
         "total_time_sec": elapsed,
         "power_metrics": asdict(updated_metrics),
@@ -244,8 +241,8 @@ def train_distributed(
     rank: int,
     world_size: int,
     config: RunConfig,
-    health_checkpoint_path: Optional[str] = None,
-) -> Optional[RunMetrics]:
+    health_checkpoint_path: str | None = None,
+) -> RunMetrics | None:
     """Train in distributed mode using trackiq_core implementation.
 
     Args:
@@ -259,9 +256,7 @@ def train_distributed(
     if rank != 0:
         return None
     if world_size <= 1:
-        return train_single_process(
-            config, health_checkpoint_path=health_checkpoint_path
-        )
+        return train_single_process(config, health_checkpoint_path=health_checkpoint_path)
 
     # Compatibility wrapper: build equivalent multi-process run and return rank-0 view.
     core_cfg = config.to_core()
@@ -299,9 +294,7 @@ def train_distributed(
     )
 
 
-def run_distributed(
-    config: RunConfig, health_checkpoint_path: Optional[str] = None
-) -> RunMetrics:
+def run_distributed(config: RunConfig, health_checkpoint_path: str | None = None) -> RunMetrics:
     """Spawn distributed training processes and return metrics.
 
     Uses multiprocessing to spawn worker processes with torch.distributed,
@@ -315,9 +308,7 @@ def run_distributed(
     """
     if config.num_processes == 1:
         # Single process mode
-        return train_single_process(
-            config, health_checkpoint_path=health_checkpoint_path
-        )
+        return train_single_process(config, health_checkpoint_path=health_checkpoint_path)
 
     core_cfg = config.to_core()
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
@@ -389,10 +380,10 @@ def determine_worker_status(
 
 
 def _convert_to_run_metrics(
-    metrics_dict: Dict[str, Any],
+    metrics_dict: dict[str, Any],
     num_workers: int,
     config: RunConfig,
-    health_checkpoint_path: Optional[str] = None,
+    health_checkpoint_path: str | None = None,
 ) -> RunMetrics:
     """Convert trackiq_core metrics to minicluster RunMetrics format.
 
@@ -415,7 +406,7 @@ def _convert_to_run_metrics(
 
     if "losses" in metrics_dict:
         run_id = str(uuid.uuid4())
-        all_worker_snapshots: List[WorkerSnapshot] = []
+        all_worker_snapshots: list[WorkerSnapshot] = []
         baseline_throughput = throughput
         for i, loss in enumerate(metrics_dict["losses"]):
             steps.append(
@@ -427,8 +418,8 @@ def _convert_to_run_metrics(
                     compute_time_ms=0.0,
                 )
             )
-            worker_snapshots: List[WorkerSnapshot] = []
-            now_iso = datetime.utcnow().isoformat()
+            worker_snapshots: list[WorkerSnapshot] = []
+            now_iso = datetime.now(timezone.utc).isoformat()
             for worker_id in range(num_workers):
                 snap = WorkerSnapshot(
                     worker_id=worker_id,
@@ -464,11 +455,8 @@ def _convert_to_run_metrics(
                     run_id=run_id,
                     total_steps=config.num_steps,
                     completed_steps=latest_step,
-                    workers=[
-                        s for s in all_worker_snapshots
-                        if s.step == all_worker_snapshots[-1].step
-                    ],
-                    timestamp=datetime.utcnow().isoformat(),
+                    workers=[s for s in all_worker_snapshots if s.step == all_worker_snapshots[-1].step],
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     is_complete=True,
                 ),
                 health_checkpoint_path,
@@ -477,7 +465,7 @@ def _convert_to_run_metrics(
         metrics_dict["health_checkpoint_path"] = health_checkpoint_path
 
     return RunMetrics(
-        config=asdict(config) if hasattr(config, '__dataclass_fields__') else config,
+        config=asdict(config) if hasattr(config, "__dataclass_fields__") else config,
         num_workers=num_workers,
         num_steps=config.num_steps,
         steps=steps,
@@ -510,7 +498,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
     result = TrackiqResult(
         tool_name="minicluster",
         tool_version="0.1.0",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         platform=PlatformInfo(
             hardware_name="CPU",
             os=f"{_platform.system()} {_platform.release()}",
@@ -524,9 +512,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
             steps=metrics.num_steps,
         ),
         metrics=Metrics(
-            throughput_samples_per_sec=float(
-                metrics_dict.get("average_throughput_samples_per_sec", 0.0)
-            ),
+            throughput_samples_per_sec=float(metrics_dict.get("average_throughput_samples_per_sec", 0.0)),
             latency_p50_ms=0.0,
             latency_p95_ms=0.0,
             latency_p99_ms=0.0,
@@ -564,7 +550,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
     save_trackiq_result(result, output_path)
 
 
-def load_metrics(output_path: str) -> Dict[str, Any]:
+def load_metrics(output_path: str) -> dict[str, Any]:
     """Load run metrics from JSON file.
 
     Args:

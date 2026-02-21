@@ -1,15 +1,15 @@
 """Metric comparator for canonical TrackIQ results."""
 
 from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Optional
 
 from trackiq_compare.deps import TrackiqResult
-
 
 LOWER_IS_BETTER_METRICS = {
     "latency_p50_ms",
     "latency_p95_ms",
     "latency_p99_ms",
+    "ttft_ms",
+    "decode_tpt_ms",
     "memory_utilization_percent",
     "communication_overhead_percent",
     "power_consumption_watts",
@@ -28,13 +28,13 @@ class MetricComparison:
     """Comparison details for a single metric."""
 
     metric_name: str
-    value_a: Optional[float]
-    value_b: Optional[float]
+    value_a: float | None
+    value_b: float | None
     comparable: bool
-    abs_delta: Optional[float]
-    percent_delta: Optional[float]
+    abs_delta: float | None
+    percent_delta: float | None
     winner: str
-    winner_margin_percent: Optional[float]
+    winner_margin_percent: float | None
     reason: str = ""
 
 
@@ -44,15 +44,15 @@ class ComparisonResult:
 
     label_a: str
     label_b: str
-    metrics: Dict[str, MetricComparison] = field(default_factory=dict)
+    metrics: dict[str, MetricComparison] = field(default_factory=dict)
 
     @property
-    def comparable_metrics(self) -> List[MetricComparison]:
+    def comparable_metrics(self) -> list[MetricComparison]:
         """Return comparable metric comparisons."""
         return [item for item in self.metrics.values() if item.comparable]
 
     @property
-    def non_comparable_metrics(self) -> List[MetricComparison]:
+    def non_comparable_metrics(self) -> list[MetricComparison]:
         """Return non-comparable metric comparisons."""
         return [item for item in self.metrics.values() if not item.comparable]
 
@@ -69,13 +69,8 @@ class MetricComparator:
         metrics_a = asdict(result_a.metrics)
         metrics_b = asdict(result_b.metrics)
         all_metric_names = sorted(set(metrics_a.keys()) | set(metrics_b.keys()))
-        if all(
-            metrics_a.get(name) is None and metrics_b.get(name) is None
-            for name in POWER_METRIC_FIELDS
-        ):
-            all_metric_names = [
-                name for name in all_metric_names if name not in POWER_METRIC_FIELDS
-            ]
+        if all(metrics_a.get(name) is None and metrics_b.get(name) is None for name in POWER_METRIC_FIELDS):
+            all_metric_names = [name for name in all_metric_names if name not in POWER_METRIC_FIELDS]
 
         output = ComparisonResult(label_a=self.label_a, label_b=self.label_b)
 
@@ -86,9 +81,7 @@ class MetricComparator:
 
         return output
 
-    def _compare_metric(
-        self, name: str, value_a: Optional[float], value_b: Optional[float]
-    ) -> MetricComparison:
+    def _compare_metric(self, name: str, value_a: float | None, value_b: float | None) -> MetricComparison:
         """Compare an individual metric with null-safe handling."""
         if value_a is None or value_b is None:
             return MetricComparison(
@@ -111,6 +104,7 @@ class MetricComparator:
             percent_delta = (delta / float(value_a)) * 100.0
 
         lower_is_better = name in LOWER_IS_BETTER_METRICS
+        margin: float | None
         if delta == 0:
             winner = "tie"
             margin = 0.0

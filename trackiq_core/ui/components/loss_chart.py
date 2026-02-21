@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from trackiq_core.ui.theme import DARK_THEME, TrackiqTheme
 
@@ -12,9 +12,9 @@ class LossChart:
 
     def __init__(
         self,
-        steps: List[int],
-        loss_values: List[float],
-        baseline_values: Optional[List[float]] = None,
+        steps: list[int],
+        loss_values: list[float],
+        baseline_values: list[float] | None = None,
         tolerance: float = 0.05,
         theme: TrackiqTheme = DARK_THEME,
     ) -> None:
@@ -24,7 +24,7 @@ class LossChart:
         self.tolerance = tolerance
         self.theme = theme
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return serializable chart data."""
         return {
             "steps": self.steps,

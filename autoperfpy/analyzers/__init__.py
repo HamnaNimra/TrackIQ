@@ -1,13 +1,14 @@
 """Analyzer module for AutoPerfPy."""
 
 from trackiq_core.utils.analyzers import (
-    PercentileLatencyAnalyzer,
-    LogAnalyzer,
     EfficiencyAnalyzer,
+    LogAnalyzer,
+    PercentileLatencyAnalyzer,
     VariabilityAnalyzer,
 )
-from .tegrastats import TegrastatsAnalyzer
+
 from .dnn_pipeline import DNNPipelineAnalyzer
+from .tegrastats import TegrastatsAnalyzer
 
 __all__ = [
     "PercentileLatencyAnalyzer",

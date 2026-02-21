@@ -133,4 +133,3 @@ def test_rocm_unavailable_raises_clear_error(monkeypatch) -> None:
     monkeypatch.setattr("trackiq_core.power_profiler.shutil.which", lambda _: None)
     with pytest.raises(PowerSourceUnavailableError, match="rocm-smi"):
         RocmSmiReader()
-

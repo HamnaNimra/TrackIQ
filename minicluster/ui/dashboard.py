@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import tempfile
 import time
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any
 
 from minicluster.monitor.health_reader import HealthReader
+from minicluster.reporting import MiniClusterHtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
     DARK_THEME,
@@ -30,11 +33,26 @@ class MiniClusterDashboard(TrackiqDashboard):
     ) -> None:
         super().__init__(result=result, theme=theme, title=title)
 
-    def _tool_payload(self) -> Dict[str, Any]:
+    def expected_tool_names(self) -> list[str]:
+        """MiniCluster dashboard should only load MiniCluster results."""
+        return ["minicluster"]
+
+    def _build_html_report(self, result: TrackiqResult) -> str:
+        """Generate the same HTML artifact as `minicluster report html`."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "minicluster_dashboard_report.html"
+            MiniClusterHtmlReporter().generate(
+                output_path=str(report_path),
+                results=[result],
+                title="MiniCluster Performance Report",
+            )
+            return report_path.read_text(encoding="utf-8")
+
+    def _tool_payload(self) -> dict[str, Any]:
         result = self._primary_result()
         return result.tool_payload if isinstance(result.tool_payload, dict) else {}
 
-    def _payload_from_checkpoint(self, checkpoint: Any) -> Dict[str, Any]:
+    def _payload_from_checkpoint(self, checkpoint: Any) -> dict[str, Any]:
         workers = [
             {
                 "worker_id": worker.worker_id,
@@ -61,15 +79,13 @@ class MiniClusterDashboard(TrackiqDashboard):
             "faults_detected": self._tool_payload().get("faults_detected"),
         }
 
-    def _render_dynamic_sections(self, payload: Dict[str, Any]) -> None:
+    def _render_dynamic_sections(self, payload: dict[str, Any]) -> None:
         """Render worker grid and loss chart from the provided payload."""
         import streamlit as st
 
         result = self._primary_result()
         workers = payload.get("workers", [])
-        steps_data: List[Dict[str, Any]] = (
-            payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
-        )
+        steps_data: list[dict[str, Any]] = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
         steps = [int(item.get("step", idx)) for idx, item in enumerate(steps_data)]
         losses = [float(item.get("loss", 0.0)) for item in steps_data]
 
@@ -95,6 +111,119 @@ class MiniClusterDashboard(TrackiqDashboard):
         else:
             st.info("Loss curve unavailable in tool payload.")
 
+    def _render_config_section(self, payload: dict[str, Any]) -> None:
+        """Render run configuration and execution context."""
+        import streamlit as st
+
+        config = payload.get("config")
+        if not isinstance(config, dict):
+            st.info("Run configuration not available in tool payload.")
+            return
+
+        st.markdown("### Run Configuration")
+        left, right = st.columns(2)
+        with left:
+            st.markdown("**Training**")
+            st.markdown(f"- Steps: `{config.get('num_steps', 'N/A')}`")
+            st.markdown(f"- Batch Size: `{config.get('batch_size', 'N/A')}`")
+            st.markdown(f"- Learning Rate: `{config.get('learning_rate', 'N/A')}`")
+            st.markdown(f"- Layers: `{config.get('num_layers', 'N/A')}`")
+            st.markdown(f"- Hidden Size: `{config.get('hidden_size', 'N/A')}`")
+        with right:
+            st.markdown("**Runtime**")
+            st.markdown(f"- Workers: `{config.get('num_processes', config.get('num_workers', 'N/A'))}`")
+            st.markdown(f"- Seed: `{config.get('seed', 'N/A')}`")
+            st.markdown(f"- TDP (W): `{config.get('tdp_watts', 'N/A')}`")
+            st.markdown(f"- Loss Tolerance: `{config.get('loss_tolerance', 'N/A')}`")
+            st.markdown(f"- Regression Threshold (%): `{config.get('regression_threshold', 'N/A')}`")
+
+    def _render_training_graphs(self, payload: dict[str, Any]) -> None:
+        """Render graph-heavy training timelines from step payload."""
+        import streamlit as st
+
+        steps_data = payload.get("steps")
+        if not isinstance(steps_data, list) or not steps_data:
+            st.info("No per-step data available for training graphs.")
+            return
+
+        rows: list[dict[str, float]] = []
+        for idx, item in enumerate(steps_data):
+            if not isinstance(item, dict):
+                continue
+            rows.append(
+                {
+                    "step": float(item.get("step", idx)),
+                    "loss": float(item.get("loss", 0.0)),
+                    "throughput": float(item.get("throughput_samples_per_sec", 0.0)),
+                    "allreduce_ms": float(item.get("allreduce_time_ms", 0.0)),
+                    "compute_ms": float(item.get("compute_time_ms", 0.0)),
+                }
+            )
+        if not rows:
+            st.info("Step data is malformed; unable to render graphs.")
+            return
+
+        st.markdown("### Training Graphs")
+        try:
+            import pandas as pd
+            import plotly.express as px
+            import plotly.graph_objects as go
+        except Exception:
+            # Fallback when plotly/pandas are unavailable
+            st.line_chart(
+                {
+                    "loss": [row["loss"] for row in rows],
+                    "throughput": [row["throughput"] for row in rows],
+                }
+            )
+            return
+
+        df = pd.DataFrame(rows)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_loss = px.line(
+                df,
+                x="step",
+                y="loss",
+                title="Loss by Step",
+                labels={"step": "Step", "loss": "Loss"},
+            )
+            st.plotly_chart(fig_loss, use_container_width=True)
+        with col_b:
+            fig_thr = px.line(
+                df,
+                x="step",
+                y="throughput",
+                title="Throughput by Step",
+                labels={"step": "Step", "throughput": "Samples/sec"},
+            )
+            st.plotly_chart(fig_thr, use_container_width=True)
+
+        fig_timing = go.Figure()
+        fig_timing.add_trace(
+            go.Bar(
+                x=df["step"],
+                y=df["compute_ms"],
+                name="Compute (ms)",
+                marker_color="#2563eb",
+            )
+        )
+        fig_timing.add_trace(
+            go.Bar(
+                x=df["step"],
+                y=df["allreduce_ms"],
+                name="Allreduce (ms)",
+                marker_color="#dc2626",
+            )
+        )
+        fig_timing.update_layout(
+            title="Per-Step Timing Breakdown",
+            xaxis_title="Step",
+            yaxis_title="Time (ms)",
+            barmode="stack",
+        )
+        st.plotly_chart(fig_timing, use_container_width=True)
+
     def render_sidebar(self) -> None:
         """Render shared sidebar plus MiniCluster auto-refresh controls."""
         import streamlit as st
@@ -117,13 +246,11 @@ class MiniClusterDashboard(TrackiqDashboard):
                 else:  # pragma: no cover
                     st.experimental_rerun()
 
-    def build_components(self) -> Dict[str, object]:
+    def build_components(self) -> dict[str, object]:
         """Build component instances for testable, reusable rendering."""
         result = self._primary_result()
         payload = self._tool_payload()
-        steps_data: List[Dict[str, Any]] = (
-            payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
-        )
+        steps_data: list[dict[str, Any]] = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
         steps = [int(item.get("step", idx)) for idx, item in enumerate(steps_data)]
         losses = [float(item.get("loss", 0.0)) for item in steps_data]
         workers = payload.get("workers", [])
@@ -169,19 +296,45 @@ class MiniClusterDashboard(TrackiqDashboard):
 
         if auto_refresh and checkpoint_path:
             reader = HealthReader(str(checkpoint_path), timeout_seconds=2.0)
-            while True:
-                checkpoint = reader.read()
-                if checkpoint is not None:
-                    local_payload = self._payload_from_checkpoint(checkpoint)
+            checkpoint = reader.read()
+            if checkpoint is not None:
+                st.session_state["minicluster_refresh_failures"] = 0
+                local_payload = self._payload_from_checkpoint(checkpoint)
                 with dynamic_container.container():
                     self._render_dynamic_sections(local_payload)
-                if checkpoint is not None and checkpoint.is_complete:
+                if checkpoint.is_complete:
                     st.success("Live run complete. Auto-refresh stopped.")
                     st.session_state["minicluster_auto_refresh"] = False
                     st.session_state["trackiq_live_indicator"] = False
-                    break
-                time.sleep(2)
+                else:
+                    st.caption("Auto-refresh active. Updating every 2 seconds.")
+                    time.sleep(2)
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:  # pragma: no cover
+                        st.experimental_rerun()
+            else:
+                failures = int(st.session_state.get("minicluster_refresh_failures", 0)) + 1
+                st.session_state["minicluster_refresh_failures"] = failures
+                if failures >= 3:
+                    st.warning(
+                        "Auto-refresh stopped: live checkpoint is unavailable. "
+                        "Use Refresh Now or disable auto-refresh."
+                    )
+                    st.session_state["minicluster_auto_refresh"] = False
+                    st.session_state["trackiq_live_indicator"] = False
+                else:
+                    st.caption("Waiting for live checkpoint...")
+                    time.sleep(2)
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:  # pragma: no cover
+                        st.experimental_rerun()
+        else:
+            st.session_state["minicluster_refresh_failures"] = 0
 
+        self._render_config_section(local_payload)
+        self._render_training_graphs(local_payload)
         components["power_gauge"].render()
         self.render_kv_cache_section()
 

@@ -7,12 +7,13 @@ No remote execution or networking. Applications (e.g. autoperfpy) map device_typ
 to collectors; trackiq does not depend on any specific collector.
 """
 
-from dataclasses import dataclass, field
 import json
 import platform
 import subprocess
 import sys
-from typing import Any, Dict, List
+from dataclasses import dataclass, field
+from typing import Any
+
 try:
     import pynvml  # provided by nvidia-ml-py
 except Exception:  # pragma: no cover - optional dependency
@@ -54,9 +55,9 @@ class DeviceProfile:
     soc: str = ""
     power_mode: str = ""
     index: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Export as dict for JSON and UI."""
         return {
             "device_id": self.device_id,
@@ -101,9 +102,9 @@ def _get_os_info() -> str:
         return "Unknown OS"
 
 
-def detect_nvidia_gpus() -> List[DeviceProfile]:
+def detect_nvidia_gpus() -> list[DeviceProfile]:
     """Detect NVIDIA GPUs using nvidia-ml-py (pynvml module) if available, else nvidia-smi."""
-    devices: List[DeviceProfile] = []
+    devices: list[DeviceProfile] = []
     cpu_model = _get_cpu_info()
     os_info = _get_os_info()
     driver_version = ""
@@ -182,9 +183,9 @@ def detect_nvidia_gpus() -> List[DeviceProfile]:
     return devices
 
 
-def detect_amd_gpus() -> List[DeviceProfile]:
+def detect_amd_gpus() -> list[DeviceProfile]:
     """Detect AMD GPUs via `rocm-smi` JSON output with plain-text fallback."""
-    devices: List[DeviceProfile] = []
+    devices: list[DeviceProfile] = []
     cpu_model = _get_cpu_info()
     os_info = _get_os_info()
 
@@ -286,9 +287,9 @@ def detect_amd_gpus() -> List[DeviceProfile]:
     return devices
 
 
-def detect_apple_silicon() -> List[DeviceProfile]:
+def detect_apple_silicon() -> list[DeviceProfile]:
     """Detect Apple Silicon platform and expose it as a single device profile."""
-    devices: List[DeviceProfile] = []
+    devices: list[DeviceProfile] = []
     machine = (platform.machine() or "").lower()
     if sys.platform != "darwin" or "arm" not in machine:
         return devices
@@ -343,12 +344,12 @@ def detect_cpu() -> DeviceProfile:
     )
 
 
-def detect_intel_gpus() -> List[DeviceProfile]:
+def detect_intel_gpus() -> list[DeviceProfile]:
     """Detect Intel GPUs / integrated accelerators if identifiable.
 
     Uses platform and optional env/probe; no remote or network.
     """
-    devices: List[DeviceProfile] = []
+    devices: list[DeviceProfile] = []
     cpu_model = _get_cpu_info()
     os_info = _get_os_info()
 
@@ -378,14 +379,14 @@ def detect_intel_gpus() -> List[DeviceProfile]:
     return devices
 
 
-def detect_tegrastats_platforms() -> List[DeviceProfile]:
+def detect_tegrastats_platforms() -> list[DeviceProfile]:
     """Detect NVIDIA Jetson or DRIVE (tegrastats-capable) platforms.
 
     Uses /etc/nv_tegra_release when present; no subprocess or network.
     Returns at most one device (single SoC per system). Generic for edge AI
     and automotive; applications map device_type to TegrastatsCollector or equivalent.
     """
-    devices: List[DeviceProfile] = []
+    devices: list[DeviceProfile] = []
     cpu_model = _get_cpu_info()
     os_info = _get_os_info()
     tegra_release_path = "/etc/nv_tegra_release"
@@ -394,7 +395,7 @@ def detect_tegrastats_platforms() -> List[DeviceProfile]:
 
         if not os.path.isfile(tegra_release_path):
             return devices
-        with open(tegra_release_path, "r", encoding="utf-8", errors="replace") as f:
+        with open(tegra_release_path, encoding="utf-8", errors="replace") as f:
             first_line = (f.readline() or "").strip()
         if not first_line:
             return devices
@@ -425,7 +426,7 @@ def detect_tegrastats_platforms() -> List[DeviceProfile]:
                 metadata={"os": os_info, "tegra_release": first_line},
             )
         )
-    except (OSError, IOError):
+    except OSError:
         pass
     except Exception:
         pass
@@ -439,12 +440,12 @@ def get_all_devices(
     include_intel: bool = True,
     include_cpu: bool = True,
     include_tegrastats: bool = True,
-) -> List[DeviceProfile]:
+) -> list[DeviceProfile]:
     """Detect all available devices and return DeviceProfile list.
 
     Order: NVIDIA GPUs (by index), Tegrastats platforms (Jetson/DRIVE), Intel GPUs, CPU.
     """
-    result: List[DeviceProfile] = []
+    result: list[DeviceProfile] = []
     if include_nvidia:
         result.extend(detect_nvidia_gpus())
     if include_amd:
@@ -461,7 +462,7 @@ def get_all_devices(
     return result
 
 
-def get_platform_metadata_for_device(device: DeviceProfile) -> Dict[str, Any]:
+def get_platform_metadata_for_device(device: DeviceProfile) -> dict[str, Any]:
     """Build platform_metadata dict for a device (for run exports)."""
     return {
         "device_name": device.device_name,

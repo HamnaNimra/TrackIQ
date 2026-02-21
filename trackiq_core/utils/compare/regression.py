@@ -6,10 +6,10 @@ for comparing current metrics against stored baselines.
 """
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -40,7 +40,7 @@ class RegressionDetector:
         self.baseline_dir = Path(baseline_dir)
         self.baseline_dir.mkdir(parents=True, exist_ok=True)
 
-    def save_baseline(self, name: str, metrics: Dict[str, Any]) -> None:
+    def save_baseline(self, name: str, metrics: dict[str, Any]) -> None:
         """Save metrics as baseline."""
         baseline_file = self.baseline_dir / f"{name}.json"
         baseline_data = {
@@ -51,26 +51,26 @@ class RegressionDetector:
         with open(baseline_file, "w") as f:
             json.dump(baseline_data, f, indent=2)
 
-    def load_baseline(self, name: str) -> Dict[str, Any]:
+    def load_baseline(self, name: str) -> dict[str, Any]:
         """Load baseline metrics."""
         baseline_file = self.baseline_dir / f"{name}.json"
         if not baseline_file.exists():
             raise FileNotFoundError(f"Baseline not found: {name}")
 
-        with open(baseline_file, "r") as f:
+        with open(baseline_file) as f:
             data = json.load(f)
         return data["metrics"]
 
-    def list_baselines(self) -> List[str]:
+    def list_baselines(self) -> list[str]:
         """List all available baselines."""
         return [f.stem for f in self.baseline_dir.glob("*.json")]
 
     def compare_metrics(
         self,
-        baseline_metrics: Dict[str, float],
-        current_metrics: Dict[str, float],
-        thresholds: Optional[RegressionThreshold] = None,
-    ) -> Dict[str, MetricComparison]:
+        baseline_metrics: dict[str, float],
+        current_metrics: dict[str, float],
+        thresholds: RegressionThreshold | None = None,
+    ) -> dict[str, MetricComparison]:
         """Compare current metrics against baseline."""
         if thresholds is None:
             thresholds = RegressionThreshold()
@@ -83,24 +83,15 @@ class RegressionDetector:
 
             current_value = current_metrics[metric_name]
 
-            is_latency = any(
-                x in metric_name.lower()
-                for x in ["latency", "time", "p99", "p95", "p50", "mean"]
-            )
+            is_latency = any(x in metric_name.lower() for x in ["latency", "time", "p99", "p95", "p50", "mean"])
 
             if is_latency:
-                threshold = (
-                    thresholds.p99_percent
-                    if "p99" in metric_name
-                    else thresholds.latency_percent
-                )
+                threshold = thresholds.p99_percent if "p99" in metric_name else thresholds.latency_percent
                 if baseline_value == 0:
                     percent_change = float("inf") if current_value > 0 else 0.0
                     is_regression = current_value > 0
                 else:
-                    percent_change = (
-                        (current_value - baseline_value) / baseline_value
-                    ) * 100
+                    percent_change = ((current_value - baseline_value) / baseline_value) * 100
                     is_regression = percent_change > threshold
             else:
                 threshold = thresholds.throughput_percent
@@ -108,9 +99,7 @@ class RegressionDetector:
                     percent_change = 0.0
                     is_regression = False
                 else:
-                    percent_change = (
-                        (baseline_value - current_value) / baseline_value
-                    ) * 100
+                    percent_change = ((baseline_value - current_value) / baseline_value) * 100
                     is_regression = percent_change > threshold
 
             comparisons[metric_name] = MetricComparison(
@@ -127,21 +116,15 @@ class RegressionDetector:
     def detect_regressions(
         self,
         baseline_name: str,
-        current_metrics: Dict[str, float],
-        thresholds: Optional[RegressionThreshold] = None,
-    ) -> Dict[str, Any]:
+        current_metrics: dict[str, float],
+        thresholds: RegressionThreshold | None = None,
+    ) -> dict[str, Any]:
         """Detect regressions in current metrics."""
         baseline_metrics = self.load_baseline(baseline_name)
-        comparisons = self.compare_metrics(
-            baseline_metrics, current_metrics, thresholds
-        )
+        comparisons = self.compare_metrics(baseline_metrics, current_metrics, thresholds)
 
         regressions = {k: v for k, v in comparisons.items() if v.is_regression}
-        improvements = {
-            k: v
-            for k, v in comparisons.items()
-            if not v.is_regression and v.percent_change != 0
-        }
+        improvements = {k: v for k, v in comparisons.items() if not v.is_regression and v.percent_change != 0}
 
         return {
             "baseline": baseline_name,
@@ -156,8 +139,8 @@ class RegressionDetector:
     def generate_report(
         self,
         baseline_name: str,
-        current_metrics: Dict[str, float],
-        thresholds: Optional[RegressionThreshold] = None,
+        current_metrics: dict[str, float],
+        thresholds: RegressionThreshold | None = None,
     ) -> str:
         """Generate a human-readable regression report."""
         result = self.detect_regressions(baseline_name, current_metrics, thresholds)

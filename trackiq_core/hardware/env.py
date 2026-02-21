@@ -2,7 +2,6 @@
 
 import os
 import subprocess
-from typing import List, Optional
 
 # Common nvidia-smi search paths (used by tools and monitoring)
 NVIDIA_SMI_PATHS = [
@@ -34,7 +33,7 @@ def command_available(cmd_name: str, timeout: float = 5.0) -> bool:
         return False
 
 
-def nvidia_smi_available(paths: Optional[List[str]] = None) -> bool:
+def nvidia_smi_available(paths: list[str] | None = None) -> bool:
     """Check if nvidia-smi is available (file exists in common paths).
 
     Args:
@@ -49,7 +48,7 @@ def nvidia_smi_available(paths: Optional[List[str]] = None) -> bool:
     return False
 
 
-def find_nvidia_smi_path(paths: Optional[List[str]] = None) -> Optional[str]:
+def find_nvidia_smi_path(paths: list[str] | None = None) -> str | None:
     """Return first path where nvidia-smi exists, or None."""
     for path in paths or NVIDIA_SMI_PATHS:
         if os.path.exists(path):

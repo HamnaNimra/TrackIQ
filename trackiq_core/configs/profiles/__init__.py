@@ -1,15 +1,17 @@
 """Collector and benchmark profiles."""
 
+from trackiq_core.utils.errors import ProfileValidationError
+
 from .profiles import (
-    Profile,
     CollectorType,
+    Profile,
     get_profile,
+    get_profile_info,
     list_profiles,
     register_profile,
-    get_profile_info,
     validate_profile_collector,
+    validate_profile_precision,
 )
-from trackiq_core.utils.errors import ProfileValidationError
 
 __all__ = [
     "Profile",
@@ -19,5 +21,6 @@ __all__ = [
     "register_profile",
     "get_profile_info",
     "validate_profile_collector",
+    "validate_profile_precision",
     "ProfileValidationError",
 ]

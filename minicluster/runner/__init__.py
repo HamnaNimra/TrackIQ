@@ -7,14 +7,14 @@ metrics formatting and serialization.
 from minicluster.runner.distributed_runner import (
     RunConfig,
     RunMetrics,
-    StepMetrics,
     SimpleMLP,
+    StepMetrics,
     create_synthetic_dataset,
-    train_single_process,
-    train_distributed,
+    load_metrics,
     run_distributed,
     save_metrics,
-    load_metrics,
+    train_distributed,
+    train_single_process,
 )
 
 __all__ = [

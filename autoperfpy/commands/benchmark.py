@@ -1,0 +1,49 @@
+"""Benchmark command handlers for AutoPerfPy CLI."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
+
+
+def run_benchmark_batching(args: Any, config: Any) -> dict[str, Any]:
+    """Run batching trade-off benchmark."""
+    batch_sizes = [int(x) for x in args.batch_sizes.split(",")]
+    benchmark = BatchingTradeoffBenchmark(config)
+    results = benchmark.run(batch_sizes=batch_sizes, num_images=args.images)
+
+    print("\nBatching Trade-off Analysis")
+    print("=" * 60)
+    print(f"{'Batch':<10} {'Latency (ms)':<15} {'Throughput (img/s)':<20}")
+    print("-" * 60)
+    for i, batch in enumerate(results["batch_size"]):
+        latency = results["latency_ms"][i]
+        throughput = results["throughput_img_per_sec"][i]
+        print(f"{batch:<10} {latency:<15.2f} {throughput:<20.2f}")
+
+    return results
+
+
+def run_benchmark_llm(args: Any, config: Any) -> dict[str, Any]:
+    """Run LLM latency benchmark."""
+    benchmark = LLMLatencyBenchmark(config)
+    results = benchmark.run(
+        prompt_tokens=args.prompt_length,
+        output_tokens=args.output_tokens,
+        num_runs=args.runs,
+    )
+
+    print("\nLLM Latency Benchmark")
+    print("=" * 60)
+    print("TTFT (Time-to-First-Token):")
+    print(f"  P50: {results['ttft_p50']:.1f}ms")
+    print(f"  P95: {results['ttft_p95']:.1f}ms")
+    print(f"  P99: {results['ttft_p99']:.1f}ms")
+    print("\nTime-per-Token (Decode):")
+    print(f"  P50: {results['tpt_p50']:.1f}ms")
+    print(f"  P95: {results['tpt_p95']:.1f}ms")
+    print(f"  P99: {results['tpt_p99']:.1f}ms")
+    print(f"\nThroughput: {results['throughput_tokens_per_sec']:.1f} tokens/sec")
+
+    return results

@@ -8,7 +8,8 @@ This module provides metrics for analyzing performance efficiency including:
 """
 
 from dataclasses import dataclass
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 import numpy as np
 
 
@@ -31,11 +32,11 @@ class EfficiencyMetrics:
     power_efficiency_percent: float  # Actual vs TDP utilization
 
     # Optional cost metrics
-    cost_per_inference_usd: Optional[float] = None
-    cost_per_1k_inferences_usd: Optional[float] = None
-    electricity_rate_per_kwh: Optional[float] = None
+    cost_per_inference_usd: float | None = None
+    cost_per_1k_inferences_usd: float | None = None
+    electricity_rate_per_kwh: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "perf_per_watt": self.perf_per_watt,
@@ -98,9 +99,7 @@ class EfficiencyCalculator:
         self.electricity_rate = electricity_rate or self.ELECTRICITY_RATES.get(
             region, self.ELECTRICITY_RATES["cloud_estimate"]
         )
-        self.gpu_tdp = gpu_tdp or self.GPU_TDP.get(
-            gpu_model, self.GPU_TDP["default"]
-        )
+        self.gpu_tdp = gpu_tdp or self.GPU_TDP.get(gpu_model, self.GPU_TDP["default"])
 
     def calculate_perf_per_watt(
         self,
@@ -124,7 +123,7 @@ class EfficiencyCalculator:
         self,
         latency_ms: float,
         power_watts: float,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate energy consumed per inference.
 
         Args:
@@ -150,7 +149,7 @@ class EfficiencyCalculator:
         self,
         energy_kwh: float,
         electricity_rate: float = None,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Calculate cost per inference based on energy consumption.
 
         Args:
@@ -193,7 +192,7 @@ class EfficiencyCalculator:
         self,
         throughput: float,
         latency_ms: float,
-        power_samples: List[float],
+        power_samples: list[float],
         throughput_unit: str = "images/sec",
         include_cost: bool = True,
     ) -> EfficiencyMetrics:
@@ -249,7 +248,7 @@ class EfficiencyCalculator:
         self,
         baseline: EfficiencyMetrics,
         current: EfficiencyMetrics,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Compare efficiency between two configurations.
 
         Args:
@@ -259,29 +258,22 @@ class EfficiencyCalculator:
         Returns:
             Dictionary with comparison results
         """
+
         def safe_percent_change(base: float, curr: float) -> float:
             if base == 0:
-                return float('inf') if curr > 0 else 0.0
+                return float("inf") if curr > 0 else 0.0
             return ((curr - base) / base) * 100
 
         return {
-            "perf_per_watt_change_percent": safe_percent_change(
-                baseline.perf_per_watt, current.perf_per_watt
-            ),
+            "perf_per_watt_change_percent": safe_percent_change(baseline.perf_per_watt, current.perf_per_watt),
             "energy_per_inference_change_percent": safe_percent_change(
                 baseline.energy_per_inference_joules,
                 current.energy_per_inference_joules,
             ),
-            "power_change_percent": safe_percent_change(
-                baseline.avg_power_watts, current.avg_power_watts
-            ),
-            "throughput_change_percent": safe_percent_change(
-                baseline.throughput, current.throughput
-            ),
+            "power_change_percent": safe_percent_change(baseline.avg_power_watts, current.avg_power_watts),
+            "throughput_change_percent": safe_percent_change(baseline.throughput, current.throughput),
             "is_more_efficient": current.perf_per_watt > baseline.perf_per_watt,
-            "efficiency_improvement_percent": safe_percent_change(
-                baseline.perf_per_watt, current.perf_per_watt
-            ),
+            "efficiency_improvement_percent": safe_percent_change(baseline.perf_per_watt, current.perf_per_watt),
             "baseline": baseline.to_dict(),
             "current": current.to_dict(),
         }
@@ -300,8 +292,8 @@ class BatchEfficiencyAnalyzer:
 
     def analyze_batch_efficiency(
         self,
-        batch_results: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        batch_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Analyze efficiency across batch sizes.
 
         Args:
@@ -323,7 +315,7 @@ class BatchEfficiencyAnalyzer:
 
         best_efficiency = 0
         best_throughput = 0
-        lowest_energy = float('inf')
+        lowest_energy = float("inf")
 
         for batch_data in batch_results:
             batch_size = batch_data["batch_size"]
@@ -361,8 +353,8 @@ class BatchEfficiencyAnalyzer:
 
     def find_pareto_optimal(
         self,
-        batch_results: List[Dict[str, Any]],
-    ) -> List[int]:
+        batch_results: list[dict[str, Any]],
+    ) -> list[int]:
         """Find Pareto-optimal batch sizes (throughput vs energy trade-off).
 
         Args:
@@ -381,11 +373,13 @@ class BatchEfficiencyAnalyzer:
             avg_power = np.mean(power_samples)
             energy_j = avg_power * (latency_ms / 1000.0)
 
-            points.append({
-                "batch_size": batch_size,
-                "throughput": throughput,
-                "energy": energy_j,
-            })
+            points.append(
+                {
+                    "batch_size": batch_size,
+                    "throughput": throughput,
+                    "energy": energy_j,
+                }
+            )
 
         # Find Pareto frontier (maximize throughput, minimize energy)
         pareto_optimal = []

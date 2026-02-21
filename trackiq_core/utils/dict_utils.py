@@ -1,9 +1,9 @@
 """Shared dictionary utilities."""
 
-from typing import Any, Dict
+from typing import Any
 
 
-def safe_get(d: Dict, *keys, default: Any = None) -> Any:
+def safe_get(d: dict, *keys, default: Any = None) -> Any:
     """Safely get nested dictionary value.
 
     Args:

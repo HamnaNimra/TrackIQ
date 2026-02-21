@@ -2,12 +2,10 @@
 
 import json
 import os
-import sys
 import tempfile
-from typing import Optional, Tuple, Any
+from typing import Any
 
 from trackiq_core.utils.errors import HardwareNotFoundError
-from trackiq_core.hardware import DeviceProfile
 
 
 def output_path(args, filename: str) -> str:
@@ -41,9 +39,9 @@ def write_result_to_csv(result: dict, path: str) -> bool:
 def run_default_benchmark(
     device_resolver_fn: Any,
     benchmark_runner_fn: Any,
-    device_id: Optional[str] = None,
+    device_id: str | None = None,
     duration_seconds: int = 10,
-) -> Tuple[dict, Optional[str], Optional[str]]:
+) -> tuple[dict, str | None, str | None]:
     """Run a short benchmark and return (data_dict, temp_csv_path, temp_json_path).
 
     Args:
@@ -55,13 +53,11 @@ def run_default_benchmark(
     Returns:
         Tuple of (result_dict, csv_path, json_path)
     """
-    from trackiq_core.inference import InferenceConfig, PRECISION_FP32, DEFAULT_WARMUP_RUNS
+    from trackiq_core.inference import DEFAULT_WARMUP_RUNS, PRECISION_FP32, InferenceConfig
 
     device = device_resolver_fn(device_id or "cpu_0")
     if not device:
-        raise HardwareNotFoundError(
-            "No devices detected. Use --device or install GPU/CPU support."
-        )
+        raise HardwareNotFoundError("No devices detected. Use --device or install GPU/CPU support.")
     config = InferenceConfig(
         precision=PRECISION_FP32,
         batch_size=1,

@@ -1,9 +1,7 @@
 """Shared statistics utilities (percentile, stats from numeric lists)."""
 
-from typing import Dict, List, Optional
 
-
-def percentile(values: List[float], p: float) -> float:
+def percentile(values: list[float], p: float) -> float:
     """Calculate percentile of a list of values (linear interpolation).
 
     Args:
@@ -22,7 +20,7 @@ def percentile(values: List[float], p: float) -> float:
     return sorted_values[f] + (k - f) * (sorted_values[c] - sorted_values[f])
 
 
-def stats_from_values(values: List[float]) -> Dict[str, Optional[float]]:
+def stats_from_values(values: list[float]) -> dict[str, float | None]:
     """Calculate mean, min, max for a list of values (handles None/empty).
 
     Args:

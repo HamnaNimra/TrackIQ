@@ -4,9 +4,7 @@ import json
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from minicluster.runner import RunConfig, train_single_process
+from minicluster.runner import RunConfig
 from minicluster.validators import FaultInjector, FaultType
 
 

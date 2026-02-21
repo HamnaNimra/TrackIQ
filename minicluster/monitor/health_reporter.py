@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from html import escape
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
-from trackiq_core.configs.config_io import ensure_parent_dir
 from minicluster.monitor.anomaly_detector import Anomaly
+from trackiq_core.configs.config_io import ensure_parent_dir
 
 if TYPE_CHECKING:
     from minicluster.runner.distributed_runner import HealthCheckpoint
@@ -16,7 +16,7 @@ class HealthReporter:
     """Generate summary, HTML, and JSON health reports."""
 
     @staticmethod
-    def _build_bar_svg(labels: List[str], values: List[float], title: str) -> str:
+    def _build_bar_svg(labels: list[str], values: list[float], title: str) -> str:
         """Build a simple inline SVG bar chart for fully self-contained HTML."""
         if not labels or not values or len(labels) != len(values):
             return f"<p>No data available for {escape(title)}.</p>"
@@ -30,14 +30,13 @@ class HealthReporter:
         max_value = max(values) if max(values) > 0 else 1.0
         bar_w = max(12.0, chart_w / max(1, len(values)) - 8.0)
 
-        bars: List[str] = []
+        bars: list[str] = []
         for idx, value in enumerate(values):
             scaled = (value / max_value) * chart_h
             x = margin_left + idx * (bar_w + 8.0)
             y = 20 + (chart_h - scaled)
             bars.append(
-                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" '
-                f'height="{scaled:.1f}" fill="#cc3333" />'
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" ' f'height="{scaled:.1f}" fill="#cc3333" />'
             )
             bars.append(
                 f'<text x="{x + bar_w / 2:.1f}" y="{height - 20}" text-anchor="middle" '
@@ -55,12 +54,10 @@ class HealthReporter:
             f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff" />'
             f'<line x1="{margin_left}" y1="20" x2="{margin_left}" y2="{20 + chart_h}" stroke="#666" />'
             f'<line x1="{margin_left}" y1="{20 + chart_h}" x2="{margin_left + chart_w}" '
-            f'y2="{20 + chart_h}" stroke="#666" />'
-            + "".join(bars)
-            + "</svg>"
+            f'y2="{20 + chart_h}" stroke="#666" />' + "".join(bars) + "</svg>"
         )
 
-    def generate_summary(self, checkpoint: HealthCheckpoint, anomalies: List[Anomaly]) -> str:
+    def generate_summary(self, checkpoint: HealthCheckpoint, anomalies: list[Anomaly]) -> str:
         """Generate plain-English cluster health paragraph."""
         healthy_workers = sum(1 for w in checkpoint.workers if w.status == "healthy")
         total_workers = len(checkpoint.workers)
@@ -81,9 +78,7 @@ class HealthReporter:
             f"Overall cluster health is {verdict}."
         )
 
-    def generate_html_report(
-        self, checkpoint: HealthCheckpoint, anomalies: List[Anomaly], output_path: str
-    ) -> None:
+    def generate_html_report(self, checkpoint: HealthCheckpoint, anomalies: list[Anomaly], output_path: str) -> None:
         """Write self-contained HTML health report."""
         ensure_parent_dir(output_path)
         summary = self.generate_summary(checkpoint, anomalies)
@@ -144,9 +139,7 @@ class HealthReporter:
         with open(output_path, "w", encoding="utf-8") as handle:
             handle.write(html)
 
-    def generate_json_report(
-        self, checkpoint: HealthCheckpoint, anomalies: List[Anomaly]
-    ) -> Dict[str, Any]:
+    def generate_json_report(self, checkpoint: HealthCheckpoint, anomalies: list[Anomaly]) -> dict[str, Any]:
         """Build machine-readable health report payload."""
         if any(a.severity == "critical" for a in anomalies):
             status = "critical"
@@ -155,13 +148,13 @@ class HealthReporter:
         else:
             status = "healthy"
 
-        counts_by_type: Dict[str, int] = {}
-        counts_by_severity: Dict[str, int] = {"warning": 0, "critical": 0}
+        counts_by_type: dict[str, int] = {}
+        counts_by_severity: dict[str, int] = {"warning": 0, "critical": 0}
         for anomaly in anomalies:
             counts_by_type[anomaly.anomaly_type] = counts_by_type.get(anomaly.anomaly_type, 0) + 1
             counts_by_severity[anomaly.severity] = counts_by_severity.get(anomaly.severity, 0) + 1
 
-        recommendations: List[str] = []
+        recommendations: list[str] = []
         if counts_by_type.get("failed_worker", 0) > 0:
             recommendations.append("Inspect worker process logs and node health for failed workers.")
         if counts_by_type.get("slow_worker", 0) > 0:

@@ -22,6 +22,9 @@ def make_result(
     power=None,
     energy=None,
     perf_per_watt=None,
+    ttft=None,
+    tokens_per_sec=None,
+    decode_tpt=None,
 ) -> TrackiqResult:
     """Create a TrackiqResult for tests."""
     return TrackiqResult(
@@ -50,10 +53,11 @@ def make_result(
             power_consumption_watts=power,
             energy_per_step_joules=energy,
             performance_per_watt=perf_per_watt,
+            ttft_ms=ttft,
+            tokens_per_sec=tokens_per_sec,
+            decode_tpt_ms=decode_tpt,
         ),
-        regression=RegressionInfo(
-            baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
-        ),
+        regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
     )
 
 
@@ -106,3 +110,14 @@ def test_power_metrics_skipped_when_both_results_have_nulls() -> None:
     assert "power_consumption_watts" not in comparison.metrics
     assert "energy_per_step_joules" not in comparison.metrics
     assert "performance_per_watt" not in comparison.metrics
+
+
+def test_llm_metric_winner_logic() -> None:
+    """TTFT/decode are lower-is-better, tokens/sec is higher-is-better."""
+    result_a = make_result(ttft=900.0, tokens_per_sec=22.0, decode_tpt=45.0)
+    result_b = make_result(ttft=700.0, tokens_per_sec=30.0, decode_tpt=30.0)
+    comparison = MetricComparator("A", "B").compare(result_a, result_b)
+
+    assert comparison.metrics["ttft_ms"].winner == "B"
+    assert comparison.metrics["tokens_per_sec"].winner == "B"
+    assert comparison.metrics["decode_tpt_ms"].winner == "B"

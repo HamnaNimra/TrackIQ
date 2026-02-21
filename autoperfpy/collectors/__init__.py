@@ -2,12 +2,13 @@
 
 from trackiq_core.collectors import (
     CollectorBase,
-    CollectorSample,
     CollectorExport,
-    SyntheticCollector,
+    CollectorSample,
     NVMLCollector,
     PsutilCollector,
+    SyntheticCollector,
 )
+
 from .tegrastats_collector import TegrastatsCollector
 
 __all__ = [

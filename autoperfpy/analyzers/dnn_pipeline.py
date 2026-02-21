@@ -33,11 +33,12 @@ Authors:
     Hamna Nimra
 """
 
-from typing import Dict, Any, Optional, List
-from ..core import BaseAnalyzer, AnalysisResult
+from typing import Any
+
+from ..core import AnalysisResult, BaseAnalyzer
 from ..core.dnn_pipeline import (
-    DNNPipelineParser,
     DNNPipelineCalculator,
+    DNNPipelineParser,
     InferenceRun,
     LayerTiming,
     MemoryTransfer,
@@ -67,7 +68,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         summary = analyzer.summarize()
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize analyzer.
 
         Args:
@@ -78,9 +79,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         super().__init__("DNNPipelineAnalyzer")
         self.config = config or {}
         self.top_n_layers = self.config.get("top_n_layers", 5)
-        self.memory_overhead_threshold = self.config.get(
-            "memory_overhead_threshold", 20.0
-        )
+        self.memory_overhead_threshold = self.config.get("memory_overhead_threshold", 20.0)
 
     def analyze(self, data: Any) -> AnalysisResult:
         """Perform analysis on DNN pipeline data.
@@ -141,7 +140,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
 
     def analyze_runs(
         self,
-        runs: List[InferenceRun],
+        runs: list[InferenceRun],
         name: str = "inference_analysis",
     ) -> AnalysisResult:
         """Analyze multiple inference runs.
@@ -167,9 +166,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             return result
 
         # Calculate aggregates
-        aggregates = DNNPipelineCalculator.calculate_aggregates(
-            runs, top_n_layers=self.top_n_layers
-        )
+        aggregates = DNNPipelineCalculator.calculate_aggregates(runs, top_n_layers=self.top_n_layers)
 
         # Batch scaling analysis
         batch_analysis = DNNPipelineCalculator.analyze_batch_scaling(runs)
@@ -229,10 +226,10 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
 
     def analyze_from_data(
         self,
-        layer_timings: List[Dict[str, Any]],
-        memory_transfers: Optional[List[Dict[str, Any]]] = None,
+        layer_timings: list[dict[str, Any]],
+        memory_transfers: list[dict[str, Any]] | None = None,
         batch_size: int = 1,
-        total_time_ms: Optional[float] = None,
+        total_time_ms: float | None = None,
     ) -> AnalysisResult:
         """Analyze from raw timing data dictionaries.
 
@@ -275,7 +272,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
                 for mt in memory_transfers
             ]
 
-        computed_total = sum(l.execution_time_ms for l in layers)
+        computed_total = sum(layer.execution_time_ms for layer in layers)
         if transfers:
             computed_total += sum(t.duration_ms for t in transfers)
 
@@ -304,21 +301,19 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             AnalysisResult with metrics
         """
         # Group layers by device
-        gpu_layers = [l for l in run.layers if l.device == "GPU"]
-        dla_layers = [l for l in run.layers if l.device.startswith("DLA")]
+        gpu_layers = [layer for layer in run.layers if layer.device == "GPU"]
+        dla_layers = [layer for layer in run.layers if layer.device.startswith("DLA")]
 
         # Find slowest layers
-        sorted_layers = sorted(
-            run.layers, key=lambda l: l.execution_time_ms, reverse=True
-        )
+        sorted_layers = sorted(run.layers, key=lambda layer: layer.execution_time_ms, reverse=True)
         slowest = [
             {
-                "name": l.name,
-                "type": l.layer_type,
-                "time_ms": l.execution_time_ms,
-                "device": l.device,
+                "name": layer.name,
+                "type": layer.layer_type,
+                "time_ms": layer.execution_time_ms,
+                "device": layer.device,
             }
-            for l in sorted_layers[: self.top_n_layers]
+            for layer in sorted_layers[: self.top_n_layers]
         ]
 
         metrics = {
@@ -349,9 +344,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
                 "d2h_time_ms": run.d2h_time_ms,
                 "total_overhead_ms": run.memory_overhead_ms,
                 "overhead_percentage": (
-                    (run.memory_overhead_ms / run.total_time_ms * 100)
-                    if run.total_time_ms > 0
-                    else 0.0
+                    (run.memory_overhead_ms / run.total_time_ms * 100) if run.total_time_ms > 0 else 0.0
                 ),
                 "num_transfers": len(run.memory_transfers),
             },
@@ -370,7 +363,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         self.add_result(result)
         return result
 
-    def _generate_recommendations(self, metrics: Dict[str, Any]) -> List[str]:
+    def _generate_recommendations(self, metrics: dict[str, Any]) -> list[str]:
         """Generate optimization recommendations based on metrics.
 
         Args:
@@ -395,8 +388,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         dla_pct = device_split.get("dla_percentage", 0)
         if dla_pct < 30 and dla_pct > 0:
             recommendations.append(
-                f"Low DLA utilization ({dla_pct:.1f}%). "
-                "Check for unsupported layers causing GPU fallback."
+                f"Low DLA utilization ({dla_pct:.1f}%). " "Check for unsupported layers causing GPU fallback."
             )
 
         # Check for dominant layers
@@ -405,9 +397,7 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             timing = metrics.get("timing", {})
             total_time = timing.get("total_time_ms", timing.get("avg_total_ms", 1))
             if total_time > 0:
-                top_layer_time = slowest[0].get(
-                    "time_ms", slowest[0].get("avg_time_ms", 0)
-                )
+                top_layer_time = slowest[0].get("time_ms", slowest[0].get("avg_time_ms", 0))
                 top_layer_pct = (top_layer_time / total_time) * 100
                 if top_layer_pct > 30:
                     recommendations.append(
@@ -427,13 +417,11 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
                 )
 
         if not recommendations:
-            recommendations.append(
-                "No significant optimization opportunities detected."
-            )
+            recommendations.append("No significant optimization opportunities detected.")
 
         return recommendations
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         """Summarize all DNN pipeline analyses.
 
         Returns:
@@ -497,17 +485,15 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
             summary["avg_dla_percentage"] = sum(dla_percentages) / len(dla_percentages)
 
         if memory_overheads:
-            summary["avg_memory_overhead_percentage"] = sum(memory_overheads) / len(
-                memory_overheads
-            )
+            summary["avg_memory_overhead_percentage"] = sum(memory_overheads) / len(memory_overheads)
 
         return summary
 
     def compare_engines(
         self,
-        baseline_metrics: Dict[str, Any],
-        optimized_metrics: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        baseline_metrics: dict[str, Any],
+        optimized_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
         """Compare metrics between two engine configurations.
 
         Args:
@@ -533,28 +519,18 @@ class DNNPipelineAnalyzer(BaseAnalyzer):
         if optimized_throughput == 0:
             optimized_throughput = safe_get(optimized_metrics, "throughput", "avg_fps", default=0.0)
 
-        baseline_overhead = safe_get(
-            baseline_metrics, "memory_overhead", "overhead_percentage", default=0.0
-        )
-        optimized_overhead = safe_get(
-            optimized_metrics, "memory_overhead", "overhead_percentage", default=0.0
-        )
+        baseline_overhead = safe_get(baseline_metrics, "memory_overhead", "overhead_percentage", default=0.0)
+        optimized_overhead = safe_get(optimized_metrics, "memory_overhead", "overhead_percentage", default=0.0)
 
         # Calculate improvements
-        latency_improvement = (
-            ((baseline_time - optimized_time) / baseline_time * 100)
-            if baseline_time > 0
-            else 0.0
-        )
+        latency_improvement = ((baseline_time - optimized_time) / baseline_time * 100) if baseline_time > 0 else 0.0
         throughput_improvement = (
             ((optimized_throughput - baseline_throughput) / baseline_throughput * 100)
             if baseline_throughput > 0
             else 0.0
         )
         overhead_reduction = (
-            ((baseline_overhead - optimized_overhead) / baseline_overhead * 100)
-            if baseline_overhead > 0
-            else 0.0
+            ((baseline_overhead - optimized_overhead) / baseline_overhead * 100) if baseline_overhead > 0 else 0.0
         )
 
         return {

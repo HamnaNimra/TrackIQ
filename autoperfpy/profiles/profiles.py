@@ -5,14 +5,15 @@ registry; registers AutoPerfPy-specific profiles on import.
 """
 
 from trackiq_core.configs.profiles import (
-    Profile,
     CollectorType,
+    Profile,
+    ProfileValidationError,
     get_profile,
+    get_profile_info,
     list_profiles,
     register_profile,
-    get_profile_info,
     validate_profile_collector,
-    ProfileValidationError,
+    validate_profile_precision,
 )
 
 # ============================================================================
@@ -184,6 +185,7 @@ __all__ = [
     "register_profile",
     "get_profile_info",
     "validate_profile_collector",
+    "validate_profile_precision",
     "AUTOMOTIVE_SAFETY",
     "EDGE_MAX_PERF",
     "EDGE_LOW_POWER",

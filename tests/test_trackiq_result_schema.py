@@ -1,5 +1,6 @@
 """Tests for canonical TrackIQ result schema and helpers."""
 
+import json
 from datetime import datetime
 
 import pytest
@@ -85,6 +86,14 @@ def test_trackiq_result_validation_fails_on_missing_required_field() -> None:
         validate_trackiq_result(payload)
 
 
+def test_trackiq_result_validation_fails_on_invalid_llm_metric_type() -> None:
+    """Validator should reject non-numeric LLM metric field values."""
+    payload = _sample_result().to_dict()
+    payload["metrics"]["ttft_ms"] = "fast"
+    with pytest.raises(TypeError, match="metrics.ttft_ms"):
+        validate_trackiq_result(payload)
+
+
 def test_trackiq_result_null_handling_for_optional_fields(tmp_path) -> None:
     """Optional nullable fields should be preserved through save/load."""
     path = tmp_path / "trackiq_result_nulls.json"
@@ -120,6 +129,19 @@ def test_new_power_fields_round_trip_through_dict_conversion() -> None:
     assert loaded.metrics.energy_per_step_joules == 12.5
     assert loaded.metrics.performance_per_watt == 3.2
     assert loaded.metrics.temperature_celsius == 71.4
+
+
+def test_new_llm_fields_round_trip_through_dict_conversion() -> None:
+    """Optional LLM fields should round-trip via to_dict/from_dict."""
+    source = _sample_result()
+    source.metrics.ttft_ms = 812.4
+    source.metrics.tokens_per_sec = 26.8
+    source.metrics.decode_tpt_ms = 37.3
+
+    loaded = TrackiqResult.from_dict(source.to_dict())
+    assert loaded.metrics.ttft_ms == 812.4
+    assert loaded.metrics.tokens_per_sec == 26.8
+    assert loaded.metrics.decode_tpt_ms == 37.3
 
 
 def test_kv_cache_round_trip_through_dict_conversion() -> None:
@@ -159,3 +181,81 @@ def test_kv_cache_from_tool_payload_backcompat() -> None:
     loaded = TrackiqResult.from_dict(payload)
     assert loaded.kv_cache is not None
     assert loaded.kv_cache.estimated_size_mb == 512.0
+
+
+def test_llm_metrics_from_tool_payload_backcompat() -> None:
+    """from_dict should backfill LLM metrics from tool_payload for legacy payloads."""
+    payload = _sample_result().to_dict()
+    payload["tool_payload"] = {
+        "ttft_p50": 750.0,
+        "throughput_tokens_per_sec": 31.5,
+        "tpt_p50": 28.4,
+    }
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.metrics.ttft_ms == 750.0
+    assert loaded.metrics.tokens_per_sec == 31.5
+    assert loaded.metrics.decode_tpt_ms == 28.4
+
+
+def test_llm_metrics_backcompat_falls_back_when_canonical_payload_values_are_null() -> None:
+    """from_dict should use legacy keys when canonical tool_payload keys are present but null."""
+    payload = _sample_result().to_dict()
+    payload["tool_payload"] = {
+        "ttft_ms": None,
+        "ttft_p50": 750.0,
+        "tokens_per_sec": None,
+        "throughput_tokens_per_sec": 31.5,
+        "decode_tpt_ms": None,
+        "tpt_p50": 28.4,
+    }
+    loaded = TrackiqResult.from_dict(payload)
+    assert loaded.metrics.ttft_ms == 750.0
+    assert loaded.metrics.tokens_per_sec == 31.5
+    assert loaded.metrics.decode_tpt_ms == 28.4
+
+
+def test_save_trackiq_result_enforces_schema_contract(tmp_path) -> None:
+    """save_trackiq_result should reject invalid dataclass payloads."""
+    result = _sample_result()
+    result.workload.workload_type = "invalid"  # type: ignore[assignment]
+    with pytest.raises(ValueError, match="workload.workload_type"):
+        save_trackiq_result(result, tmp_path / "invalid.json")
+
+
+def test_load_trackiq_result_enforces_schema_contract(tmp_path) -> None:
+    """load_trackiq_result should reject invalid JSON payloads."""
+    path = tmp_path / "broken_schema.json"
+    payload = _sample_result().to_dict()
+    del payload["metrics"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="Missing required field: metrics"):
+        load_trackiq_result(path)
+
+
+def test_load_trackiq_result_backcompat_legacy_metrics_defaults_to_none(tmp_path) -> None:
+    """Legacy payloads missing newer nullable metrics should load successfully."""
+    path = tmp_path / "legacy_schema.json"
+    payload = _sample_result().to_dict()
+    payload["schema_version"] = "1.0.0"
+    metrics = payload["metrics"]
+    del metrics["communication_overhead_percent"]  # type: ignore[index]
+    del metrics["power_consumption_watts"]  # type: ignore[index]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    loaded = load_trackiq_result(path)
+    assert loaded.metrics.communication_overhead_percent is None
+    assert loaded.metrics.power_consumption_watts is None
+
+
+@pytest.mark.parametrize(
+    "missing_key",
+    ["tool_name", "tool_version", "timestamp", "platform", "workload", "regression"],
+)
+def test_load_trackiq_result_missing_required_top_level_fields(tmp_path, missing_key: str) -> None:
+    """load_trackiq_result should fail fast on missing top-level contract keys."""
+    path = tmp_path / f"missing_{missing_key}.json"
+    payload = _sample_result().to_dict()
+    del payload[missing_key]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=f"Missing required field: {missing_key}"):
+        load_trackiq_result(path)

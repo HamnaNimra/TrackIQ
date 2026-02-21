@@ -23,11 +23,12 @@ Authors:
     Hamna Nimra
 """
 
-from typing import Dict, Any, Optional, List
-from ..core import BaseAnalyzer, AnalysisResult
+from typing import Any
+
+from ..core import AnalysisResult, BaseAnalyzer
 from ..core.tegrastats import (
-    TegrastatsParser,
     TegrastatsCalculator,
+    TegrastatsParser,
     TegrastatsSnapshot,
 )
 
@@ -58,7 +59,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
     # Default memory pressure threshold (percent)
     DEFAULT_MEMORY_PRESSURE_PERCENT = 90.0
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize analyzer.
 
         Args:
@@ -68,12 +69,8 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         """
         super().__init__("TegrastatsAnalyzer")
         self.config = config or {}
-        self.throttle_temp_c = self.config.get(
-            "throttle_temp_c", self.DEFAULT_THROTTLE_TEMP_C
-        )
-        self.memory_pressure_percent = self.config.get(
-            "memory_pressure_percent", self.DEFAULT_MEMORY_PRESSURE_PERCENT
-        )
+        self.throttle_temp_c = self.config.get("throttle_temp_c", self.DEFAULT_THROTTLE_TEMP_C)
+        self.memory_pressure_percent = self.config.get("memory_pressure_percent", self.DEFAULT_MEMORY_PRESSURE_PERCENT)
 
     def analyze(self, filepath: str) -> AnalysisResult:
         """Analyze tegrastats output from a file.
@@ -87,7 +84,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         snapshots = TegrastatsParser.parse_file(filepath)
         return self._analyze_snapshots(snapshots, source=filepath)
 
-    def analyze_lines(self, lines: List[str]) -> AnalysisResult:
+    def analyze_lines(self, lines: list[str]) -> AnalysisResult:
         """Analyze tegrastats from a list of output lines.
 
         Args:
@@ -108,7 +105,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
 
         return self._analyze_snapshots(snapshots, source="lines")
 
-    def analyze_snapshot(self, snapshot: TegrastatsSnapshot) -> Dict[str, Any]:
+    def analyze_snapshot(self, snapshot: TegrastatsSnapshot) -> dict[str, Any]:
         """Analyze a single tegrastats snapshot.
 
         Args:
@@ -121,7 +118,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
 
     def _analyze_snapshots(
         self,
-        snapshots: List[TegrastatsSnapshot],
+        snapshots: list[TegrastatsSnapshot],
         source: str = "unknown",
     ) -> AnalysisResult:
         """Internal method to analyze a list of snapshots.
@@ -150,12 +147,8 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         aggregates = TegrastatsCalculator.calculate_aggregates(snapshots)
 
         # Detect issues
-        thermal_throttling = TegrastatsCalculator.detect_thermal_throttling(
-            snapshots, self.throttle_temp_c
-        )
-        memory_pressure = TegrastatsCalculator.detect_memory_pressure(
-            snapshots, self.memory_pressure_percent
-        )
+        thermal_throttling = TegrastatsCalculator.detect_thermal_throttling(snapshots, self.throttle_temp_c)
+        memory_pressure = TegrastatsCalculator.detect_memory_pressure(snapshots, self.memory_pressure_percent)
 
         # Build metrics dictionary
         metrics = {
@@ -207,7 +200,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         self.add_result(result)
         return result
 
-    def _assess_health(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    def _assess_health(self, metrics: dict[str, Any]) -> dict[str, Any]:
         """Assess overall system health based on metrics.
 
         Args:
@@ -222,9 +215,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         # Check thermal
         thermal = metrics.get("thermal_throttling", {})
         if thermal.get("throttle_percentage", 0) > 0:
-            issues.append(
-                f"Thermal throttling detected: {thermal['throttle_percentage']:.1f}% of samples"
-            )
+            issues.append(f"Thermal throttling detected: {thermal['throttle_percentage']:.1f}% of samples")
 
         max_temp = metrics.get("thermal", {}).get("max_observed_c", 0)
         if max_temp > 80:
@@ -233,9 +224,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         # Check memory
         memory_pressure = metrics.get("memory_pressure", {})
         if memory_pressure.get("pressure_percentage", 0) > 0:
-            warnings.append(
-                f"Memory pressure detected: {memory_pressure['pressure_percentage']:.1f}% of samples"
-            )
+            warnings.append(f"Memory pressure detected: {memory_pressure['pressure_percentage']:.1f}% of samples")
 
         # Check GPU utilization
         gpu_max = metrics.get("gpu", {}).get("max_utilization_percent", 0)
@@ -261,7 +250,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
             "warnings": warnings,
         }
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         """Summarize all tegrastats analyses.
 
         Returns:
@@ -311,25 +300,19 @@ class TegrastatsAnalyzer(BaseAnalyzer):
 
             # Thermal max
             thermal = m.get("thermal", {})
-            summary["thermal_max_observed_c"] = max(
-                summary["thermal_max_observed_c"], thermal.get("max_observed_c", 0)
-            )
+            summary["thermal_max_observed_c"] = max(summary["thermal_max_observed_c"], thermal.get("max_observed_c", 0))
 
             # Issues
             throttle = m.get("thermal_throttling", {})
             summary["throttle_events_total"] += throttle.get("throttle_events", 0)
 
             pressure = m.get("memory_pressure", {})
-            summary["memory_pressure_events_total"] += pressure.get(
-                "pressure_events", 0
-            )
+            summary["memory_pressure_events_total"] += pressure.get("pressure_events", 0)
 
             # Health
             health = m.get("health", {})
             status = health.get("status", "healthy")
-            summary["health_summary"][status] = (
-                summary["health_summary"].get(status, 0) + 1
-            )
+            summary["health_summary"][status] = summary["health_summary"].get(status, 0) + 1
 
         # Handle edge case where no valid data
         if summary["cpu_utilization_range"]["min"] == float("inf"):
@@ -341,9 +324,9 @@ class TegrastatsAnalyzer(BaseAnalyzer):
 
     def compare_runs(
         self,
-        baseline_metrics: Dict[str, Any],
-        current_metrics: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        baseline_metrics: dict[str, Any],
+        current_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
         """Compare tegrastats metrics between two runs.
 
         Args:
@@ -355,7 +338,7 @@ class TegrastatsAnalyzer(BaseAnalyzer):
         """
         from trackiq_core import safe_get as _safe_get
 
-        def _get(d: Dict, *keys, default=0.0):
+        def _get(d: dict, *keys, default=0.0):
             return _safe_get(d, *keys, default=default)
 
         baseline_cpu = _get(baseline_metrics, "cpu", "avg_utilization_percent")

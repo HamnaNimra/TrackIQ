@@ -1,8 +1,9 @@
 """Tests for variability metrics analyzer."""
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from autoperfpy.analyzers import VariabilityAnalyzer
 from autoperfpy.core import LatencyStats

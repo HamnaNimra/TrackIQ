@@ -4,23 +4,22 @@ from __future__ import annotations
 
 import json
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
+from trackiq_compare.comparator import MetricComparator, SummaryGenerator
+from trackiq_compare.reporters import HtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    ComparisonTable,
     DARK_THEME,
+    ComparisonTable,
     RegressionBadge,
     TrackiqDashboard,
     TrackiqTheme,
 )
-from trackiq_compare.comparator import MetricComparator, SummaryGenerator
-from trackiq_compare.reporters import HtmlReporter
 
-
-VENDOR_COLORS: Dict[str, str] = {
+VENDOR_COLORS: dict[str, str] = {
     "AMD": "#e53935",
     "NVIDIA": "#76b900",
     "Intel": "#0071c5",
@@ -34,10 +33,7 @@ VENDOR_COLORS: Dict[str, str] = {
 def detect_platform_vendor(hardware_name: str) -> str:
     """Detect normalized platform vendor from a hardware name string."""
     normalized = hardware_name.lower()
-    if any(
-        token in normalized
-        for token in ["amd", "radeon", "mi300", "mi250", "cdna", "rdna", "rocm"]
-    ):
+    if any(token in normalized for token in ["amd", "radeon", "mi300", "mi250", "cdna", "rdna", "rocm"]):
         return "AMD"
     if any(
         token in normalized
@@ -58,17 +54,9 @@ def detect_platform_vendor(hardware_name: str) -> str:
         return "Intel"
     if any(token in normalized for token in ["apple", "m1", "m2", "m3", "m4", "metal"]):
         return "Apple"
-    if any(
-        token in normalized
-        for token in ["qualcomm", "snapdragon", "hexagon", "adreno"]
-    ):
+    if any(token in normalized for token in ["qualcomm", "snapdragon", "hexagon", "adreno"]):
         return "Qualcomm"
-    if (
-        "cpu" in normalized
-        or "ryzen" in normalized
-        or "intel core" in normalized
-        or "apple m" in normalized
-    ):
+    if "cpu" in normalized or "ryzen" in normalized or "intel core" in normalized or "apple m" in normalized:
         return "CPU"
     if "intel" in normalized:
         return "Intel"
@@ -81,13 +69,14 @@ class CompareDashboard(TrackiqDashboard):
     def __init__(
         self,
         result_a: TrackiqResult,
-        result_b: Optional[TrackiqResult] = None,
+        result_b: TrackiqResult | None = None,
         *,
-        label_a: Optional[str] = None,
-        label_b: Optional[str] = None,
-        result: Optional[List[TrackiqResult]] = None,
+        label_a: str | None = None,
+        label_b: str | None = None,
+        result: list[TrackiqResult] | None = None,
         theme: TrackiqTheme = DARK_THEME,
         title: str = "TrackIQ Compare Dashboard",
+        regression_threshold_percent: float = 5.0,
     ) -> None:
         if result is not None:
             if len(result) != 2:
@@ -102,9 +91,10 @@ class CompareDashboard(TrackiqDashboard):
         self.result_b = right
         self.label_a = label_a or left.tool_name
         self.label_b = label_b or right.tool_name
+        self.regression_threshold_percent = float(regression_threshold_percent)
         super().__init__(result=[left, right], theme=theme, title=title)
 
-    def _vendors(self) -> Tuple[str, str]:
+    def _vendors(self) -> tuple[str, str]:
         return (
             detect_platform_vendor(self.result_a.platform.hardware_name),
             detect_platform_vendor(self.result_b.platform.hardware_name),
@@ -120,18 +110,48 @@ class CompareDashboard(TrackiqDashboard):
         vendor_a, vendor_b = self._vendors()
         return vendor_a != vendor_b
 
-    def _competitive_metric_rows(self) -> List[Dict[str, Any]]:
+    def _competitive_metric_specs(self) -> list[tuple[str, float | None, float | None, str, int]]:
+        """Return metric comparison specs: (name, a_val, b_val, direction, weight)."""
         metrics_a = self.result_a.metrics
         metrics_b = self.result_b.metrics
-        rows: List[Dict[str, Any]] = []
-        candidates = [
+        return [
             ("performance_per_watt", metrics_a.performance_per_watt, metrics_b.performance_per_watt, "high", 2),
-            ("throughput_samples_per_sec", metrics_a.throughput_samples_per_sec, metrics_b.throughput_samples_per_sec, "high", 1),
-            ("latency_p99_ms", metrics_a.latency_p99_ms, metrics_b.latency_p99_ms, "low", 1),
-            ("memory_utilization_percent", metrics_a.memory_utilization_percent, metrics_b.memory_utilization_percent, "context", 0),
-            ("communication_overhead_percent", metrics_a.communication_overhead_percent, metrics_b.communication_overhead_percent, "low", 1),
+            (
+                "throughput_samples_per_sec",
+                metrics_a.throughput_samples_per_sec,
+                metrics_b.throughput_samples_per_sec,
+                "high",
+                1,
+            ),
+            ("latency_p50_ms", metrics_a.latency_p50_ms, metrics_b.latency_p50_ms, "low", 1),
+            ("latency_p95_ms", metrics_a.latency_p95_ms, metrics_b.latency_p95_ms, "low", 1),
+            ("latency_p99_ms", metrics_a.latency_p99_ms, metrics_b.latency_p99_ms, "low", 2),
+            (
+                "power_consumption_watts",
+                metrics_a.power_consumption_watts,
+                metrics_b.power_consumption_watts,
+                "low",
+                1,
+            ),
+            (
+                "communication_overhead_percent",
+                metrics_a.communication_overhead_percent,
+                metrics_b.communication_overhead_percent,
+                "low",
+                1,
+            ),
+            (
+                "memory_utilization_percent",
+                metrics_a.memory_utilization_percent,
+                metrics_b.memory_utilization_percent,
+                "context",
+                0,
+            ),
         ]
-        for name, a_val, b_val, direction, weight in candidates:
+
+    def _competitive_metric_rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for name, a_val, b_val, direction, weight in self._competitive_metric_specs():
             if a_val is None or b_val is None:
                 continue
             if a_val == 0:
@@ -159,19 +179,117 @@ class CompareDashboard(TrackiqDashboard):
             )
         return rows
 
-    def _competitive_verdict(self, rows: List[Dict[str, Any]]) -> str:
+    @staticmethod
+    def _metric_family(metric_name: str) -> str:
+        """Map canonical metric name to a display family for grouped visuals."""
+        if metric_name.startswith("latency_"):
+            return "latency"
+        if metric_name in {"throughput_samples_per_sec", "performance_per_watt"}:
+            return "performance"
+        if metric_name == "power_consumption_watts":
+            return "efficiency"
+        if metric_name == "memory_utilization_percent":
+            return "memory"
+        if metric_name == "communication_overhead_percent":
+            return "communication"
+        return "other"
+
+    def _normalized_delta_percent_for_row(self, row: dict[str, Any]) -> float | None:
+        """Return signed delta where positive means B is better, negative means A is better."""
+        delta = row.get("delta_percent")
+        direction = str(row.get("direction", "context"))
+        try:
+            delta_value = float(delta)
+        except (TypeError, ValueError):
+            return None
+        if delta_value == float("inf"):
+            return None
+        if direction == "high":
+            return delta_value
+        if direction == "low":
+            return -delta_value
+        return 0.0
+
+    def _metric_family_delta_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Aggregate normalized deltas by metric family."""
+        buckets: dict[str, list[float]] = {}
+        for row in rows:
+            if str(row.get("direction", "context")) == "context":
+                continue
+            normalized = self._normalized_delta_percent_for_row(row)
+            if normalized is None:
+                continue
+            family = self._metric_family(str(row.get("metric", "other")))
+            buckets.setdefault(family, []).append(normalized)
+
+        aggregated: list[dict[str, Any]] = []
+        for family, values in buckets.items():
+            if not values:
+                continue
+            mean_delta = sum(values) / len(values)
+            winner = self.label_b if mean_delta > 0 else self.label_a if mean_delta < 0 else "tie"
+            aggregated.append(
+                {
+                    "family": family,
+                    "normalized_delta_percent": mean_delta,
+                    "metric_count": len(values),
+                    "winner": winner,
+                }
+            )
+        aggregated.sort(key=lambda item: abs(float(item["normalized_delta_percent"])), reverse=True)
+        return aggregated
+
+    def _metric_confidence_rows(self) -> list[dict[str, Any]]:
+        """Return per-metric data availability and confidence signals."""
+        confidence_rows: list[dict[str, Any]] = []
+        for name, a_val, b_val, direction, _weight in self._competitive_metric_specs():
+            a_available = a_val is not None
+            b_available = b_val is not None
+            if a_available and b_available:
+                confidence = "strong"
+            elif a_available or b_available:
+                confidence = "insufficient"
+            else:
+                confidence = "none"
+            confidence_rows.append(
+                {
+                    "metric": name,
+                    "family": self._metric_family(name),
+                    "a_available": a_available,
+                    "b_available": b_available,
+                    "direction": direction,
+                    "confidence": confidence,
+                }
+            )
+        return confidence_rows
+
+    def _build_html_report(self, _result: TrackiqResult) -> str:
+        """Generate the same compare HTML artifact used by CLI."""
+        comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
+        comparison = comparator.compare(self.result_a, self.result_b)
+        summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "trackiq_compare_report.html"
+            HtmlReporter().generate(
+                str(report_path),
+                comparison,
+                summary,
+                self.result_a,
+                self.result_b,
+            )
+            return report_path.read_text(encoding="utf-8")
+
+    def _competitive_verdict(self, rows: list[dict[str, Any]]) -> str:
         score_a = 0
         score_b = 0
-        details: List[str] = []
+        details: list[str] = []
         for row in rows:
             if row["winner"] == self.label_a:
                 score_a += int(row["weight"])
             elif row["winner"] == self.label_b:
                 score_b += int(row["weight"])
             if row["winner"] in (self.label_a, self.label_b) and row["delta_percent"] != float("inf"):
-                details.append(
-                    f"{row['metric']}: {row['winner']} by {abs(row['delta_percent']):.2f}%"
-                )
+                details.append(f"{row['metric']}: {row['winner']} by {abs(row['delta_percent']):.2f}%")
             elif row["winner"] == "context":
                 details.append(
                     f"{row['metric']}: context metric ({self.label_a}={row['a']:.2f}, {self.label_b}={row['b']:.2f})"
@@ -186,8 +304,7 @@ class CompareDashboard(TrackiqDashboard):
         return (
             f"Overall winner: {overall}. "
             f"Weighted score ({self.label_a}={score_a}, {self.label_b}={score_b}), "
-            f"with performance_per_watt weighted 2x. "
-            + " | ".join(details)
+            f"with high-impact metrics weighted 2x. " + " | ".join(details)
         )
 
     def _render_platform_comparison_mode(self) -> None:
@@ -230,7 +347,7 @@ class CompareDashboard(TrackiqDashboard):
             st.subheader("Competitive Verdict")
             st.write(self._competitive_verdict(rows))
 
-            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             filename = self.platform_export_filename(vendor_a, vendor_b, timestamp)
             html = (
                 "<!doctype html><html><head><meta charset='utf-8'><title>Platform Comparison</title></head><body>"
@@ -247,7 +364,193 @@ class CompareDashboard(TrackiqDashboard):
                 key="platform_comparison_export",
             )
 
-    def build_components(self) -> Dict[str, object]:
+    def _render_input_context(self) -> None:
+        """Render comparison input/configuration context for both sides."""
+        import streamlit as st
+
+        st.markdown("### Comparison Configuration")
+        left, right = st.columns(2)
+        with left:
+            st.markdown(f"**{self.label_a}**")
+            st.markdown(f"- Tool: `{self.result_a.tool_name} {self.result_a.tool_version}`")
+            st.markdown(f"- Hardware: `{self.result_a.platform.hardware_name}`")
+            st.markdown(f"- Framework: `{self.result_a.platform.framework} {self.result_a.platform.framework_version}`")
+            st.markdown(f"- Workload: `{self.result_a.workload.name}` ({self.result_a.workload.workload_type})")
+            st.markdown(f"- Batch Size: `{self.result_a.workload.batch_size}`")
+            st.markdown(f"- Steps: `{self.result_a.workload.steps}`")
+        with right:
+            st.markdown(f"**{self.label_b}**")
+            st.markdown(f"- Tool: `{self.result_b.tool_name} {self.result_b.tool_version}`")
+            st.markdown(f"- Hardware: `{self.result_b.platform.hardware_name}`")
+            st.markdown(f"- Framework: `{self.result_b.platform.framework} {self.result_b.platform.framework_version}`")
+            st.markdown(f"- Workload: `{self.result_b.workload.name}` ({self.result_b.workload.workload_type})")
+            st.markdown(f"- Batch Size: `{self.result_b.workload.batch_size}`")
+            st.markdown(f"- Steps: `{self.result_b.workload.steps}`")
+
+    def _render_metric_graphs(self, rows: list[dict[str, Any]]) -> None:
+        """Render chart-based metric comparison visuals."""
+        import streamlit as st
+
+        if not rows:
+            st.info("No comparable metric rows available for graph rendering.")
+            return
+
+        plot_rows = [
+            row for row in rows if isinstance(row.get("a"), (int, float)) and isinstance(row.get("b"), (int, float))
+        ]
+        if not plot_rows:
+            st.info("No numeric metrics available for graph rendering.")
+            return
+
+        st.markdown("### Comparison Graphs")
+        try:
+            import pandas as pd
+            import plotly.express as px
+            import plotly.graph_objects as go
+        except Exception:
+            st.bar_chart(
+                {
+                    self.label_a: [float(row["a"]) for row in plot_rows],
+                    self.label_b: [float(row["b"]) for row in plot_rows],
+                }
+            )
+            return
+
+        df = pd.DataFrame(
+            {
+                "metric": [str(row["metric"]) for row in plot_rows],
+                "a": [float(row["a"]) for row in plot_rows],
+                "b": [float(row["b"]) for row in plot_rows],
+                "delta_percent": [float(row.get("delta_percent", 0.0)) for row in plot_rows],
+                "normalized_delta_percent": [
+                    (
+                        float(self._normalized_delta_percent_for_row(row))
+                        if self._normalized_delta_percent_for_row(row) is not None
+                        else 0.0
+                    )
+                    for row in plot_rows
+                ],
+            }
+        )
+        long_df = df.melt(
+            id_vars=["metric", "delta_percent"],
+            value_vars=["a", "b"],
+            var_name="side",
+            value_name="value",
+        )
+        long_df["side"] = long_df["side"].map({"a": self.label_a, "b": self.label_b})
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            fig_values = px.bar(
+                long_df,
+                x="metric",
+                y="value",
+                color="side",
+                barmode="group",
+                title="Metric Values by Side",
+                labels={"metric": "Metric", "value": "Value", "side": "Result"},
+            )
+            fig_values.update_layout(xaxis_tickangle=-25)
+            st.plotly_chart(fig_values, use_container_width=True)
+        with col_b:
+            fig_delta = px.bar(
+                df,
+                x="metric",
+                y="delta_percent",
+                title="Percent Delta (B vs A)",
+                labels={"metric": "Metric", "delta_percent": "Delta (%)"},
+                color="delta_percent",
+                color_continuous_scale="RdYlGn",
+            )
+            fig_delta.update_layout(xaxis_tickangle=-25)
+            fig_delta.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+            st.plotly_chart(fig_delta, use_container_width=True)
+
+        weighted: list[tuple[str, int]] = []
+        for row in plot_rows:
+            winner = str(row.get("winner", "tie"))
+            weight = int(row.get("weight", 0))
+            if winner == self.label_a:
+                weighted.append((self.label_a, weight))
+            elif winner == self.label_b:
+                weighted.append((self.label_b, weight))
+        score_a = sum(weight for label, weight in weighted if label == self.label_a)
+        score_b = sum(weight for label, weight in weighted if label == self.label_b)
+        fig_score = go.Figure(
+            data=[go.Bar(x=[self.label_a, self.label_b], y=[score_a, score_b], marker_color=["#3b82f6", "#22c55e"])]
+        )
+        fig_score.update_layout(
+            title="Weighted Winner Score",
+            xaxis_title="Result",
+            yaxis_title="Score",
+        )
+        st.plotly_chart(fig_score, use_container_width=True)
+
+        # Normalized deltas (positive => B advantage, negative => A advantage)
+        st.markdown("### Normalized Metric Deltas")
+        fig_norm = px.bar(
+            df.sort_values("normalized_delta_percent"),
+            x="metric",
+            y="normalized_delta_percent",
+            title=f"Normalized Delta ({self.label_b} advantage is positive)",
+            labels={"metric": "Metric", "normalized_delta_percent": "Normalized Delta (%)"},
+            color="normalized_delta_percent",
+            color_continuous_scale="RdYlGn",
+        )
+        fig_norm.update_layout(xaxis_tickangle=-25)
+        fig_norm.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+        st.plotly_chart(fig_norm, use_container_width=True)
+
+        # Waterfall-style family summary
+        family_rows = self._metric_family_delta_rows(rows)
+        if family_rows:
+            family_df = pd.DataFrame(family_rows)
+            fig_family = px.bar(
+                family_df.sort_values("normalized_delta_percent"),
+                x="family",
+                y="normalized_delta_percent",
+                title="Metric Family Delta Waterfall",
+                labels={"family": "Family", "normalized_delta_percent": "Normalized Delta (%)"},
+                color="normalized_delta_percent",
+                color_continuous_scale="RdYlGn",
+                hover_data={"metric_count": True, "winner": True},
+            )
+            fig_family.add_hline(y=0, line_dash="dash", line_color="#6b7280")
+            st.plotly_chart(fig_family, use_container_width=True)
+
+        # Confidence matrix
+        confidence_rows = self._metric_confidence_rows()
+        if confidence_rows:
+            confidence_df = pd.DataFrame(confidence_rows)
+            z_data = [
+                [1 if bool(row["a_available"]) else 0, 1 if bool(row["b_available"]) else 0] for row in confidence_rows
+            ]
+            fig_conf = go.Figure(
+                data=go.Heatmap(
+                    z=z_data,
+                    x=[self.label_a, self.label_b],
+                    y=[str(row["metric"]) for row in confidence_rows],
+                    colorscale=[[0.0, "#ef4444"], [1.0, "#22c55e"]],
+                    zmin=0,
+                    zmax=1,
+                    showscale=False,
+                )
+            )
+            fig_conf.update_layout(
+                title="Metric Availability Confidence Matrix",
+                xaxis_title="Result",
+                yaxis_title="Metric",
+            )
+            st.plotly_chart(fig_conf, use_container_width=True)
+
+            st.dataframe(
+                confidence_df[["metric", "family", "confidence"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    def build_components(self) -> dict[str, object]:
         """Build testable comparison dashboard components."""
         return {
             "comparison_table": ComparisonTable(
@@ -266,8 +569,11 @@ class CompareDashboard(TrackiqDashboard):
         import streamlit as st
 
         components = self.build_components()
+        self._render_input_context()
         if self.is_platform_comparison_mode():
             self._render_platform_comparison_mode()
+        rows = self._competitive_metric_rows()
+        self._render_metric_graphs(rows)
         components["comparison_table"].render()
 
         col_a, col_b = st.columns(2)
@@ -280,7 +586,7 @@ class CompareDashboard(TrackiqDashboard):
 
         comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
         comparison = comparator.compare(self.result_a, self.result_b)
-        summary = SummaryGenerator().generate(comparison)
+        summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report_path = str(Path(tmpdir) / "trackiq_compare_report.html")

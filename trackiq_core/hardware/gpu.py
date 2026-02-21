@@ -6,15 +6,15 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 DEFAULT_NVIDIA_SMI_TIMEOUT = 5
 
 
 def query_nvidia_smi(
-    query_fields: List[str],
+    query_fields: list[str],
     timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
-) -> Optional[str]:
+) -> str | None:
     """Execute nvidia-smi query and return raw output."""
     try:
         query_string = ",".join(query_fields)
@@ -37,7 +37,7 @@ def query_nvidia_smi(
         return None
 
 
-def query_rocm_smi(args: List[str], timeout: int = 3) -> Optional[str]:
+def query_rocm_smi(args: list[str], timeout: int = 3) -> str | None:
     """Execute rocm-smi with args and return raw output or None on failure."""
     try:
         result = subprocess.run(
@@ -55,9 +55,9 @@ def query_rocm_smi(args: List[str], timeout: int = 3) -> Optional[str]:
 
 def parse_gpu_metrics(
     output: str,
-    field_names: List[str],
+    field_names: list[str],
     separator: str = ",",
-) -> Optional[Dict[str, float]]:
+) -> dict[str, float] | None:
     """Parse nvidia-smi CSV output into a dictionary."""
     try:
         values = [v.strip() for v in output.split(separator)]
@@ -73,7 +73,7 @@ def parse_gpu_metrics(
 
 def get_memory_metrics(
     timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Get GPU memory metrics."""
     output = query_nvidia_smi(
         ["memory.used", "memory.total", "utilization.gpu"],
@@ -92,9 +92,7 @@ def get_memory_metrics(
         return None
 
     if parsed["gpu_memory_total_mb"] > 0:
-        parsed["gpu_memory_percent"] = (
-            parsed["gpu_memory_used_mb"] / parsed["gpu_memory_total_mb"] * 100
-        )
+        parsed["gpu_memory_percent"] = parsed["gpu_memory_used_mb"] / parsed["gpu_memory_total_mb"] * 100
     else:
         parsed["gpu_memory_percent"] = 0.0
 
@@ -103,7 +101,7 @@ def get_memory_metrics(
 
 def get_performance_metrics(
     timeout: int = DEFAULT_NVIDIA_SMI_TIMEOUT,
-) -> Optional[Dict[str, float]]:
+) -> dict[str, float] | None:
     """Get GPU performance metrics (utilization, temperature, power)."""
     output = query_nvidia_smi(
         ["utilization.gpu", "temperature.gpu", "power.draw"],
@@ -119,12 +117,12 @@ def get_performance_metrics(
     )
 
 
-def _extract_float(text: str) -> Optional[float]:
+def _extract_float(text: str) -> float | None:
     match = re.search(r"-?\d+(?:\.\d+)?", text)
     return float(match.group(0)) if match else None
 
 
-def _get_windows_cpu_temperature() -> Optional[float]:
+def _get_windows_cpu_temperature() -> float | None:
     """Best-effort Windows CPU temperature using optional WMI providers."""
     # Option 1: python wmi package (optional dependency).
     try:
@@ -165,7 +163,7 @@ def _get_windows_cpu_temperature() -> Optional[float]:
     return None
 
 
-def _get_macos_cpu_temperature() -> Optional[float]:
+def _get_macos_cpu_temperature() -> float | None:
     """Best-effort macOS CPU temperature via powermetrics or osx-cpu-temp."""
     try:
         result = subprocess.run(
@@ -203,7 +201,7 @@ def _get_macos_cpu_temperature() -> Optional[float]:
     return None
 
 
-def get_amd_gpu_metrics(index: int = 0) -> Optional[Dict[str, float]]:
+def get_amd_gpu_metrics(index: int = 0) -> dict[str, float] | None:
     """Get AMD GPU metrics from rocm-smi output."""
     out_temp = query_rocm_smi(["--showtemp"])
     out_power = query_rocm_smi(["--showpower"])
@@ -236,7 +234,7 @@ def get_amd_gpu_metrics(index: int = 0) -> Optional[Dict[str, float]]:
     }
 
 
-def get_intel_gpu_metrics() -> Optional[Dict[str, float]]:
+def get_intel_gpu_metrics() -> dict[str, float] | None:
     """Get Intel GPU metrics from intel_gpu_top JSON or Linux sysfs fallback."""
     if shutil.which("intel_gpu_top"):
         try:
@@ -283,14 +281,14 @@ def get_intel_gpu_metrics() -> Optional[Dict[str, float]]:
         power = None
         busy_path = os.path.join(base, "gt_busy_percent")
         if os.path.exists(busy_path):
-            with open(busy_path, "r", encoding="utf-8") as handle:
+            with open(busy_path, encoding="utf-8") as handle:
                 utilization = _extract_float(handle.read())
         hwmon_base = os.path.join(base, "device/hwmon")
         if os.path.exists(hwmon_base):
             for name in os.listdir(hwmon_base):
                 power_path = os.path.join(hwmon_base, name, "power1_average")
                 if os.path.exists(power_path):
-                    with open(power_path, "r", encoding="utf-8") as handle:
+                    with open(power_path, encoding="utf-8") as handle:
                         value = _extract_float(handle.read())
                         if value is not None:
                             power = value / 1_000_000.0
@@ -305,7 +303,7 @@ def get_intel_gpu_metrics() -> Optional[Dict[str, float]]:
         return None
 
 
-def get_apple_silicon_metrics() -> Optional[Dict[str, float]]:
+def get_apple_silicon_metrics() -> dict[str, float] | None:
     """Get Apple Silicon metrics via powermetrics with psutil fallback."""
     if os.sys.platform != "darwin":
         return None
@@ -353,7 +351,7 @@ def get_apple_silicon_metrics() -> Optional[Dict[str, float]]:
     }
 
 
-def get_cpu_metrics() -> Optional[Dict[str, float]]:
+def get_cpu_metrics() -> dict[str, float] | None:
     """Get CPU metrics; always returns a dictionary."""
     try:
         import psutil

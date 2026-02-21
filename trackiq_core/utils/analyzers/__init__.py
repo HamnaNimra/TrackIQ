@@ -1,7 +1,7 @@
 """Latency, efficiency, variability analyzers."""
 
-from .latency import PercentileLatencyAnalyzer, LogAnalyzer
 from .efficiency import EfficiencyAnalyzer
+from .latency import LogAnalyzer, PercentileLatencyAnalyzer
 from .variability import VariabilityAnalyzer
 
 __all__ = [

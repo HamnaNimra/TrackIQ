@@ -1,37 +1,38 @@
 """Core module for AutoPerfPy."""
 
 from trackiq_core.utils import (
+    AnalysisResult,
     BaseAnalyzer,
     BaseBenchmark,
     BaseMonitor,
-    AnalysisResult,
+    BatchEfficiencyAnalyzer,
     DataLoader,
+    EfficiencyCalculator,
+    EfficiencyMetrics,
     LatencyStats,
+    MetricComparison,
     PerformanceComparator,
     RegressionDetector,
     RegressionThreshold,
-    MetricComparison,
-    EfficiencyMetrics,
-    EfficiencyCalculator,
-    BatchEfficiencyAnalyzer,
 )
-from .tegrastats import (
-    TegrastatsParser,
-    TegrastatsCalculator,
-    TegrastatsSnapshot,
-    TegrastatsAggregateStats,
-    CPUCoreStats,
-    GPUStats,
-    MemoryStats,
-    ThermalStats,
-)
+
 from .dnn_pipeline import (
-    DNNPipelineParser,
     DNNPipelineCalculator,
+    DNNPipelineParser,
+    EngineOptimizationMetrics,
     InferenceRun,
     LayerTiming,
     MemoryTransfer,
-    EngineOptimizationMetrics,
+)
+from .tegrastats import (
+    CPUCoreStats,
+    GPUStats,
+    MemoryStats,
+    TegrastatsAggregateStats,
+    TegrastatsCalculator,
+    TegrastatsParser,
+    TegrastatsSnapshot,
+    ThermalStats,
 )
 
 __all__ = [

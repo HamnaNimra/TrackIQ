@@ -1,8 +1,9 @@
 """Core utilities for TrackIQ (DataLoader, LatencyStats, PerformanceComparator)."""
 
-import pandas as pd
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 import numpy as np
+import pandas as pd
 
 
 class DataLoader:
@@ -19,7 +20,7 @@ class DataLoader:
             raise ValueError(f"Invalid CSV format: {filepath}")
 
     @staticmethod
-    def validate_columns(df: pd.DataFrame, required_cols: List[str]) -> bool:
+    def validate_columns(df: pd.DataFrame, required_cols: list[str]) -> bool:
         """Validate that required columns exist."""
         missing = set(required_cols) - set(df.columns)
         if missing:
@@ -31,7 +32,7 @@ class LatencyStats:
     """Calculate latency statistics."""
 
     @staticmethod
-    def calculate_percentiles(latencies: List[float], percentiles: List[int] = [50, 95, 99]) -> dict:
+    def calculate_percentiles(latencies: list[float], percentiles: list[int] = [50, 95, 99]) -> dict:
         if not latencies:
             return {}
         result = {}
@@ -45,10 +46,10 @@ class LatencyStats:
 
     @staticmethod
     def calculate_extended_stats(
-        latencies: List[float],
-        percentiles: List[int] = [50, 95, 99],
-        power_samples: Optional[List[float]] = None,
-    ) -> Dict[str, Any]:
+        latencies: list[float],
+        percentiles: list[int] = [50, 95, 99],
+        power_samples: list[float] | None = None,
+    ) -> dict[str, Any]:
         if not latencies:
             return {}
         result = LatencyStats.calculate_percentiles(latencies, percentiles)
@@ -69,14 +70,14 @@ class LatencyStats:
         return result
 
     @staticmethod
-    def calculate_jitter(latencies: List[float]) -> float:
+    def calculate_jitter(latencies: list[float]) -> float:
         if len(latencies) < 2:
             return 0.0
         differences = np.abs(np.diff(latencies))
         return float(np.mean(differences))
 
     @staticmethod
-    def calculate_coefficient_of_variation(latencies: List[float]) -> float:
+    def calculate_coefficient_of_variation(latencies: list[float]) -> float:
         if not latencies:
             return 0.0
         mean = np.mean(latencies)
@@ -85,7 +86,7 @@ class LatencyStats:
         return float(np.std(latencies) / mean)
 
     @staticmethod
-    def calculate_iqr(latencies: List[float]) -> float:
+    def calculate_iqr(latencies: list[float]) -> float:
         if not latencies:
             return 0.0
         q1 = np.percentile(latencies, 25)
@@ -93,7 +94,7 @@ class LatencyStats:
         return float(q3 - q1)
 
     @staticmethod
-    def count_outliers(latencies: List[float], sigma: float = 3.0) -> int:
+    def count_outliers(latencies: list[float], sigma: float = 3.0) -> int:
         if len(latencies) < 2:
             return 0
         mean = np.mean(latencies)
@@ -118,17 +119,15 @@ class LatencyStats:
         df: pd.DataFrame,
         latency_col: str,
         group_by: str,
-        power_col: Optional[str] = None,
-    ) -> Dict[str, Dict[str, Any]]:
+        power_col: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
         result = {}
         for group_name, group_df in df.groupby(group_by):
             latencies = group_df[latency_col].tolist()
             power_samples = None
             if power_col and power_col in group_df.columns:
                 power_samples = group_df[power_col].tolist()
-            result[group_name] = LatencyStats.calculate_extended_stats(
-                latencies, power_samples=power_samples
-            )
+            result[group_name] = LatencyStats.calculate_extended_stats(latencies, power_samples=power_samples)
         return result
 
 
@@ -137,7 +136,7 @@ class PerformanceComparator:
 
     @staticmethod
     def compare_latency_throughput(
-        batch_sizes: List[int], latencies: List[float], images_per_second: List[float]
+        batch_sizes: list[int], latencies: list[float], images_per_second: list[float]
     ) -> dict:
         return {
             "batch_size": batch_sizes,

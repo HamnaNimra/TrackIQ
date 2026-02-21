@@ -1,7 +1,7 @@
 """Tests for trackiq_core.ui package."""
 
-from datetime import datetime
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -13,6 +13,7 @@ from trackiq_core.schema import (
     TrackiqResult,
     WorkloadInfo,
 )
+from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.ui import (
     DARK_THEME,
     LIGHT_THEME,
@@ -23,11 +24,12 @@ from trackiq_core.ui import (
     PowerGauge,
     RegressionBadge,
     ResultBrowser,
+    RunHistoryLoader,
     TrackiqDashboard,
+    TrendChart,
     WorkerGrid,
     run_dashboard,
 )
-from trackiq_core.serializer import save_trackiq_result
 
 
 def _result(
@@ -153,9 +155,7 @@ def test_components_instantiate_with_optional_metrics_none() -> None:
     MetricTable(result=[result, _result(optional_none=True)], mode="comparison")
     LossChart(steps=[0, 1, 2], loss_values=[1.0, 0.8, 0.7])
     RegressionBadge(result.regression)
-    WorkerGrid(
-        [{"worker_id": "w0", "throughput": 1, "allreduce_time_ms": 0.5, "status": "healthy"}]
-    )
+    WorkerGrid([{"worker_id": "w0", "throughput": 1, "allreduce_time_ms": 0.5, "status": "healthy"}])
     PowerGauge(metrics=result.metrics, tool_payload=result.tool_payload)
     ComparisonTable(result, _result(optional_none=True, hardware="HW-B"))
 
@@ -178,6 +178,7 @@ def test_components_import_without_streamlit_dependency() -> None:
         __import__("trackiq_core.ui.components.comparison_table")
         __import__("trackiq_core.ui.components.device_panel")
         __import__("trackiq_core.ui.components.result_browser")
+        __import__("trackiq_core.ui.components.trend_chart")
         assert "streamlit" not in sys.modules
     finally:
         if preloaded is not None:
@@ -221,6 +222,115 @@ def test_result_browser_to_dict_returns_metadata_for_valid_result(tmp_path: Path
     assert rows[0]["path"] == str(out)
 
 
+def test_result_browser_to_dict_filters_by_allowed_tools(tmp_path: Path) -> None:
+    """ResultBrowser should filter rows when allowed_tools is specified."""
+    out_a = tmp_path / "tool_a.json"
+    out_m = tmp_path / "minicluster.json"
+    result_a = _result()
+    result_m = _result()
+    result_m.tool_name = "minicluster"
+    save_trackiq_result(result_a, out_a)
+    save_trackiq_result(result_m, out_m)
+
+    browser = ResultBrowser(search_paths=[str(tmp_path)], allowed_tools=["minicluster"])
+    rows = browser.to_dict()
+    assert len(rows) == 1
+    assert rows[0]["tool_name"] == "minicluster"
+
+
+def test_dashboard_tool_compatibility_filter() -> None:
+    """Dashboards should be able to validate loaded-result tool compatibility."""
+
+    class _Dash(TrackiqDashboard):
+        def expected_tool_names(self) -> list[str]:
+            return ["autoperfpy"]
+
+        def render_body(self) -> None:
+            return None
+
+    dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
+    auto = _result()
+    auto.tool_name = "autoperfpy"
+    mini = _result()
+    mini.tool_name = "minicluster"
+    assert dash._is_result_compatible(auto) is True
+    assert dash._is_result_compatible(mini) is False
+
+
+def test_run_history_loader_loads_sorted_results_and_skips_invalid(tmp_path: Path) -> None:
+    """RunHistoryLoader should return valid results sorted by timestamp."""
+    history_dir = tmp_path / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    older = _result(throughput=90.0, perf_per_watt=0.7)
+    older.timestamp = datetime(2026, 2, 20, 10, 0, 0)
+    newer = _result(throughput=120.0, perf_per_watt=1.0)
+    newer.timestamp = datetime(2026, 2, 21, 10, 0, 0)
+    save_trackiq_result(newer, history_dir / "newer.json")
+    save_trackiq_result(older, history_dir / "older.json")
+    (history_dir / "broken.json").write_text("{not-json", encoding="utf-8")
+
+    loaded = RunHistoryLoader(str(history_dir)).load()
+    assert len(loaded) == 2
+    assert [item.metrics.throughput_samples_per_sec for item in loaded] == [90.0, 120.0]
+
+
+def test_run_history_loader_sorts_mixed_naive_and_aware_timestamps(tmp_path: Path) -> None:
+    """RunHistoryLoader should sort mixed timestamp types without raising TypeError."""
+    history_dir = tmp_path / "history_mixed_tz"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    aware_older = _result(throughput=90.0, perf_per_watt=0.7)
+    aware_older.timestamp = datetime(2026, 2, 21, 9, 0, 0, tzinfo=timezone.utc)
+    naive_newer = _result(throughput=120.0, perf_per_watt=1.0)
+    naive_newer.timestamp = datetime(2026, 2, 21, 10, 0, 0)
+
+    save_trackiq_result(naive_newer, history_dir / "naive_newer.json")
+    save_trackiq_result(aware_older, history_dir / "aware_older.json")
+
+    loaded = RunHistoryLoader(str(history_dir)).load()
+    assert len(loaded) == 2
+    assert [item.metrics.throughput_samples_per_sec for item in loaded] == [90.0, 120.0]
+
+
+def test_trend_chart_to_dict_default_metrics_filters_null_points() -> None:
+    """TrendChart should include default metrics and omit null metric points."""
+    run_a = _result(throughput=95.0, perf_per_watt=0.8)
+    run_a.timestamp = datetime(2026, 2, 19, 8, 0, 0)
+    run_a.metrics.latency_p99_ms = 16.0
+
+    run_b = _result(throughput=110.0, perf_per_watt=1.1)
+    run_b.timestamp = datetime(2026, 2, 20, 8, 0, 0)
+    run_b.metrics.latency_p99_ms = 12.0
+
+    run_c = _result(throughput=125.0, perf_per_watt=1.3)
+    run_c.timestamp = datetime(2026, 2, 21, 8, 0, 0)
+    run_c.metrics.latency_p99_ms = 10.0
+    run_c.metrics.performance_per_watt = None
+
+    payload = TrendChart(results=[run_c, run_a, run_b]).to_dict()
+
+    assert payload["run_count"] == 3
+    assert payload["metric_names"] == list(TrendChart.DEFAULT_METRICS)
+    assert [point["value"] for point in payload["trends"]["throughput_samples_per_sec"]] == [
+        95.0,
+        110.0,
+        125.0,
+    ]
+    assert len(payload["trends"]["performance_per_watt"]) == 2
+
+
+def test_trend_chart_supports_custom_metric_names() -> None:
+    """TrendChart should preserve custom metric ordering and unknown metrics."""
+    payload = TrendChart(
+        results=[_result()],
+        metric_names=["latency_p95_ms", "missing_metric"],
+    ).to_dict()
+    assert payload["metric_names"] == ["latency_p95_ms", "missing_metric"]
+    assert len(payload["trends"]["latency_p95_ms"]) == 1
+    assert payload["trends"]["missing_metric"] == []
+
+
 def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
     """TrackiqDashboard subclasses should expose device panel and result browser methods."""
 
@@ -231,15 +341,14 @@ def test_dashboard_subclass_has_device_and_result_browser_methods() -> None:
     dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
     assert hasattr(dash, "render_device_panel")
     assert hasattr(dash, "render_result_browser")
+    assert hasattr(dash, "render_trend_section")
     assert hasattr(dash, "render_download_section")
 
 
 def test_power_gauge_placeholder_with_null_metrics_and_live_device_none() -> None:
     """PowerGauge to_dict should return placeholder when no benchmark/live power exists."""
     result = _result(optional_none=True)
-    payload = PowerGauge(
-        metrics=result.metrics, tool_payload=result.tool_payload, live_device=None
-    ).to_dict()
+    payload = PowerGauge(metrics=result.metrics, tool_payload=result.tool_payload, live_device=None).to_dict()
     assert payload["placeholder"] == "Power profiling not available in this environment."
 
 

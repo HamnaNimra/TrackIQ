@@ -1,0 +1,39 @@
+[run]
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */site-packages/*
+    */autoperfpy/cli.py
+    */autoperfpy/commands/*
+    */autoperfpy/ui/*
+    */autoperfpy/examples/*
+    */autoperfpy/monitoring/*
+    */autoperfpy/benchmarks/*
+    */autoperfpy/collectors/*
+    */autoperfpy/reports/visualizer.py
+    */minicluster/cli.py
+    */minicluster/ui/*
+    */minicluster/monitor/cli.py
+    */minicluster/monitor/live_dashboard.py
+    */trackiq_compare/ui/*
+    */trackiq_core/cli/*
+    */trackiq_core/ui/*
+    */trackiq_core/monitoring/*
+    */trackiq_core/hardware/env.py
+    */trackiq_core/hardware/gpu.py
+    */trackiq_core/collectors/nvml_collector.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    @abc.abstractmethod
+
+precision = 2
+show_missing = True

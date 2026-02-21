@@ -440,9 +440,7 @@ class TestHTMLReportGeneratorIntegration:
         fig1 = viz.plot_latency_percentiles(latency_data)
         report.add_figure(fig1, "Latency Percentiles", "Latency Analysis")
 
-        fig2 = viz.plot_latency_throughput_tradeoff(
-            [1, 2, 4, 8], [20, 25, 35, 50], [50, 80, 115, 160]
-        )
+        fig2 = viz.plot_latency_throughput_tradeoff([1, 2, 4, 8], [20, 25, 35, 50], [50, 80, 115, 160])
         report.add_figure(fig2, "Batch Scaling", "Latency Analysis")
 
         # Add table
@@ -498,19 +496,21 @@ class TestChartsReportIntegration:
 
     def _minimal_df_summary(self):
         """Minimal DataFrame and summary matching collector export shape."""
-        df = pd.DataFrame({
-            "timestamp": [1000.0 + i * 0.5 for i in range(20)],
-            "elapsed_seconds": [i * 0.5 for i in range(20)],
-            "latency_ms": [22.0 + (i % 3) for i in range(20)],
-            "cpu_percent": [40.0 + i for i in range(20)],
-            "gpu_percent": [70.0 + (i % 10) for i in range(20)],
-            "power_w": [15.0 + i * 0.2 for i in range(20)],
-            "temperature_c": [45.0 + i * 0.5 for i in range(20)],
-            "memory_used_mb": [4000.0 + i * 2 for i in range(20)],
-            "memory_total_mb": [16384.0] * 20,
-            "throughput_fps": [1000.0 / (22.0 + (i % 3)) for i in range(20)],
-            "is_warmup": [i < 2 for i in range(20)],
-        })
+        df = pd.DataFrame(
+            {
+                "timestamp": [1000.0 + i * 0.5 for i in range(20)],
+                "elapsed_seconds": [i * 0.5 for i in range(20)],
+                "latency_ms": [22.0 + (i % 3) for i in range(20)],
+                "cpu_percent": [40.0 + i for i in range(20)],
+                "gpu_percent": [70.0 + (i % 10) for i in range(20)],
+                "power_w": [15.0 + i * 0.2 for i in range(20)],
+                "temperature_c": [45.0 + i * 0.5 for i in range(20)],
+                "memory_used_mb": [4000.0 + i * 2 for i in range(20)],
+                "memory_total_mb": [16384.0] * 20,
+                "throughput_fps": [1000.0 / (22.0 + (i % 3)) for i in range(20)],
+                "is_warmup": [i < 2 for i in range(20)],
+            }
+        )
         summary = {
             "sample_count": 20,
             "warmup_samples": 2,

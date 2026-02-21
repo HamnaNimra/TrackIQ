@@ -1,8 +1,8 @@
 """Configuration management system for TrackIQ."""
 
 import os
-from typing import Any, Dict, Optional
 from dataclasses import asdict
+from typing import Any
 
 from trackiq_core.configs.config_io import (
     ensure_parent_dir,
@@ -16,7 +16,7 @@ from trackiq_core.configs.config_io import (
 class Config:
     """Unified configuration container for TrackIQ."""
 
-    def __init__(self, config_dict: Optional[Dict[str, Any]] = None):
+    def __init__(self, config_dict: dict[str, Any] | None = None):
         """Initialize configuration.
 
         Args:
@@ -24,7 +24,7 @@ class Config:
         """
         self.config = (config_dict or {}).copy()
 
-    def update(self, config_dict: Dict[str, Any]) -> None:
+    def update(self, config_dict: dict[str, Any]) -> None:
         """Update configuration with provided values.
 
         Args:
@@ -58,7 +58,7 @@ class Config:
                 return default
         return value if value is not None else default
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert configuration to dictionary.
 
         Returns:
@@ -126,8 +126,8 @@ class ConfigManager:
 
     @staticmethod
     def load_or_default(
-        filepath: Optional[str] = None,
-        default_config: Optional[Dict[str, Any]] = None,
+        filepath: str | None = None,
+        default_config: dict[str, Any] | None = None,
     ) -> Config:
         """Load configuration from file or return defaults.
 

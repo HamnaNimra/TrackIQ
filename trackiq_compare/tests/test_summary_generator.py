@@ -42,9 +42,7 @@ def _result(throughput: float, p99: float) -> TrackiqResult:
             communication_overhead_percent=None,
             power_consumption_watts=None,
         ),
-        regression=RegressionInfo(
-            baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]
-        ),
+        regression=RegressionInfo(baseline_id=None, delta_percent=0.0, status="pass", failed_metrics=[]),
     )
 
 
@@ -93,3 +91,11 @@ def test_cli_custom_labels_show_in_output(tmp_path, capsys) -> None:
     output = capsys.readouterr().out
     assert "AMD MI300X" in output
     assert "NVIDIA A100" in output
+
+
+def test_cli_report_requires_subcommand_returns_nonzero(capsys) -> None:
+    """`trackiq-compare report` without report type should return non-zero."""
+    rc = cli_main(["report"])
+    assert rc == 1
+    output = capsys.readouterr().out.lower()
+    assert "usage: trackiq-compare report" in output

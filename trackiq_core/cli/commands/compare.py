@@ -2,6 +2,7 @@
 
 import json
 import sys
+
 from trackiq_core.utils.compare import RegressionDetector, RegressionThreshold
 
 
@@ -20,9 +21,7 @@ def flatten_summary_for_compare(summary: dict) -> dict:
 
 def run_compare(args):
     """Compare current run against baseline using trackiq comparison module."""
-    baseline_dir = (
-        getattr(args, "baseline_dir", ".trackiq/baselines") or ".trackiq/baselines"
-    )
+    baseline_dir = getattr(args, "baseline_dir", ".trackiq/baselines") or ".trackiq/baselines"
     detector = RegressionDetector(baseline_dir=baseline_dir)
     thresholds = RegressionThreshold(
         latency_percent=getattr(args, "latency_pct", 5.0),
@@ -30,12 +29,10 @@ def run_compare(args):
         p99_percent=getattr(args, "p99_pct", 10.0),
     )
 
-    with open(args.current, "r", encoding="utf-8") as f:
+    with open(args.current, encoding="utf-8") as f:
         current_data = json.load(f)
     summary = current_data.get("summary", current_data.get("metrics", current_data))
-    current_metrics = (
-        flatten_summary_for_compare(summary) if isinstance(summary, dict) else {}
-    )
+    current_metrics = flatten_summary_for_compare(summary) if isinstance(summary, dict) else {}
 
     if getattr(args, "save_baseline", False):
         detector.save_baseline(args.baseline, current_metrics)

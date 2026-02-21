@@ -11,7 +11,7 @@ import os
 import time
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import torch
 import torch.distributed as dist
@@ -19,8 +19,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, DistributedSampler
 
-from minicluster.deps import save_json_file, ensure_parent_dir
-from minicluster.runner import RunConfig, StepMetrics, SimpleMLP, create_synthetic_dataset
+from minicluster.deps import ensure_parent_dir, save_json_file
+from minicluster.runner import RunConfig, SimpleMLP, StepMetrics, create_synthetic_dataset
 
 
 class FaultType(Enum):
@@ -51,8 +51,8 @@ class FaultDetectionResult:
     affected_rank: int
     was_detected: bool
     reason: str
-    faulty_metrics: Optional[Dict[str, Any]] = None
-    clean_metrics: Optional[Dict[str, Any]] = None
+    faulty_metrics: dict[str, Any] | None = None
+    clean_metrics: dict[str, Any] | None = None
 
 
 @dataclass
@@ -62,10 +62,10 @@ class FaultInjectionReport:
     num_faults: int
     num_detected: int = 0
     num_missed: int = 0
-    results: List[FaultDetectionResult] = field(default_factory=list)
+    results: list[FaultDetectionResult] = field(default_factory=list)
     summary: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert report to dictionary."""
         return {
             "num_faults": self.num_faults,
@@ -99,7 +99,7 @@ class FaultInjector:
 
     def train_with_slow_worker(
         self, rank: int, world_size: int, config: RunConfig, sleep_duration: float
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Train with one worker artificially slowed.
 
         Args:
@@ -118,9 +118,7 @@ class FaultInjector:
         dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
 
         try:
-            model = SimpleMLP(
-                config.input_size, config.hidden_size, config.output_size, config.num_layers
-            )
+            model = SimpleMLP(config.input_size, config.hidden_size, config.output_size, config.num_layers)
             from torch.nn.parallel import DistributedDataParallel as DDP
 
             model = DDP(model)
@@ -132,12 +130,8 @@ class FaultInjector:
                 output_size=config.output_size,
                 seed=config.seed,
             )
-            sampler = DistributedSampler(
-                dataset, num_replicas=world_size, rank=rank, shuffle=False, seed=config.seed
-            )
-            dataloader = DataLoader(
-                dataset, batch_size=config.batch_size, sampler=sampler, shuffle=False
-            )
+            sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=False, seed=config.seed)
+            dataloader = DataLoader(dataset, batch_size=config.batch_size, sampler=sampler, shuffle=False)
 
             if rank == 0:
                 from minicluster.runner import RunMetrics
@@ -206,7 +200,7 @@ class FaultInjector:
 
     def train_with_gradient_anomaly(
         self, rank: int, world_size: int, config: RunConfig, noise_scale: float
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Train with gradient noise injected on one worker.
 
         Args:
@@ -225,9 +219,7 @@ class FaultInjector:
         dist.init_process_group(backend="gloo", rank=rank, world_size=world_size)
 
         try:
-            model = SimpleMLP(
-                config.input_size, config.hidden_size, config.output_size, config.num_layers
-            )
+            model = SimpleMLP(config.input_size, config.hidden_size, config.output_size, config.num_layers)
             from torch.nn.parallel import DistributedDataParallel as DDP
 
             model = DDP(model)
@@ -239,12 +231,8 @@ class FaultInjector:
                 output_size=config.output_size,
                 seed=config.seed,
             )
-            sampler = DistributedSampler(
-                dataset, num_replicas=world_size, rank=rank, shuffle=False, seed=config.seed
-            )
-            dataloader = DataLoader(
-                dataset, batch_size=config.batch_size, sampler=sampler, shuffle=False
-            )
+            sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=False, seed=config.seed)
+            dataloader = DataLoader(dataset, batch_size=config.batch_size, sampler=sampler, shuffle=False)
 
             if rank == 0:
                 from minicluster.runner import RunMetrics
@@ -275,9 +263,7 @@ class FaultInjector:
                     if rank == 0:
                         for param in model.parameters():
                             if param.grad is not None:
-                                param.grad.add_(
-                                    torch.randn_like(param.grad) * noise_scale
-                                )
+                                param.grad.add_(torch.randn_like(param.grad) * noise_scale)
 
                     compute_time = time.time() - step_start
 
@@ -355,9 +341,7 @@ class FaultInjector:
                 if slow_metrics["steps"]
                 else 0.0
             )
-            throughput_drop = (
-                ((baseline_thr - faulty_thr) / baseline_thr) if baseline_thr > 0 else 0.0
-            )
+            throughput_drop = ((baseline_thr - faulty_thr) / baseline_thr) if baseline_thr > 0 else 0.0
             detected = throughput_drop > self.tolerance
             result = FaultDetectionResult(
                 fault_type=FaultType.SLOW_WORKER,
@@ -395,8 +379,7 @@ class FaultInjector:
             # Simulate gradient anomaly by perturbing final losses
             anom_metrics = clean_metrics.to_dict()
             anom_metrics["steps"] = [
-                {**s, "loss": s["loss"] * (1 + 0.5 * (i % 2))}
-                for i, s in enumerate(anom_metrics["steps"])
+                {**s, "loss": s["loss"] * (1 + 0.5 * (i % 2))} for i, s in enumerate(anom_metrics["steps"])
             ]
 
             validator = CorrectnessValidator(tolerance=self.tolerance)
@@ -407,9 +390,7 @@ class FaultInjector:
                 fault_type=FaultType.GRADIENT_SYNC_ANOMALY,
                 affected_rank=0,
                 was_detected=detected,
-                reason=(
-                    "Detected via loss divergence" if detected else "Loss divergence not detected"
-                ),
+                reason=("Detected via loss divergence" if detected else "Loss divergence not detected"),
                 faulty_metrics=anom_metrics,
                 clean_metrics=clean_dict,
             )

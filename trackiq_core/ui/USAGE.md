@@ -34,6 +34,10 @@ if __name__ == "__main__":
 
 `ComparisonTable` renders end-to-end pairwise comparison including platform differences, metric deltas, and a plain-English winner summary. It requires two `TrackiqResult` objects and optional labels.
 
+`RunHistoryLoader` loads a directory of TrackiqResult JSON files and returns timestamp-sorted runs for trend analysis.
+
+`TrendChart` renders metric-over-time trends across many runs (defaults: throughput, p99 latency, performance per watt) and exposes a serializable `to_dict()` payload.
+
 ## Theme Customization
 Create a custom `TrackiqTheme` and pass it into any dashboard or component:
 
@@ -78,4 +82,3 @@ run_dashboard(
     result_path="trackiq_result.json",
 )
 ```
-

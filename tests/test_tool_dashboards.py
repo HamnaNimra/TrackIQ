@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytest
 
+import dashboard as root_dashboard
 from autoperfpy.ui.dashboard import AutoPerfDashboard
 from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import (
@@ -18,7 +19,6 @@ from trackiq_core.schema import (
     TrackiqResult,
     WorkloadInfo,
 )
-import dashboard as root_dashboard
 
 
 def _result(
@@ -91,9 +91,7 @@ def test_minicluster_dashboard_component_smoke_to_dict() -> None:
         ],
         "faults_detected": {"slow_workers": []},
     }
-    dash = MiniClusterDashboard(
-        result=_result(tool_name="minicluster", workload_type="training", tool_payload=payload)
-    )
+    dash = MiniClusterDashboard(result=_result(tool_name="minicluster", workload_type="training", tool_payload=payload))
     components = dash.build_components()
     for component in components.values():
         component.to_dict()
@@ -152,3 +150,95 @@ def test_platform_export_filename_format() -> None:
     """Platform export filename should include both vendors and timestamp."""
     out = CompareDashboard.platform_export_filename("AMD", "NVIDIA", "20260221_235959")
     assert out == "amd_vs_nvidia_comparison_20260221_235959.html"
+
+
+def test_compare_dashboard_family_delta_rows_show_directional_advantage() -> None:
+    """Normalized family deltas should indicate which side has the advantage."""
+    left = _result(tool_name="left", hardware="HW-A")
+    right = _result(tool_name="right", hardware="HW-B")
+    right.metrics.throughput_samples_per_sec = 130.0  # better for right
+    right.metrics.performance_per_watt = 1.8  # better for right
+    right.metrics.latency_p99_ms = 10.0  # worse for right
+    right.metrics.latency_p95_ms = 8.0  # worse for right
+    right.metrics.latency_p50_ms = 6.0  # worse for right
+    right.metrics.power_consumption_watts = 70.0  # better for right (lower)
+
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    rows = dash._competitive_metric_rows()
+    families = {row["family"]: row for row in dash._metric_family_delta_rows(rows)}
+
+    assert "performance" in families
+    assert "latency" in families
+    assert "efficiency" in families
+    assert float(families["performance"]["normalized_delta_percent"]) > 0
+    assert float(families["latency"]["normalized_delta_percent"]) < 0
+    assert float(families["efficiency"]["normalized_delta_percent"]) > 0
+
+
+def test_compare_dashboard_confidence_rows_reflect_missing_metrics() -> None:
+    """Confidence rows should flag missing values as insufficient."""
+    left = _result(tool_name="left", hardware="HW-A")
+    right = _result(tool_name="right", hardware="HW-B")
+    right.metrics.communication_overhead_percent = 3.2
+    left.metrics.communication_overhead_percent = None
+    right.metrics.power_consumption_watts = None
+
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    confidence_rows = {row["metric"]: row for row in dash._metric_confidence_rows()}
+
+    assert confidence_rows["throughput_samples_per_sec"]["confidence"] == "strong"
+    assert confidence_rows["communication_overhead_percent"]["confidence"] == "insufficient"
+    assert confidence_rows["power_consumption_watts"]["confidence"] == "insufficient"
+
+
+def test_compare_dashboard_download_html_uses_compare_report_builder() -> None:
+    """Compare dashboard HTML download path should match compare reporter content."""
+    left = _result(tool_name="autoperfpy", hardware="HW-A")
+    right = _result(tool_name="minicluster", workload_type="training", hardware="HW-B")
+    dash = CompareDashboard(result_a=left, result_b=right, label_a="A", label_b="B")
+    html = dash._build_html_report(left)
+
+    assert "TrackIQ Comparison Report" in html
+    assert "Metric Comparison" in html
+    assert "Visual Overview" in html
+
+
+def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -> None:
+    """MiniCluster dashboard HTML download path should match minicluster HTML reporter."""
+    payload = {
+        "config": {
+            "num_processes": 1,
+            "num_steps": 2,
+            "batch_size": 4,
+            "learning_rate": 0.01,
+            "hidden_size": 128,
+            "num_layers": 2,
+            "seed": 42,
+            "tdp_watts": 150.0,
+        },
+        "steps": [
+            {
+                "step": 0,
+                "loss": 1.1,
+                "throughput_samples_per_sec": 100.0,
+                "allreduce_time_ms": 1.0,
+                "compute_time_ms": 2.0,
+            },
+            {
+                "step": 1,
+                "loss": 1.0,
+                "throughput_samples_per_sec": 102.0,
+                "allreduce_time_ms": 1.2,
+                "compute_time_ms": 2.2,
+            },
+        ],
+        "total_time_sec": 0.2,
+        "final_loss": 1.0,
+    }
+    result = _result(tool_name="minicluster", workload_type="training", tool_payload=payload)
+    dash = MiniClusterDashboard(result=result)
+    html = dash._build_html_report(result)
+
+    assert "MiniCluster Performance Report" in html
+    assert "Training Graphs" in html
+    assert ("plotly-graph-div" in html) or ("<svg" in html)

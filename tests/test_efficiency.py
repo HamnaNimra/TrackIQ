@@ -1,16 +1,17 @@
 """Tests for efficiency metrics module."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
+from autoperfpy.analyzers import EfficiencyAnalyzer
 from autoperfpy.core import (
-    EfficiencyMetrics,
-    EfficiencyCalculator,
     BatchEfficiencyAnalyzer,
+    EfficiencyCalculator,
+    EfficiencyMetrics,
     LatencyStats,
 )
-from autoperfpy.analyzers import EfficiencyAnalyzer
 
 
 class TestEfficiencyCalculator:

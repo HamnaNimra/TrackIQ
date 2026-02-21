@@ -1,10 +1,11 @@
 """Tests for AutoPerfPy analyzers module."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
-from autoperfpy.analyzers import PercentileLatencyAnalyzer, LogAnalyzer
+import pytest
+
+from autoperfpy.analyzers import LogAnalyzer, PercentileLatencyAnalyzer
 
 
 class TestPercentileLatencyAnalyzer:

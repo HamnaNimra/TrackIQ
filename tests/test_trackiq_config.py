@@ -26,26 +26,20 @@ class TestConfigManager:
 
     def test_load_yaml_parses_without_error(self, tmp_path):
         yaml_path = tmp_path / "config.yaml"
-        yaml_path.write_text(
-            "benchmark:\n  batch_sizes: [1, 4, 8]\nlatency:\n  threshold_ms: 100\n"
-        )
+        yaml_path.write_text("benchmark:\n  batch_sizes: [1, 4, 8]\nlatency:\n  threshold_ms: 100\n")
         config = ConfigManager.load_yaml(str(yaml_path))
         assert config.get("benchmark.batch_sizes") == [1, 4, 8]
         assert config.get("latency.threshold_ms") == 100
 
     def test_load_json_parses_without_error(self, tmp_path):
         json_path = tmp_path / "config.json"
-        json_path.write_text(
-            '{"benchmark": {"batch_sizes": [1, 4, 8]}, "latency": {"threshold_ms": 100}}'
-        )
+        json_path.write_text('{"benchmark": {"batch_sizes": [1, 4, 8]}, "latency": {"threshold_ms": 100}}')
         config = ConfigManager.load_json(str(json_path))
         assert config.get("benchmark.batch_sizes") == [1, 4, 8]
         assert config.get("latency.threshold_ms") == 100
 
     def test_load_or_default_with_missing_file(self):
-        config = ConfigManager.load_or_default(
-            "/nonexistent.yaml", default_config={"a": 1}
-        )
+        config = ConfigManager.load_or_default("/nonexistent.yaml", default_config={"a": 1})
         assert config.get("a") == 1
 
     def test_load_or_default_with_existing_yaml(self, tmp_path):

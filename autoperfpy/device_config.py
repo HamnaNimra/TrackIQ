@@ -4,29 +4,33 @@ Re-exports generic inference config from trackiq_core and adds
 automotive-specific device resolution.
 """
 
-from typing import List, Optional, Tuple
-
 from trackiq_core.hardware.devices import DeviceProfile, get_all_devices
 
 # Re-export from trackiq_core
 from trackiq_core.inference import (
-    InferenceConfig,
-    enumerate_inference_configs,
-    PRECISION_FP32,
-    PRECISION_FP16,
-    PRECISION_INT8,
-    PRECISIONS,
     DEFAULT_BATCH_SIZES,
-    DEFAULT_WARMUP_RUNS,
     DEFAULT_ITERATIONS,
     DEFAULT_STREAMS,
+    DEFAULT_WARMUP_RUNS,
+    PRECISION_BF16,
+    PRECISION_FP16,
+    PRECISION_FP32,
+    PRECISION_INT4,
+    PRECISION_INT8,
+    PRECISION_MIXED,
+    PRECISIONS,
+    InferenceConfig,
+    enumerate_inference_configs,
+    get_supported_precisions_for_device,
+    is_precision_supported,
+    resolve_precision_for_device,
 )
 
 
 def resolve_device(
     device_id: str,
-    devices: Optional[List[DeviceProfile]] = None,
-) -> Optional[DeviceProfile]:
+    devices: list[DeviceProfile] | None = None,
+) -> DeviceProfile | None:
     """Resolve device ID (e.g. nvidia_0, cpu_0, 0) to a DeviceProfile.
 
     Args:
@@ -60,11 +64,11 @@ def get_devices_and_configs_auto(
     include_intel: bool = True,
     include_cpu: bool = True,
     include_tegrastats: bool = True,
-    device_ids_filter: Optional[List[str]] = None,
-    precisions: Optional[List[str]] = None,
-    batch_sizes: Optional[List[int]] = None,
-    max_configs_per_device: Optional[int] = 6,
-) -> List[Tuple[DeviceProfile, InferenceConfig]]:
+    device_ids_filter: list[str] | None = None,
+    precisions: list[str] | None = None,
+    batch_sizes: list[int] | None = None,
+    max_configs_per_device: int | None = 6,
+) -> list[tuple[DeviceProfile, InferenceConfig]]:
     """Detect all devices and enumerate inference configs (auto mode).
 
     When device_ids_filter is set, only devices whose device_id is in the list
@@ -106,12 +110,18 @@ __all__ = [
     "enumerate_inference_configs",
     "PRECISION_FP32",
     "PRECISION_FP16",
+    "PRECISION_BF16",
     "PRECISION_INT8",
+    "PRECISION_INT4",
+    "PRECISION_MIXED",
     "PRECISIONS",
     "DEFAULT_BATCH_SIZES",
     "DEFAULT_WARMUP_RUNS",
     "DEFAULT_ITERATIONS",
     "DEFAULT_STREAMS",
+    "get_supported_precisions_for_device",
+    "is_precision_supported",
+    "resolve_precision_for_device",
     # AutoPerfPy-specific
     "resolve_device",
     "get_devices_and_configs_auto",

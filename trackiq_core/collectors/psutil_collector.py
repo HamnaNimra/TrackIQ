@@ -36,9 +36,10 @@ Authors:
 
 import random
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
-from trackiq_core.utils.stats import percentile as _percentile, stats_from_values
+from trackiq_core.utils.stats import percentile as _percentile
+from trackiq_core.utils.stats import stats_from_values
 
 from .base import CollectorBase, CollectorExport
 
@@ -75,8 +76,8 @@ class PsutilCollector(CollectorBase):
         include_per_cpu: bool = True,
         include_disk_io: bool = False,
         include_network_io: bool = False,
-        process_pid: Optional[int] = None,
-        config: Optional[Dict[str, Any]] = None,
+        process_pid: int | None = None,
+        config: dict[str, Any] | None = None,
         name: str = "PsutilCollector",
     ):
         """Initialize the psutil collector.
@@ -133,10 +134,7 @@ class PsutilCollector(CollectorBase):
 
             self._psutil = psutil
         except ImportError:
-            raise ImportError(
-                "psutil is required for PsutilCollector. "
-                "Install with: pip install psutil"
-            )
+            raise ImportError("psutil is required for PsutilCollector. " "Install with: pip install psutil")
 
         # Attach to process if PID specified
         if self.process_pid is not None:
@@ -158,7 +156,7 @@ class PsutilCollector(CollectorBase):
         self._sample_index = 0
         self._samples.clear()
 
-    def sample(self, timestamp: float) -> Optional[Dict[str, Any]]:
+    def sample(self, timestamp: float) -> dict[str, Any] | None:
         """Collect system metrics at the given timestamp.
 
         Args:
@@ -233,17 +231,13 @@ class PsutilCollector(CollectorBase):
                 for name in ["coretemp", "cpu_thermal", "k10temp", "zenpower"]:
                     if name in temps:
                         # Get highest temperature
-                        max_temp = max(
-                            t.current for t in temps[name] if t.current is not None
-                        )
+                        max_temp = max(t.current for t in temps[name] if t.current is not None)
                         metrics["temperature_c"] = max_temp
                         break
                 else:
                     # Use first available sensor
                     for name, entries in temps.items():
-                        valid_temps = [
-                            t.current for t in entries if t.current is not None
-                        ]
+                        valid_temps = [t.current for t in entries if t.current is not None]
                         if valid_temps:
                             metrics["temperature_c"] = max(valid_temps)
                             break
@@ -252,9 +246,7 @@ class PsutilCollector(CollectorBase):
             pass
 
         # Calculate time delta for I/O rates
-        time_delta = (
-            timestamp - self._prev_sample_time if self._prev_sample_time else 1.0
-        )
+        time_delta = timestamp - self._prev_sample_time if self._prev_sample_time else 1.0
         time_delta = max(time_delta, 0.001)  # Avoid division by zero
 
         # Disk I/O metrics
@@ -265,18 +257,10 @@ class PsutilCollector(CollectorBase):
                     read_bytes = disk_io.read_bytes - self._prev_disk_io.read_bytes
                     write_bytes = disk_io.write_bytes - self._prev_disk_io.write_bytes
 
-                    metrics["disk_read_mbps"] = (read_bytes / time_delta) / (
-                        1024 * 1024
-                    )
-                    metrics["disk_write_mbps"] = (write_bytes / time_delta) / (
-                        1024 * 1024
-                    )
-                    metrics["disk_read_count"] = (
-                        disk_io.read_count - self._prev_disk_io.read_count
-                    )
-                    metrics["disk_write_count"] = (
-                        disk_io.write_count - self._prev_disk_io.write_count
-                    )
+                    metrics["disk_read_mbps"] = (read_bytes / time_delta) / (1024 * 1024)
+                    metrics["disk_write_mbps"] = (write_bytes / time_delta) / (1024 * 1024)
+                    metrics["disk_read_count"] = disk_io.read_count - self._prev_disk_io.read_count
+                    metrics["disk_write_count"] = disk_io.write_count - self._prev_disk_io.write_count
 
                 self._prev_disk_io = disk_io
             except Exception:
@@ -292,12 +276,8 @@ class PsutilCollector(CollectorBase):
 
                     metrics["net_sent_mbps"] = (sent_bytes / time_delta) / (1024 * 1024)
                     metrics["net_recv_mbps"] = (recv_bytes / time_delta) / (1024 * 1024)
-                    metrics["net_packets_sent"] = (
-                        net_io.packets_sent - self._prev_net_io.packets_sent
-                    )
-                    metrics["net_packets_recv"] = (
-                        net_io.packets_recv - self._prev_net_io.packets_recv
-                    )
+                    metrics["net_packets_sent"] = net_io.packets_sent - self._prev_net_io.packets_sent
+                    metrics["net_packets_recv"] = net_io.packets_recv - self._prev_net_io.packets_recv
 
                 self._prev_net_io = net_io
             except Exception:
@@ -309,12 +289,8 @@ class PsutilCollector(CollectorBase):
                 if self._process.is_running():
                     with self._process.oneshot():
                         metrics["process_cpu_percent"] = self._process.cpu_percent()
-                        metrics["process_memory_mb"] = (
-                            self._process.memory_info().rss / (1024 * 1024)
-                        )
-                        metrics["process_memory_percent"] = (
-                            self._process.memory_percent()
-                        )
+                        metrics["process_memory_mb"] = self._process.memory_info().rss / (1024 * 1024)
+                        metrics["process_memory_percent"] = self._process.memory_percent()
                         metrics["process_threads"] = self._process.num_threads()
 
                         try:
@@ -382,7 +358,7 @@ class PsutilCollector(CollectorBase):
 
         return metrics
 
-    def _get_platform_info(self) -> Dict[str, Any]:
+    def _get_platform_info(self) -> dict[str, Any]:
         """Get platform information."""
         import platform
 
@@ -425,7 +401,7 @@ class PsutilCollector(CollectorBase):
             },
         )
 
-    def _calculate_summary(self) -> Dict[str, Any]:
+    def _calculate_summary(self) -> dict[str, Any]:
         """Calculate summary statistics for collected samples.
 
         Returns:
@@ -436,19 +412,13 @@ class PsutilCollector(CollectorBase):
             return {}
 
         warmup_count = self._cfg.get("warmup_samples", 0)
-        steady_samples = (
-            self._samples[warmup_count:]
-            if len(self._samples) > warmup_count
-            else self._samples
-        )
+        steady_samples = self._samples[warmup_count:] if len(self._samples) > warmup_count else self._samples
 
         def _values_for(key: str):
             """Extract non-None values for a metric key from steady samples."""
-            return [
-                val for s in steady_samples if (val := s.metrics.get(key)) is not None
-            ]
+            return [val for s in steady_samples if (val := s.metrics.get(key)) is not None]
 
-        def _safe_stats(key: str) -> Dict[str, Optional[float]]:
+        def _safe_stats(key: str) -> dict[str, float | None]:
             return stats_from_values(_values_for(key))
 
         def _pct(key: str, p: float) -> float:
@@ -457,9 +427,7 @@ class PsutilCollector(CollectorBase):
         summary = {
             "sample_count": len(self._samples),
             "warmup_samples": min(warmup_count, len(self._samples)),
-            "duration_seconds": (
-                (self._end_time - self._start_time) if self._end_time else None
-            ),
+            "duration_seconds": ((self._end_time - self._start_time) if self._end_time else None),
             # Latency statistics (required for UI latency charts)
             "latency": {
                 "mean_ms": _safe_stats("latency_ms").get("mean", 0),
@@ -491,11 +459,7 @@ class PsutilCollector(CollectorBase):
                 "mean_mb": _safe_stats("memory_used_mb").get("mean"),
                 "max_mb": _safe_stats("memory_used_mb").get("max"),
                 "min_mb": _safe_stats("memory_used_mb").get("min"),
-                "total_mb": (
-                    steady_samples[0].metrics.get("memory_total_mb")
-                    if steady_samples
-                    else None
-                ),
+                "total_mb": (steady_samples[0].metrics.get("memory_total_mb") if steady_samples else None),
                 "mean_percent": _safe_stats("memory_percent").get("mean"),
             },
             "swap": {
@@ -533,7 +497,7 @@ class PsutilCollector(CollectorBase):
 
         return summary
 
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Get detailed system information.
 
         Returns:

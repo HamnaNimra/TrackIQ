@@ -12,84 +12,89 @@ Provides:
 - benchmarks (BatchingTradeoffBenchmark, LLMLatencyBenchmark)
 """
 
-from trackiq_core.utils.dict_utils import safe_get
-from trackiq_core.utils.stats import percentile, stats_from_values
-from trackiq_core.hardware.env import command_available, nvidia_smi_available
+# Benchmarks
+from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
+from trackiq_core.configs.config import Config, ConfigManager
+from trackiq_core.configs.config_io import (
+    ensure_parent_dir,
+    load_json_file,
+    load_yaml_file,
+    save_json_file,
+    save_yaml_file,
+)
+
+# Distributed validation
+from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
 from trackiq_core.hardware import (
     DEVICE_TYPE_AMD_GPU,
     DEVICE_TYPE_APPLE_SILICON,
     detect_amd_gpus,
     detect_apple_silicon,
     get_amd_gpu_metrics,
-    get_intel_gpu_metrics,
     get_apple_silicon_metrics,
     get_cpu_metrics,
+    get_intel_gpu_metrics,
     query_rocm_smi,
 )
-from trackiq_core.configs.config_io import (
-    load_yaml_file,
-    load_json_file,
-    save_yaml_file,
-    save_json_file,
-    ensure_parent_dir,
-)
-from trackiq_core.configs.config import Config, ConfigManager
+from trackiq_core.hardware.env import command_available, nvidia_smi_available
 
 # Inference configuration
 from trackiq_core.inference import (
+    DEFAULT_BATCH_SIZES,
+    DEFAULT_ITERATIONS,
+    DEFAULT_WARMUP_RUNS,
+    PRECISION_BF16,
+    PRECISION_FP16,
+    PRECISION_FP32,
+    PRECISION_INT4,
+    PRECISION_INT8,
+    PRECISION_MIXED,
+    PRECISIONS,
     InferenceConfig,
     enumerate_inference_configs,
-    PRECISION_FP32,
-    PRECISION_FP16,
-    PRECISION_INT8,
-    PRECISIONS,
-    DEFAULT_BATCH_SIZES,
-    DEFAULT_WARMUP_RUNS,
-    DEFAULT_ITERATIONS,
-)
-
-# Runners
-from trackiq_core.runners import (
-    BenchmarkRunner,
-    run_single_benchmark,
-    run_auto_benchmarks,
+    get_supported_precisions_for_device,
+    is_precision_supported,
+    resolve_precision_for_device,
 )
 
 # Monitoring
 from trackiq_core.monitoring import GPUMemoryMonitor, LLMKVCacheMonitor
 
-# Benchmarks
-from trackiq_core.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
-
-# Distributed validation
-from trackiq_core.distributed_validator import DistributedValidator, DistributedValidationConfig
-from trackiq_core.schema import (
-    TrackiqResult,
-    PlatformInfo,
-    WorkloadInfo,
-    Metrics,
-    RegressionInfo,
-    KVCacheInfo,
+# Runners
+from trackiq_core.runners import (
+    BenchmarkRunner,
+    run_auto_benchmarks,
+    run_single_benchmark,
 )
-from trackiq_core.serializer import save_trackiq_result, load_trackiq_result
-from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
+from trackiq_core.schema import (
+    KVCacheInfo,
+    Metrics,
+    PlatformInfo,
+    RegressionInfo,
+    TrackiqResult,
+    WorkloadInfo,
+)
+from trackiq_core.serializer import load_trackiq_result, save_trackiq_result
 
 # UI layer
 from trackiq_core.ui import (
-    TrackiqDashboard,
-    TrackiqTheme,
     DARK_THEME,
     LIGHT_THEME,
-    run_dashboard,
-    MetricTable,
-    LossChart,
-    RegressionBadge,
-    WorkerGrid,
-    PowerGauge,
     ComparisonTable,
     DevicePanel,
+    LossChart,
+    MetricTable,
+    PowerGauge,
+    RegressionBadge,
     ResultBrowser,
+    TrackiqDashboard,
+    TrackiqTheme,
+    WorkerGrid,
+    run_dashboard,
 )
+from trackiq_core.utils.dict_utils import safe_get
+from trackiq_core.utils.stats import percentile, stats_from_values
+from trackiq_core.validator import validate_trackiq_result, validate_trackiq_result_obj
 
 __all__ = [
     # Utils
@@ -121,11 +126,17 @@ __all__ = [
     "enumerate_inference_configs",
     "PRECISION_FP32",
     "PRECISION_FP16",
+    "PRECISION_BF16",
     "PRECISION_INT8",
+    "PRECISION_INT4",
+    "PRECISION_MIXED",
     "PRECISIONS",
     "DEFAULT_BATCH_SIZES",
     "DEFAULT_WARMUP_RUNS",
     "DEFAULT_ITERATIONS",
+    "get_supported_precisions_for_device",
+    "is_precision_supported",
+    "resolve_precision_for_device",
     # Runners
     "BenchmarkRunner",
     "run_single_benchmark",

@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Union
 
 from trackiq_core.schema import TrackiqResult
-
+from trackiq_core.validator import validate_trackiq_result_obj
 
 PathLike = Union[str, Path]
 
 
 def save_trackiq_result(result: TrackiqResult, path: PathLike) -> None:
     """Save a TrackiqResult to JSON."""
+    validate_trackiq_result_obj(result)
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as handle:
@@ -23,4 +24,23 @@ def load_trackiq_result(path: PathLike) -> TrackiqResult:
     in_path = Path(path)
     with in_path.open("r", encoding="utf-8") as handle:
         payload = json.load(handle)
-    return TrackiqResult.from_dict(payload)
+    required = (
+        "tool_name",
+        "tool_version",
+        "timestamp",
+        "platform",
+        "workload",
+        "metrics",
+        "regression",
+    )
+    for key in required:
+        if key not in payload:
+            raise ValueError(f"Missing required field: {key}")
+    try:
+        result = TrackiqResult.from_dict(payload)
+    except KeyError as exc:
+        raise ValueError(f"Missing required field: {exc.args[0]}") from exc
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid TrackiqResult payload: {exc}") from exc
+    validate_trackiq_result_obj(result)
+    return result

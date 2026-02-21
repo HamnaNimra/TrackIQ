@@ -1,4 +1,4 @@
-.PHONY: help install install-test install-dev test test-verbose test-coverage test-fast test-specific clean lint format regression-example
+.PHONY: help install install-test install-dev test test-verbose test-coverage test-fast test-specific clean lint format typecheck regression-example
 
 help:
 	@echo "TrackIQ Development Commands"
@@ -16,8 +16,9 @@ help:
 	@echo "  make test-fast        - Run tests without capturing output"
 	@echo ""
 	@echo "Code Quality:"
-	@echo "  make lint             - Run linting (flake8)"
-	@echo "  make format           - Format code (black, isort)"
+	@echo "  make lint             - Run linting (ruff)"
+	@echo "  make typecheck        - Run static typing checks (mypy)"
+	@echo "  make format           - Format code (ruff --fix, black, isort)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make regression-example - Run regression detection example"
@@ -29,19 +30,19 @@ install:
 	pip install -e .
 
 install-test:
-	pip install -e ".[test]"
+	pip install -e ".[test,ml,ui,gpu]"
 
 install-dev:
-	pip install -e ".[dev]"
+	pip install -e ".[dev,test,security,ml,ui,gpu]"
 
 test:
-	pytest tests/ -q
+	pytest tests/ minicluster/tests/ -q
 
 test-verbose:
-	pytest tests/ -v
+	pytest tests/ minicluster/tests/ -v
 
 test-coverage:
-	pytest tests/ --cov=autoperfpy --cov=trackiq_core --cov=minicluster --cov=trackiq_compare --cov-report=html --cov-report=term-missing --cov-report=xml
+	pytest tests/ minicluster/tests/ --cov=autoperfpy --cov=trackiq_core --cov=minicluster --cov=trackiq_compare --cov-report=html --cov-report=term-missing --cov-report=xml --cov-fail-under=70
 	@echo ""
 	@echo "Coverage report generated in htmlcov/index.html"
 
@@ -63,9 +64,13 @@ test-specific:
 	endif
 
 lint:
-	flake8 autoperfpy trackiq_core minicluster trackiq_compare tests --max-line-length=120 --ignore=E501,W503 || true
+	ruff check autoperfpy trackiq_core minicluster trackiq_compare tests
+
+typecheck:
+	mypy trackiq_compare/comparator trackiq_compare/reporters trackiq_compare/cli.py --ignore-missing-imports
 
 format:
+	ruff check --fix autoperfpy trackiq_core minicluster trackiq_compare tests
 	black autoperfpy trackiq_core minicluster trackiq_compare tests
 	isort autoperfpy trackiq_core minicluster trackiq_compare tests
 

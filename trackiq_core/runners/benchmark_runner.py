@@ -6,7 +6,8 @@ pattern so applications can register their own collectors.
 """
 
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from trackiq_core.collectors import CollectorBase, CollectorExport, SyntheticCollector
 from trackiq_core.hardware.devices import DeviceProfile, get_platform_metadata_for_device
@@ -23,7 +24,7 @@ class BenchmarkRunner:
         duration_seconds: float,
         sample_interval_seconds: float = 0.1,
         quiet: bool = False,
-        power_profiler: Optional[PowerProfiler] = None,
+        power_profiler: PowerProfiler | None = None,
     ):
         """Initialize benchmark runner.
 
@@ -93,7 +94,7 @@ def make_run_label(device: DeviceProfile, config: InferenceConfig) -> str:
     return f"{device.device_id}_{config.precision}_bs{config.batch_size}"
 
 
-def base_collector_config(config: InferenceConfig) -> Dict[str, Any]:
+def base_collector_config(config: InferenceConfig) -> dict[str, Any]:
     """Build base collector config from inference config.
 
     Args:
@@ -109,18 +110,18 @@ def base_collector_config(config: InferenceConfig) -> Dict[str, Any]:
 
 
 # Type alias for collector factory functions
-CollectorFactory = Callable[[DeviceProfile, InferenceConfig], Optional[CollectorBase]]
+CollectorFactory = Callable[[DeviceProfile, InferenceConfig], CollectorBase | None]
 
 
 def run_single_benchmark(
     device: DeviceProfile,
     config: InferenceConfig,
-    collector_factory: Optional[CollectorFactory] = None,
+    collector_factory: CollectorFactory | None = None,
     duration_seconds: float = 10.0,
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
-    power_profiler: Optional[PowerProfiler] = None,
-) -> Dict[str, Any]:
+    power_profiler: PowerProfiler | None = None,
+) -> dict[str, Any]:
     """Run one benchmark for (device, config) and return result dict.
 
     Args:
@@ -157,14 +158,14 @@ def run_single_benchmark(
 
 
 def run_auto_benchmarks(
-    device_config_pairs: List[Tuple[DeviceProfile, InferenceConfig]],
-    collector_factory: Optional[CollectorFactory] = None,
+    device_config_pairs: list[tuple[DeviceProfile, InferenceConfig]],
+    collector_factory: CollectorFactory | None = None,
     duration_seconds: float = 10.0,
     sample_interval_seconds: float = 0.2,
     quiet: bool = True,
-    progress_callback: Optional[Callable[..., None]] = None,
-    power_profiler_factory: Optional[Callable[[], Optional[PowerProfiler]]] = None,
-) -> List[Dict[str, Any]]:
+    progress_callback: Callable[..., None] | None = None,
+    power_profiler_factory: Callable[[], PowerProfiler | None] | None = None,
+) -> list[dict[str, Any]]:
     """Run benchmarks sequentially for each (device, config).
 
     Same runner for auto/manual modes.
@@ -180,7 +181,7 @@ def run_auto_benchmarks(
     Returns:
         List of result dictionaries, one per (device, config) pair
     """
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     total = len(device_config_pairs)
     for i, (device, config) in enumerate(device_config_pairs):
         if progress_callback:
@@ -193,9 +194,7 @@ def run_auto_benchmarks(
                 duration_seconds=duration_seconds,
                 sample_interval_seconds=sample_interval_seconds,
                 quiet=quiet,
-                power_profiler=(
-                    power_profiler_factory() if power_profiler_factory else None
-                ),
+                power_profiler=(power_profiler_factory() if power_profiler_factory else None),
             )
             results.append(res)
         except Exception as e:

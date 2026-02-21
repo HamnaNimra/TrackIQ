@@ -1,11 +1,13 @@
 """Efficiency analyzer for performance data."""
 
-from typing import Dict, Any
-from trackiq_core.utils.base import BaseAnalyzer
+from typing import Any
+
+import numpy as np
+
 from trackiq_core.schemas import AnalysisResult
 from trackiq_core.utils.analysis_utils import DataLoader
-from trackiq_core.utils.efficiency import EfficiencyCalculator, BatchEfficiencyAnalyzer
-import numpy as np
+from trackiq_core.utils.base import BaseAnalyzer
+from trackiq_core.utils.efficiency import BatchEfficiencyAnalyzer, EfficiencyCalculator
 
 
 class EfficiencyAnalyzer(BaseAnalyzer):
@@ -162,8 +164,8 @@ class EfficiencyAnalyzer(BaseAnalyzer):
 
     def _generate_batch_recommendation(
         self,
-        analysis: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        analysis: dict[str, Any],
+    ) -> dict[str, Any]:
         """Generate batch size recommendation based on efficiency analysis.
 
         Args:
@@ -187,9 +189,7 @@ class EfficiencyAnalyzer(BaseAnalyzer):
             )
             recommendation["confidence"] = "high"
         elif opt_efficiency == opt_throughput:
-            recommendation["reasoning"].append(
-                f"Batch size {opt_efficiency} balances efficiency and throughput."
-            )
+            recommendation["reasoning"].append(f"Batch size {opt_efficiency} balances efficiency and throughput.")
             recommendation["confidence"] = "high"
         elif opt_efficiency == opt_energy:
             recommendation["reasoning"].append(
@@ -211,9 +211,9 @@ class EfficiencyAnalyzer(BaseAnalyzer):
 
     def compare_configurations(
         self,
-        baseline_metrics: Dict[str, float],
-        current_metrics: Dict[str, float],
-    ) -> Dict[str, Any]:
+        baseline_metrics: dict[str, float],
+        current_metrics: dict[str, float],
+    ) -> dict[str, Any]:
         """Compare efficiency between two configurations.
 
         Args:
@@ -237,7 +237,7 @@ class EfficiencyAnalyzer(BaseAnalyzer):
 
         return self.calculator.compare_efficiency(baseline_eff, current_eff)
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         """Summarize all efficiency analysis results.
 
         Returns:

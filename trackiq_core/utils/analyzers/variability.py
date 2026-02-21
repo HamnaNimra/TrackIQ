@@ -1,9 +1,10 @@
 """Variability and consistency metrics analyzers."""
 
-from typing import Dict, Any, Optional, List
-from trackiq_core.utils.base import BaseAnalyzer
+from typing import Any
+
 from trackiq_core.schemas import AnalysisResult
 from trackiq_core.utils.analysis_utils import DataLoader, LatencyStats
+from trackiq_core.utils.base import BaseAnalyzer
 
 
 class VariabilityAnalyzer(BaseAnalyzer):
@@ -28,7 +29,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
       from the mean (default: 3 sigma).
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None):
         """Initialize analyzer.
 
         Args:
@@ -45,7 +46,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
         self,
         csv_filepath: str,
         latency_col: str = "latency_ms",
-        group_by: Optional[str] = None,
+        group_by: str | None = None,
     ) -> AnalysisResult:
         """Analyze variability metrics from a CSV file.
 
@@ -80,7 +81,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
 
     def analyze_from_list(
         self,
-        latencies: List[float],
+        latencies: list[float],
         name: str = "analysis",
     ) -> AnalysisResult:
         """Analyze variability metrics from a list of latencies.
@@ -102,7 +103,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
         self.add_result(result)
         return result
 
-    def _calculate_variability_metrics(self, latencies: List[float]) -> Dict[str, Any]:
+    def _calculate_variability_metrics(self, latencies: list[float]) -> dict[str, Any]:
         """Calculate all variability metrics for a list of latencies.
 
         Args:
@@ -155,7 +156,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
             "consistency_rating": consistency_rating,
         }
 
-    def summarize(self) -> Dict[str, Any]:
+    def summarize(self) -> dict[str, Any]:
         """Summarize all variability analyses.
 
         Returns:
@@ -221,9 +222,9 @@ class VariabilityAnalyzer(BaseAnalyzer):
 
     def compare_variability(
         self,
-        baseline_metrics: Dict[str, Any],
-        current_metrics: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        baseline_metrics: dict[str, Any],
+        current_metrics: dict[str, Any],
+    ) -> dict[str, Any]:
         """Compare variability metrics between two configurations.
 
         Args:
@@ -244,9 +245,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
 
         # Calculate percentage changes (negative = improvement for variability metrics)
         cv_change = ((current_cv - baseline_cv) / baseline_cv * 100) if baseline_cv > 0 else 0.0
-        jitter_change = (
-            (current_jitter - baseline_jitter) / baseline_jitter * 100
-        ) if baseline_jitter > 0 else 0.0
+        jitter_change = ((current_jitter - baseline_jitter) / baseline_jitter * 100) if baseline_jitter > 0 else 0.0
 
         return {
             "cv_change_percent": cv_change,
@@ -255,10 +254,7 @@ class VariabilityAnalyzer(BaseAnalyzer):
             "is_more_consistent": current_cv < baseline_cv,
             "is_less_jittery": current_jitter < baseline_jitter,
             "has_fewer_outliers": current_outliers < baseline_outliers,
-            "overall_improvement": (
-                current_cv < baseline_cv
-                and current_jitter < baseline_jitter
-            ),
+            "overall_improvement": (current_cv < baseline_cv and current_jitter < baseline_jitter),
             "baseline": {
                 "cv": baseline_cv,
                 "jitter": baseline_jitter,

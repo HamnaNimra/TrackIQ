@@ -4,9 +4,11 @@ import base64
 import io
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import matplotlib.pyplot as plt
+
+
 class HTMLReportGenerator:
     """Generate interactive HTML reports from performance analysis."""
 
@@ -26,13 +28,13 @@ class HTMLReportGenerator:
         self.title = title
         self.author = author
         self.theme = theme
-        self.figures: List[Dict[str, Any]] = []
-        self.metadata: Dict[str, Any] = {}
-        self.sections: List[Dict[str, Any]] = []
-        self.summary_items: List[Dict[str, Any]] = []
-        self.tables: List[Dict[str, Any]] = []
-        self.interactive_charts: List[Dict[str, Any]] = []
-        self.html_figures: List[Dict[str, Any]] = []
+        self.figures: list[dict[str, Any]] = []
+        self.metadata: dict[str, Any] = {}
+        self.sections: list[dict[str, Any]] = []
+        self.summary_items: list[dict[str, Any]] = []
+        self.tables: list[dict[str, Any]] = []
+        self.interactive_charts: list[dict[str, Any]] = []
+        self.html_figures: list[dict[str, Any]] = []
         self._chart_id_counter = 0
 
     def add_html_figure(
@@ -64,8 +66,8 @@ class HTMLReportGenerator:
 
     def add_multi_run_comparison(
         self,
-        runs: List[Dict[str, Any]],
-        run_names: Optional[List[str]] = None,
+        runs: list[dict[str, Any]],
+        run_names: list[str] | None = None,
         section: str = "Comparative Analysis",
         description: str = "Side-by-side comparison across multiple runs.",
         chart_engine: str = "plotly",
@@ -83,23 +85,20 @@ class HTMLReportGenerator:
             return
 
         if run_names is None:
-            run_names = [
-                r.get("run_label") or r.get("collector_name") or f"Run {i+1}"
-                for i, r in enumerate(runs)
-            ]
+            run_names = [r.get("run_label") or r.get("collector_name") or f"Run {i+1}" for i, r in enumerate(runs)]
         elif len(run_names) != len(runs):
             padded = list(run_names)
             for i in range(len(padded), len(runs)):
                 padded.append(f"Run {i+1}")
             run_names = padded[: len(runs)]
 
-        def _float_or_none(value: Any) -> Optional[float]:
+        def _float_or_none(value: Any) -> float | None:
             try:
                 return float(value)
             except (TypeError, ValueError):
                 return None
 
-        def _format_cell(value: Any, digits: Optional[int] = None) -> str:
+        def _format_cell(value: Any, digits: int | None = None) -> str:
             if value is None or value == "":
                 return "-"
             try:
@@ -112,11 +111,11 @@ class HTMLReportGenerator:
                 return str(num)
             return f"{num:.{digits}f}"
 
-        latency_p50: List[Optional[float]] = []
-        latency_p95: List[Optional[float]] = []
-        latency_p99: List[Optional[float]] = []
-        throughput_mean: List[Optional[float]] = []
-        comparison_rows: List[List[Any]] = []
+        latency_p50: list[float | None] = []
+        latency_p95: list[float | None] = []
+        latency_p99: list[float | None] = []
+        throughput_mean: list[float | None] = []
+        comparison_rows: list[list[Any]] = []
 
         for i, run in enumerate(runs):
             summary = run.get("summary", {}) or {}
@@ -205,9 +204,7 @@ class HTMLReportGenerator:
                     used_plotly = True
 
         if chart_engine == "chartjs" or not used_plotly:
-            has_latency = any(
-                v is not None for v in latency_p50 + latency_p95 + latency_p99
-            )
+            has_latency = any(v is not None for v in latency_p50 + latency_p95 + latency_p99)
             has_thr = any(v is not None for v in throughput_mean)
             if has_latency:
                 _ensure_section()
@@ -292,7 +289,7 @@ class HTMLReportGenerator:
     def add_figures_from_visualizer(
         self,
         visualizer,
-        captions: Optional[List[str]] = None,
+        captions: list[str] | None = None,
         section: str = "General",
     ) -> None:
         """Add all figures from a PerformanceVisualizer.
@@ -342,8 +339,8 @@ class HTMLReportGenerator:
     def add_table(
         self,
         title: str,
-        headers: List[str],
-        rows: List[List[Any]],
+        headers: list[str],
+        rows: list[list[Any]],
         section: str = "General",
     ) -> None:
         """Add a data table to the report.
@@ -370,8 +367,8 @@ class HTMLReportGenerator:
 
     def add_interactive_line_chart(
         self,
-        labels: List[str],
-        datasets: List[Dict[str, Any]],
+        labels: list[str],
+        datasets: list[dict[str, Any]],
         title: str = "",
         section: str = "General",
         description: str = "",
@@ -408,8 +405,8 @@ class HTMLReportGenerator:
 
     def add_interactive_bar_chart(
         self,
-        labels: List[str],
-        datasets: List[Dict[str, Any]],
+        labels: list[str],
+        datasets: list[dict[str, Any]],
         title: str = "",
         section: str = "General",
         description: str = "",
@@ -449,7 +446,7 @@ class HTMLReportGenerator:
 
     def add_interactive_scatter_chart(
         self,
-        datasets: List[Dict[str, Any]],
+        datasets: list[dict[str, Any]],
         title: str = "",
         section: str = "General",
         description: str = "",
@@ -485,12 +482,12 @@ class HTMLReportGenerator:
 
     def add_interactive_pie_chart(
         self,
-        labels: List[str],
-        data: List[float],
+        labels: list[str],
+        data: list[float],
         title: str = "",
         section: str = "General",
         description: str = "",
-        colors: Optional[List[str]] = None,
+        colors: list[str] | None = None,
         doughnut: bool = False,
     ) -> None:
         """Add an interactive pie/doughnut chart with hover values.
@@ -517,9 +514,7 @@ class HTMLReportGenerator:
             }
         )
 
-    def _fig_to_base64(
-        self, fig: plt.Figure, format: str = "png", dpi: int = 150
-    ) -> str:
+    def _fig_to_base64(self, fig: plt.Figure, format: str = "png", dpi: int = 150) -> str:
         """Convert matplotlib figure to base64 string.
 
         Args:
@@ -1118,7 +1113,7 @@ class HTMLReportGenerator:
         }}
         """
 
-    def _generate_nav_html(self, section_names: List[str]) -> str:
+    def _generate_nav_html(self, section_names: list[str]) -> str:
         """Generate navigation HTML.
 
         Args:
@@ -1161,17 +1156,13 @@ class HTMLReportGenerator:
         cards_html = []
         for item in self.summary_items:
             status_class = item.get("status", "neutral")
-            unit_html = (
-                f'<span class="unit">{item["unit"]}</span>' if item.get("unit") else ""
-            )
-            cards_html.append(
-                f"""
+            unit_html = f'<span class="unit">{item["unit"]}</span>' if item.get("unit") else ""
+            cards_html.append(f"""
             <div class="summary-card {status_class}">
                 <div class="label">{item['label']}</div>
                 <div class="value">{item['value']}{unit_html}</div>
             </div>
-            """
-            )
+            """)
 
         return f"""
         <section class="section" id="summary">
@@ -1187,7 +1178,7 @@ class HTMLReportGenerator:
         </section>
         """
 
-    def _generate_figures_html(self, figures: List[Dict], section_name: str) -> str:
+    def _generate_figures_html(self, figures: list[dict], section_name: str) -> str:
         """Generate figures HTML for a section.
 
         Args:
@@ -1207,8 +1198,7 @@ class HTMLReportGenerator:
             description = fig_data.get("description", "")
 
             desc_html = f"<p>{description}</p>" if description else ""
-            figure_cards.append(
-                f"""
+            figure_cards.append(f"""
             <div class="figure-card">
                 <img src="data:image/png;base64,{img_base64}" alt="{caption}">
                 <div class="figure-caption">
@@ -1216,8 +1206,7 @@ class HTMLReportGenerator:
                     {desc_html}
                 </div>
             </div>
-            """
-            )
+            """)
 
         return f"""
         <div class="figure-grid">
@@ -1225,7 +1214,7 @@ class HTMLReportGenerator:
         </div>
         """
 
-    def _generate_html_figures_html(self, html_figures_list: List[Dict]) -> str:
+    def _generate_html_figures_html(self, html_figures_list: list[dict]) -> str:
         """Generate HTML for pre-rendered HTML figure fragments (e.g. Plotly).
 
         Args:
@@ -1243,8 +1232,7 @@ class HTMLReportGenerator:
             caption = fig_data.get("caption", "")
             description = fig_data.get("description", "")
             desc_html = f"<p>{description}</p>" if description else ""
-            figure_cards.append(
-                f"""
+            figure_cards.append(f"""
             <div class="figure-card">
                 <div class="figure-html">
                     {html_content}
@@ -1254,8 +1242,7 @@ class HTMLReportGenerator:
                     {desc_html}
                 </div>
             </div>
-            """
-            )
+            """)
 
         return f"""
         <div class="figure-grid">
@@ -1263,7 +1250,7 @@ class HTMLReportGenerator:
         </div>
         """
 
-    def _generate_tables_html(self, tables: List[Dict]) -> str:
+    def _generate_tables_html(self, tables: list[dict]) -> str:
         """Generate tables HTML.
 
         Args:
@@ -1283,8 +1270,7 @@ class HTMLReportGenerator:
                 cells = "".join(f"<td>{cell}</td>" for cell in row)
                 rows_html += f"<tr>{cells}</tr>"
 
-            tables_html.append(
-                f"""
+            tables_html.append(f"""
             <div class="table-container">
                 <h4 class="table-title">{table['title']}</h4>
                 <table>
@@ -1296,8 +1282,7 @@ class HTMLReportGenerator:
                     </tbody>
                 </table>
             </div>
-            """
-            )
+            """)
 
         return "".join(tables_html)
 
@@ -1316,9 +1301,7 @@ class HTMLReportGenerator:
         ]
 
         for key, value in self.metadata.items():
-            meta_items.append(
-                f"<tr><td><strong>{key}</strong></td><td>{value}</td></tr>"
-            )
+            meta_items.append(f"<tr><td><strong>{key}</strong></td><td>{value}</td></tr>")
 
         return f"""
         <section class="section" id="metadata">
@@ -1336,7 +1319,7 @@ class HTMLReportGenerator:
         </section>
         """
 
-    def _generate_interactive_charts_html(self, charts: List[Dict]) -> str:
+    def _generate_interactive_charts_html(self, charts: list[dict]) -> str:
         """Generate HTML for interactive charts in a section.
 
         Args:
@@ -1355,25 +1338,20 @@ class HTMLReportGenerator:
             description = chart.get("description", "")
             enable_zoom = chart.get("enable_zoom", False)
 
-            desc_html = (
-                f'<p class="chart-description">{description}</p>' if description else ""
-            )
+            desc_html = f'<p class="chart-description">{description}</p>' if description else ""
 
             # Add zoom controls for supported chart types
             zoom_controls = ""
             zoom_info = ""
             if enable_zoom and chart["type"] in ("line", "scatter"):
-                zoom_controls = """
+                zoom_controls = f"""
                 <div class="chart-controls">
-                    <button class="chart-btn" onclick="resetZoom('{id}')">Reset Zoom</button>
+                    <button class="chart-btn" onclick="resetZoom('{chart_id}')">Reset Zoom</button>
                 </div>
-                """.format(
-                    id=chart_id
-                )
+                """
                 zoom_info = '<p class="zoom-info">Scroll to zoom, drag to pan</p>'
 
-            chart_cards.append(
-                f"""
+            chart_cards.append(f"""
             <div class="chart-card">
                 <div class="chart-header">
                     <h4 class="chart-title">{title}</h4>
@@ -1385,8 +1363,7 @@ class HTMLReportGenerator:
                 {desc_html}
                 {zoom_info}
             </div>
-            """
-            )
+            """)
 
         return f"""
         <div class="chart-grid">
@@ -1394,7 +1371,7 @@ class HTMLReportGenerator:
         </div>
         """
 
-    def _get_chart_color_palette(self) -> List[str]:
+    def _get_chart_color_palette(self) -> list[str]:
         """Get color palette for charts based on theme."""
         if self.theme == "dark":
             return [
@@ -1419,7 +1396,7 @@ class HTMLReportGenerator:
                 "rgba(237, 100, 166, 0.8)",  # Pink
             ]
 
-    def _generate_chartjs_config(self, chart: Dict) -> str:
+    def _generate_chartjs_config(self, chart: dict) -> str:
         """Generate Chart.js configuration for a chart.
 
         Args:
@@ -1626,9 +1603,7 @@ class HTMLReportGenerator:
                             "data": chart.get("data", []),
                             "backgroundColor": chart_colors,
                             "borderWidth": 2,
-                            "borderColor": (
-                                "#fff" if self.theme == "light" else "#16213e"
-                            ),
+                            "borderColor": ("#fff" if self.theme == "light" else "#16213e"),
                         }
                     ],
                 },
@@ -1748,7 +1723,7 @@ class HTMLReportGenerator:
         )
 
         # Organize figures by section
-        section_figures: Dict[str, List[Dict]] = {}
+        section_figures: dict[str, list[dict]] = {}
         for fig in self.figures:
             section = fig.get("section", "General")
             if section not in section_figures:
@@ -1756,7 +1731,7 @@ class HTMLReportGenerator:
             section_figures[section].append(fig)
 
         # Organize HTML figures by section (e.g. Plotly)
-        section_html_figures: Dict[str, List[Dict]] = {}
+        section_html_figures: dict[str, list[dict]] = {}
         for fig in self.html_figures:
             section = fig.get("section", "General")
             if section not in section_html_figures:
@@ -1764,7 +1739,7 @@ class HTMLReportGenerator:
             section_html_figures[section].append(fig)
 
         # Organize tables by section
-        section_tables: Dict[str, List[Dict]] = {}
+        section_tables: dict[str, list[dict]] = {}
         for table in self.tables:
             section = table.get("section", "General")
             if section not in section_tables:
@@ -1772,7 +1747,7 @@ class HTMLReportGenerator:
             section_tables[section].append(table)
 
         # Organize interactive charts by section
-        section_charts: Dict[str, List[Dict]] = {}
+        section_charts: dict[str, list[dict]] = {}
         for chart in self.interactive_charts:
             section = chart.get("section", "General")
             if section not in section_charts:
@@ -1828,19 +1803,12 @@ class HTMLReportGenerator:
                 section_figures.get(section_name, []),
                 section_name,
             )
-            html_figures_html = self._generate_html_figures_html(
-                section_html_figures.get(section_name, [])
-            )
-            tables_html = self._generate_tables_html(
-                section_tables.get(section_name, [])
-            )
-            charts_html = self._generate_interactive_charts_html(
-                section_charts.get(section_name, [])
-            )
+            html_figures_html = self._generate_html_figures_html(section_html_figures.get(section_name, []))
+            tables_html = self._generate_tables_html(section_tables.get(section_name, []))
+            charts_html = self._generate_interactive_charts_html(section_charts.get(section_name, []))
 
             if figures_html or html_figures_html or tables_html or charts_html:
-                sections_html.append(
-                    f"""
+                sections_html.append(f"""
                 <section class="section" id="{anchor}">
                     <div class="section-header">
                         <h2>{section_name}</h2>
@@ -1853,15 +1821,12 @@ class HTMLReportGenerator:
                         {tables_html}
                     </div>
                 </section>
-                """
-                )
+                """)
 
         # Generate meta items for header
         meta_html = ""
         for key, value in list(self.metadata.items())[:4]:  # Show first 4 in header
-            meta_html += (
-                f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
-            )
+            meta_html += f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
-import json
-from typing import List, Union
 
 from trackiq_core.hardware.devices import get_all_devices
 from trackiq_core.schema import TrackiqResult
-from trackiq_core.ui.components import DevicePanel, ResultBrowser
+from trackiq_core.ui.components import DevicePanel, ResultBrowser, RunHistoryLoader, TrendChart
 from trackiq_core.ui.theme import DARK_THEME, LIGHT_THEME, TrackiqTheme
 
 
@@ -19,7 +18,7 @@ class TrackiqDashboard(ABC):
 
     def __init__(
         self,
-        result: Union[TrackiqResult, List[TrackiqResult]],
+        result: TrackiqResult | list[TrackiqResult],
         theme: TrackiqTheme = DARK_THEME,
         title: str = "TrackIQ Dashboard",
     ) -> None:
@@ -31,6 +30,17 @@ class TrackiqDashboard(ABC):
         if isinstance(self.result, list):
             return self.result[0]
         return self.result
+
+    def expected_tool_names(self) -> list[str] | None:
+        """Return allowed tool names for browser-loaded results, or None for any."""
+        return None
+
+    def _is_result_compatible(self, result: TrackiqResult) -> bool:
+        allowed = self.expected_tool_names()
+        if not allowed:
+            return True
+        normalized_allowed = {str(item).strip().lower() for item in allowed}
+        return str(result.tool_name).strip().lower() in normalized_allowed
 
     def configure_page(self) -> None:
         """Configure Streamlit page metadata."""
@@ -71,9 +81,7 @@ class TrackiqDashboard(ABC):
         with col_toggle:
             is_dark = st.session_state["theme"] == DARK_THEME.name
             if st.button("Theme", use_container_width=True, key="trackiq_theme_toggle"):
-                st.session_state["theme"] = (
-                    LIGHT_THEME.name if is_dark else DARK_THEME.name
-                )
+                st.session_state["theme"] = LIGHT_THEME.name if is_dark else DARK_THEME.name
             st.caption(st.session_state.get("clock", ""))
 
     def render_result_browser(self) -> None:
@@ -81,13 +89,27 @@ class TrackiqDashboard(ABC):
         import streamlit as st
 
         with st.expander("Load Result", expanded=False):
-            ResultBrowser(theme=self.theme).render()
+            ResultBrowser(
+                theme=self.theme,
+                allowed_tools=self.expected_tool_names(),
+            ).render()
+
+    def render_trend_section(
+        self,
+        history_dir: str,
+        metric_names: list[str] | None = None,
+        min_runs: int = 2,
+    ) -> None:
+        """Render metric trends from a directory of TrackiqResult files."""
+        history = RunHistoryLoader(history_dir=history_dir).load()
+        if len(history) < min_runs:
+            return
+        TrendChart(results=history, metric_names=metric_names, theme=self.theme).render()
 
     def _build_html_report(self, result: TrackiqResult) -> str:
         """Build a lightweight self-contained HTML report for a single result."""
         metric_rows = "".join(
-            f"<tr><td>{name}</td><td>{value}</td></tr>"
-            for name, value in result.metrics.__dict__.items()
+            f"<tr><td>{name}</td><td>{value}</td></tr>" for name, value in result.metrics.__dict__.items()
         )
         return (
             "<!doctype html><html><head><meta charset='utf-8'/>"
@@ -189,7 +211,13 @@ class TrackiqDashboard(ABC):
 
         loaded_result = st.session_state.get("loaded_result")
         if loaded_result is not None and not isinstance(self.result, list):
-            self.result = loaded_result
+            if isinstance(loaded_result, TrackiqResult) and self._is_result_compatible(loaded_result):
+                self.result = loaded_result
+            elif isinstance(loaded_result, TrackiqResult):
+                st.session_state.pop("loaded_result", None)
+                st.session_state.pop("loaded_result_path", None)
+                with st.sidebar:
+                    st.warning(f"Ignored loaded result for tool '{loaded_result.tool_name}' in this dashboard.")
 
         result = self._primary_result()
         with st.sidebar:
@@ -212,9 +240,7 @@ class TrackiqDashboard(ABC):
         except PackageNotFoundError:
             pkg_version = "dev"
         st.markdown("---")
-        st.markdown(
-            f"TrackIQ Core `{pkg_version}` | [Repository](https://github.com/HamnaNimra/trackiq)"
-        )
+        st.markdown(f"TrackIQ Core `{pkg_version}` | [Repository](https://github.com/HamnaNimra/trackiq)")
 
     def apply_theme(self, theme: TrackiqTheme) -> None:
         """Apply a CSS theme to the current Streamlit app."""
@@ -313,11 +339,7 @@ class TrackiqDashboard(ABC):
         import streamlit as st
 
         self.configure_page()
-        active_theme = (
-            LIGHT_THEME
-            if st.session_state.get("theme", self.theme.name) == LIGHT_THEME.name
-            else DARK_THEME
-        )
+        active_theme = LIGHT_THEME if st.session_state.get("theme", self.theme.name) == LIGHT_THEME.name else DARK_THEME
         self.apply_theme(active_theme)
         self.render_header()
         self.render_sidebar()
