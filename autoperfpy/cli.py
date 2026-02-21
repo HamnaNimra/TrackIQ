@@ -27,7 +27,7 @@ from autoperfpy.device_config import (
     InferenceConfig,
     resolve_device,
 )
-from autoperfpy.profiles import ProfileValidationError
+from autoperfpy.profiles import ProfileValidationError, list_profiles
 from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
 from trackiq_core.hardware import DeviceProfile
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError

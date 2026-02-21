@@ -242,15 +242,22 @@ def create_latency_histogram(
     if not PLOTLY_AVAILABLE or "latency_ms" not in df.columns:
         return None
 
-    plot_df = df
-    if exclude_warmup and "is_warmup" in df.columns:
-        plot_df = df[~df["is_warmup"]]
+    used_warmup_filter = bool(exclude_warmup and "is_warmup" in df.columns)
+    plot_df = df[~df["is_warmup"]] if used_warmup_filter else df
+    if used_warmup_filter and len(plot_df["latency_ms"].dropna()) == 0:
+        # Fall back to all samples when warmup filtering removes all chartable points.
+        plot_df = df
+        used_warmup_filter = False
+
+    plot_df = plot_df.dropna(subset=["latency_ms"])
+    if len(plot_df) == 0:
+        return None
 
     fig = px.histogram(
         plot_df,
         x="latency_ms",
         nbins=nbins,
-        title="Latency Distribution (excluding warmup)",
+        title=("Latency Distribution (excluding warmup)" if used_warmup_filter else "Latency Distribution"),
         labels={"latency_ms": "Latency (ms)", "count": "Frequency"},
     )
 
@@ -548,15 +555,22 @@ def create_throughput_timeline(
     if not PLOTLY_AVAILABLE or "throughput_fps" not in df.columns:
         return None
 
-    plot_df = df
-    if exclude_warmup and "is_warmup" in df.columns:
-        plot_df = df[~df["is_warmup"]]
+    used_warmup_filter = bool(exclude_warmup and "is_warmup" in df.columns)
+    plot_df = df[~df["is_warmup"]] if used_warmup_filter else df
+    if used_warmup_filter and len(plot_df["throughput_fps"].dropna()) == 0:
+        # Fall back to all samples when warmup filtering removes all chartable points.
+        plot_df = df
+        used_warmup_filter = False
+
+    plot_df = plot_df.dropna(subset=["elapsed_seconds", "throughput_fps"])
+    if len(plot_df) == 0:
+        return None
 
     fig = px.line(
         plot_df,
         x="elapsed_seconds",
         y="throughput_fps",
-        title="Throughput Over Time (excluding warmup)",
+        title=("Throughput Over Time (excluding warmup)" if used_warmup_filter else "Throughput Over Time"),
         labels={
             "elapsed_seconds": "Time (seconds)",
             "throughput_fps": "Throughput (FPS)",
@@ -729,20 +743,25 @@ def add_interactive_charts_to_html_report(
     if "latency_ms" in df.columns and has_elapsed:
         report.add_section("Latency", section_descriptions["Latency"])
         plot_df = _downsample_for_chart(df, "elapsed_seconds", ["latency_ms"], max_points=500)
+        plot_df = plot_df.dropna(subset=["elapsed_seconds", "latency_ms"])
         labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]
-        report.add_interactive_line_chart(
-            labels=labels,
-            datasets=[{"label": "Latency", "data": plot_df["latency_ms"].tolist()}],
-            title="Latency Over Time",
-            section="Latency",
-            description="Latency (ms) vs elapsed time. Scroll to zoom, drag to pan.",
-            x_label="Time (s)",
-            y_label="Latency (ms)",
-            enable_zoom=True,
-        )
+        if len(plot_df) > 0:
+            report.add_interactive_line_chart(
+                labels=labels,
+                datasets=[{"label": "Latency", "data": plot_df["latency_ms"].tolist()}],
+                title="Latency Over Time",
+                section="Latency",
+                description="Latency (ms) vs elapsed time. Scroll to zoom, drag to pan.",
+                x_label="Time (s)",
+                y_label="Latency (ms)",
+                enable_zoom=True,
+            )
         # Latency distribution (bar)
         exclude_warmup = "is_warmup" in df.columns
         plot_df_hist = df[~df["is_warmup"]] if exclude_warmup else df
+        if exclude_warmup and len(plot_df_hist["latency_ms"].dropna()) == 0:
+            plot_df_hist = df
+            exclude_warmup = False
         plot_df_hist = plot_df_hist["latency_ms"].dropna()
         if len(plot_df_hist) > 0:
             hist, bin_edges = _histogram_bins(plot_df_hist.tolist(), nbins=20)
@@ -879,7 +898,11 @@ def add_interactive_charts_to_html_report(
     if "throughput_fps" in df.columns and has_elapsed:
         exclude_warmup = "is_warmup" in df.columns
         plot_df = df[~df["is_warmup"]] if exclude_warmup else df
+        if exclude_warmup and len(plot_df["throughput_fps"].dropna()) == 0:
+            plot_df = df
+            exclude_warmup = False
         plot_df = _downsample_for_chart(plot_df, "elapsed_seconds", ["throughput_fps"], max_points=500)
+        plot_df = plot_df.dropna(subset=["elapsed_seconds", "throughput_fps"])
         if len(plot_df) > 0:
             report.add_section("Throughput", section_descriptions["Throughput"])
             labels = [f"{x:.1f}s" for x in plot_df["elapsed_seconds"].tolist()]

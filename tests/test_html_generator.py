@@ -570,3 +570,18 @@ class TestChartsReportIntegration:
         content = out.read_text(encoding="utf-8")
         assert "Latency" in content
         assert "Summary Statistics" in content or "Key metrics" in content
+
+    def test_warmup_only_samples_fallback_keeps_charts_non_empty(self):
+        """When all samples are warmup, chart builders should fall back to full data."""
+        df, summary = self._minimal_df_summary()
+        df["is_warmup"] = True
+
+        # Plotly paths should still return figures instead of empty charts.
+        assert shared_charts.create_latency_histogram(df, summary, exclude_warmup=True) is not None
+        assert shared_charts.create_throughput_timeline(df, summary, exclude_warmup=True) is not None
+
+        # Chart.js report path should still include throughput chart.
+        report = HTMLReportGenerator(title="Warmup Fallback", author="Test", theme="light")
+        shared_charts.add_interactive_charts_to_html_report(report, df, summary)
+        titles = [chart.get("title") for chart in report.interactive_charts]
+        assert "Throughput Over Time" in titles
