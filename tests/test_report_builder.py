@@ -144,6 +144,10 @@ def test_populate_multi_run_html_report_includes_all_run_labels() -> None:
     labels = {row[0] for row in table["rows"]}
     assert "cpu_0_fp32_bs1" in labels
     assert "nvidia_0_fp16_bs4" in labels
+    metadata_table = next(item for item in report.tables if item["title"] == "Run Metadata Details")
+    metadata_rows = metadata_table["rows"]
+    assert any(row[0] == "cpu_0_fp32_bs1" and row[1] == "platform_metadata.device_name" for row in metadata_rows)
+    assert any(row[0] == "nvidia_0_fp16_bs4" and row[1] == "inference_config.precision" for row in metadata_rows)
 
 
 def test_populate_standard_html_report_adds_metadata_and_detailed_summary_tables() -> None:

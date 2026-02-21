@@ -346,12 +346,14 @@ def populate_multi_run_html_report(
     best_run_name = None
     best_run_throughput = None
     overview_rows: list[list[str]] = []
+    metadata_rows: list[list[str]] = []
     for idx, run in enumerate(valid_runs):
         run_name = str(run_names[idx])
         summary = run.get("summary", {}) if isinstance(run, dict) else {}
         latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
         throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
         power = summary.get("power", {}) if isinstance(summary, dict) else {}
+        temperature = summary.get("temperature", {}) if isinstance(summary, dict) else {}
         platform = run.get("platform_metadata", {}) if isinstance(run, dict) else {}
         inference = run.get("inference_config", {}) if isinstance(run, dict) else {}
 
@@ -376,6 +378,10 @@ def populate_multi_run_html_report(
         thr_display = f"{mean_fps:.2f}" if mean_fps is not None else "-"
         pwr_value = power.get("mean_w") if isinstance(power, dict) else None
         pwr_display = f"{float(pwr_value):.2f}" if isinstance(pwr_value, (int, float)) else "-"
+        temp_value = temperature.get("max_c") if isinstance(temperature, dict) else None
+        temp_display = f"{float(temp_value):.1f}" if isinstance(temp_value, (int, float)) else "-"
+        duration_value = summary.get("duration_seconds") if isinstance(summary, dict) else None
+        duration_display = f"{float(duration_value):.1f}" if isinstance(duration_value, (int, float)) else "-"
 
         device = ""
         if isinstance(platform, dict):
@@ -400,11 +406,22 @@ def populate_multi_run_html_report(
                 precision,
                 batch_size,
                 str(sample_count),
+                duration_display,
                 p99_display,
                 thr_display,
                 pwr_display,
+                temp_display,
             ]
         )
+
+        for source_name, payload in [
+            ("platform_metadata", platform),
+            ("inference_config", inference),
+        ]:
+            if not isinstance(payload, dict) or not payload:
+                continue
+            for key, value in _flatten_mapping(payload, max_depth=3):
+                metadata_rows.append([run_name, f"{source_name}.{key}", _format_value(value)])
 
     report.add_summary_item("Runs", len(valid_runs), "", "neutral")
     report.add_summary_item("Total Samples", total_samples, "", "neutral")
@@ -415,10 +432,29 @@ def populate_multi_run_html_report(
     report.add_section("Run Overview", "All run labels and key metrics in one consolidated table.")
     report.add_table(
         "Run Overview Table",
-        ["Run Label", "Device", "Precision", "Batch", "Samples", "P99 (ms)", "Mean Throughput (FPS)", "Mean Power (W)"],
+        [
+            "Run Label",
+            "Device",
+            "Precision",
+            "Batch",
+            "Samples",
+            "Duration (s)",
+            "P99 (ms)",
+            "Mean Throughput (FPS)",
+            "Mean Power (W)",
+            "Max Temp (C)",
+        ],
         overview_rows,
         "Run Overview",
     )
+    if metadata_rows:
+        report.add_section("Run Metadata", "Per-run platform and inference metadata from each input result.")
+        report.add_table(
+            "Run Metadata Details",
+            ["Run Label", "Field", "Value"],
+            metadata_rows,
+            "Run Metadata",
+        )
     report.add_multi_run_comparison(
         valid_runs,
         run_names=[str(name) for name in run_names],
