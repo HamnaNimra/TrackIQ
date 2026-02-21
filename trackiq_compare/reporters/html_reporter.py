@@ -4,6 +4,14 @@ from datetime import datetime, timezone
 from html import escape
 from typing import Any
 
+try:
+    import plotly.graph_objects as go
+
+    PLOTLY_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency fallback
+    go = None
+    PLOTLY_AVAILABLE = False
+
 from trackiq_compare.comparator.metric_comparator import (
     LOWER_IS_BETTER_METRICS,
     ComparisonResult,
@@ -160,6 +168,13 @@ class HtmlReporter:
       margin: 0 0 8px;
       color: var(--muted);
       font-size: 12px;
+    }}
+    .figure-html {{
+      width: 100%;
+      min-height: 320px;
+    }}
+    .figure-html .plotly-graph-div {{
+      width: 100% !important;
     }}
     .delta-row {{
       display: grid;
