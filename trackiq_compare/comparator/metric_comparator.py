@@ -1,5 +1,6 @@
 """Metric comparator for canonical TrackIQ results."""
 
+import statistics
 from dataclasses import asdict, dataclass, field
 
 from trackiq_compare.deps import TrackiqResult
@@ -39,12 +40,27 @@ class MetricComparison:
 
 
 @dataclass
+class ConsistencyFinding:
+    """Consistency regression finding derived from per-step all-reduce variance."""
+
+    code: str
+    label: str
+    status: str
+    stddev_a_ms: float
+    stddev_b_ms: float
+    increase_percent: float
+    threshold_percent: float
+    reason: str
+
+
+@dataclass
 class ComparisonResult:
     """Structured metric comparison output."""
 
     label_a: str
     label_b: str
     metrics: dict[str, MetricComparison] = field(default_factory=dict)
+    consistency_findings: list[ConsistencyFinding] = field(default_factory=list)
 
     @property
     def comparable_metrics(self) -> list[MetricComparison]:
@@ -60,9 +76,15 @@ class ComparisonResult:
 class MetricComparator:
     """Compare two TrackiqResult objects metric-by-metric."""
 
-    def __init__(self, label_a: str = "Result A", label_b: str = "Result B"):
+    def __init__(
+        self,
+        label_a: str = "Result A",
+        label_b: str = "Result B",
+        variance_threshold_percent: float = 25.0,
+    ):
         self.label_a = label_a
         self.label_b = label_b
+        self.variance_threshold_percent = float(variance_threshold_percent)
 
     def compare(self, result_a: TrackiqResult, result_b: TrackiqResult) -> ComparisonResult:
         """Compare all shared metric fields between two results."""
@@ -79,6 +101,7 @@ class MetricComparator:
             value_b = metrics_b.get(name)
             output.metrics[name] = self._compare_metric(name, value_a, value_b)
 
+        output.consistency_findings = self._consistency_findings(result_a, result_b)
         return output
 
     def _compare_metric(self, name: str, value_a: float | None, value_b: float | None) -> MetricComparison:
@@ -125,3 +148,58 @@ class MetricComparator:
             winner=winner,
             winner_margin_percent=margin,
         )
+
+    @staticmethod
+    def _extract_allreduce_series(result: TrackiqResult) -> list[float]:
+        """Extract all-reduce per-step values from canonical tool payload."""
+        payload = result.tool_payload if isinstance(result.tool_payload, dict) else {}
+        if not payload:
+            return []
+
+        explicit = payload.get("allreduce_time_ms")
+        if isinstance(explicit, list):
+            values = [float(v) for v in explicit if isinstance(v, (int, float))]
+            if values:
+                return values
+
+        steps = payload.get("steps")
+        if not isinstance(steps, list):
+            return []
+        values = [
+            float(step.get("allreduce_time_ms"))
+            for step in steps
+            if isinstance(step, dict) and isinstance(step.get("allreduce_time_ms"), (int, float))
+        ]
+        return values
+
+    def _consistency_findings(self, result_a: TrackiqResult, result_b: TrackiqResult) -> list[ConsistencyFinding]:
+        """Detect variance regressions in all-reduce consistency across runs."""
+        series_a = self._extract_allreduce_series(result_a)
+        series_b = self._extract_allreduce_series(result_b)
+        if len(series_a) < 2 or len(series_b) < 2:
+            return []
+
+        stdev_a = float(statistics.stdev(series_a))
+        stdev_b = float(statistics.stdev(series_b))
+        if stdev_a == 0.0:
+            increase_percent = float("inf") if stdev_b > 0.0 else 0.0
+        else:
+            increase_percent = ((stdev_b - stdev_a) / stdev_a) * 100.0
+
+        if stdev_b > stdev_a and increase_percent > self.variance_threshold_percent:
+            return [
+                ConsistencyFinding(
+                    code="VARIANCE_REGRESSION",
+                    label="All-Reduce Consistency Degraded",
+                    status="regression",
+                    stddev_a_ms=stdev_a,
+                    stddev_b_ms=stdev_b,
+                    increase_percent=increase_percent,
+                    threshold_percent=self.variance_threshold_percent,
+                    reason=(
+                        "All-reduce step-time variance increased beyond threshold. "
+                        "This can indicate an emerging communication straggler."
+                    ),
+                )
+            ]
+        return []
