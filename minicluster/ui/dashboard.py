@@ -288,18 +288,42 @@ class MiniClusterDashboard(TrackiqDashboard):
 
         if auto_refresh and checkpoint_path:
             reader = HealthReader(str(checkpoint_path), timeout_seconds=2.0)
-            while True:
-                checkpoint = reader.read()
-                if checkpoint is not None:
-                    local_payload = self._payload_from_checkpoint(checkpoint)
+            checkpoint = reader.read()
+            if checkpoint is not None:
+                st.session_state["minicluster_refresh_failures"] = 0
+                local_payload = self._payload_from_checkpoint(checkpoint)
                 with dynamic_container.container():
                     self._render_dynamic_sections(local_payload)
-                if checkpoint is not None and checkpoint.is_complete:
+                if checkpoint.is_complete:
                     st.success("Live run complete. Auto-refresh stopped.")
                     st.session_state["minicluster_auto_refresh"] = False
                     st.session_state["trackiq_live_indicator"] = False
-                    break
-                time.sleep(2)
+                else:
+                    st.caption("Auto-refresh active. Updating every 2 seconds.")
+                    time.sleep(2)
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:  # pragma: no cover
+                        st.experimental_rerun()
+            else:
+                failures = int(st.session_state.get("minicluster_refresh_failures", 0)) + 1
+                st.session_state["minicluster_refresh_failures"] = failures
+                if failures >= 3:
+                    st.warning(
+                        "Auto-refresh stopped: live checkpoint is unavailable. "
+                        "Use Refresh Now or disable auto-refresh."
+                    )
+                    st.session_state["minicluster_auto_refresh"] = False
+                    st.session_state["trackiq_live_indicator"] = False
+                else:
+                    st.caption("Waiting for live checkpoint...")
+                    time.sleep(2)
+                    if hasattr(st, "rerun"):
+                        st.rerun()
+                    else:  # pragma: no cover
+                        st.experimental_rerun()
+        else:
+            st.session_state["minicluster_refresh_failures"] = 0
 
         self._render_config_section(local_payload)
         self._render_training_graphs(local_payload)
