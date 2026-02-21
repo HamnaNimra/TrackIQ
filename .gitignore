@@ -85,3 +85,4 @@ debug_test_report.html
 .trackiq/
 output/
 minicluster_results/
+coverage.xml
