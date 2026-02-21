@@ -64,6 +64,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 streamlit_app.main()
             return 0
 
+        if not args.result_a or not args.result_b:
+            from trackiq_compare.ui import streamlit_app
+
+            streamlit_app.main()
+            return 0
+
         result_a_path = _validate_path(args.result_a, "--result-a")
         result_b_path = _validate_path(args.result_b, "--result-b")
         result_a = load_trackiq_result(result_a_path)
@@ -85,14 +91,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         run_dashboard(_CompareDashboardAdapter, result=[result_a, result_b])  # type: ignore[arg-type]
         return 0
     except Exception as exc:
-        # Compare mode fallback: interactive compare app when paths are omitted.
-        if args.tool == "compare" and (
-            not getattr(args, "result_a", None) or not getattr(args, "result_b", None)
-        ):
-            from trackiq_compare.ui import streamlit_app
-
-            streamlit_app.main()
-            return 0
         raise SystemExit(f"Failed to launch dashboard: {exc}") from exc
 
 
