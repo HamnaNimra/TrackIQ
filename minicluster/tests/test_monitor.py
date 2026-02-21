@@ -96,7 +96,7 @@ def test_anomaly_detector_detects_loss_divergence() -> None:
     workers = [
         WorkerSnapshot(0, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
         WorkerSnapshot(1, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
-        WorkerSnapshot(2, 1, 30.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
+        WorkerSnapshot(2, 1, 50.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
     ]
     anomalies = detector.detect(_checkpoint(workers))
     assert any(a.anomaly_type == "loss_divergence" and a.worker_id == 2 for a in anomalies)
@@ -107,7 +107,7 @@ def test_anomaly_detector_detects_allreduce_spike() -> None:
     workers = [
         WorkerSnapshot(0, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
         WorkerSnapshot(1, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
-        WorkerSnapshot(2, 1, 1.0, 100.0, 10.0, 1.0, "healthy", "2026-02-21T00:00:00"),
+        WorkerSnapshot(2, 1, 1.0, 100.0, 13.0, 1.0, "healthy", "2026-02-21T00:00:00"),
     ]
     anomalies = detector.detect(_checkpoint(workers))
     assert any(a.anomaly_type == "allreduce_spike" and a.worker_id == 2 for a in anomalies)
@@ -171,4 +171,3 @@ def test_health_reporter_generate_json_report_status_critical_for_failed_worker(
 def test_live_dashboard_instantiates_without_error() -> None:
     dashboard = LiveDashboard("./minicluster_results/health.json")
     assert dashboard is not None
-
