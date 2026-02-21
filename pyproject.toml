@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "autoperfpy"
-version = "0.1.0"
+version = "1.0"
 description = "Performance analysis and benchmarking toolkit for NVIDIA GPU platforms and LLM workloads"
 readme = "README.md"
 license = { text = "MIT" }

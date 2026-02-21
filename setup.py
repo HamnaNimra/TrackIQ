@@ -11,7 +11,7 @@ long_description = (
 
 setup(
     name="autoperfpy",
-    version="0.1.0",
+    version="1.0",
     author="Hamna Nimra",
     description="Performance analysis and benchmarking toolkit for NVIDIA GPU platforms and LLM workloads",
     long_description=long_description,

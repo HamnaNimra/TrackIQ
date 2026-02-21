@@ -694,7 +694,7 @@ def _infer_trackiq_result(
 
     return TrackiqResult(
         tool_name="autoperfpy",
-        tool_version="0.1.0",
+        tool_version="1.0",
         timestamp=datetime.utcnow(),
         platform=PlatformInfo(
             hardware_name=str(
