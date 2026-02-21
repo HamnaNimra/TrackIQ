@@ -78,6 +78,13 @@ def main() -> None:
             value=5.0,
             step=0.5,
         )
+        variance_threshold = st.slider(
+            "Variance Threshold (%)",
+            min_value=1.0,
+            max_value=200.0,
+            value=25.0,
+            step=1.0,
+        )
         load_clicked = st.button("Load Comparison", use_container_width=True)
 
     if load_clicked:
@@ -94,6 +101,7 @@ def main() -> None:
                 st.session_state["compare_label_a"] = label_a
                 st.session_state["compare_label_b"] = label_b
                 st.session_state["compare_regression_threshold"] = regression_threshold
+                st.session_state["compare_variance_threshold"] = variance_threshold
 
     a = st.session_state.get("compare_result_a")
     b = st.session_state.get("compare_result_b")
@@ -104,6 +112,7 @@ def main() -> None:
     comp = MetricComparator(
         label_a=st.session_state.get("compare_label_a", label_a),
         label_b=st.session_state.get("compare_label_b", label_b),
+        variance_threshold_percent=float(st.session_state.get("compare_variance_threshold", variance_threshold)),
     ).compare(a, b)
     summary = SummaryGenerator(
         regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold))
@@ -130,6 +139,7 @@ def main() -> None:
         label_a=st.session_state.get("compare_label_a"),
         label_b=st.session_state.get("compare_label_b"),
         regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold)),
+        variance_threshold_percent=float(st.session_state.get("compare_variance_threshold", variance_threshold)),
     )
     dash.apply_theme(dash.theme)
     dash.render_sidebar()
