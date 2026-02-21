@@ -37,7 +37,7 @@ class RegressionBadge:
                 color:white;
                 font-size:40px;
                 font-weight:700;
-                border-radius:12px;
+                border-radius:{self.theme.border_radius};
                 padding:18px;
                 text-align:center;">
                 {label}
@@ -51,4 +51,3 @@ class RegressionBadge:
             delta=f"{self.regression.delta_percent:.2f}%",
             delta_color="inverse",
         )
-
