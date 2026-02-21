@@ -193,3 +193,17 @@ def test_load_trackiq_result_backcompat_legacy_metrics_defaults_to_none(tmp_path
     loaded = load_trackiq_result(path)
     assert loaded.metrics.communication_overhead_percent is None
     assert loaded.metrics.power_consumption_watts is None
+
+
+@pytest.mark.parametrize(
+    "missing_key",
+    ["tool_name", "tool_version", "timestamp", "platform", "workload", "regression"],
+)
+def test_load_trackiq_result_missing_required_top_level_fields(tmp_path, missing_key: str) -> None:
+    """load_trackiq_result should fail fast on missing top-level contract keys."""
+    path = tmp_path / f"missing_{missing_key}.json"
+    payload = _sample_result().to_dict()
+    del payload[missing_key]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=f"Missing required field: {missing_key}"):
+        load_trackiq_result(path)
