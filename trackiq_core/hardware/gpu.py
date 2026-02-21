@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 DEFAULT_NVIDIA_SMI_TIMEOUT = 5
@@ -121,6 +122,85 @@ def get_performance_metrics(
 def _extract_float(text: str) -> Optional[float]:
     match = re.search(r"-?\d+(?:\.\d+)?", text)
     return float(match.group(0)) if match else None
+
+
+def _get_windows_cpu_temperature() -> Optional[float]:
+    """Best-effort Windows CPU temperature using optional WMI providers."""
+    # Option 1: python wmi package (optional dependency).
+    try:
+        import wmi  # type: ignore
+
+        client = wmi.WMI(namespace="root\\wmi")
+        zones = client.MSAcpi_ThermalZoneTemperature()
+        if zones:
+            raw = getattr(zones[0], "CurrentTemperature", None)
+            if raw is not None:
+                # Deci-Kelvin to Celsius.
+                return float(raw) / 10.0 - 273.15
+    except Exception:
+        pass
+
+    # Option 2: WMIC fallback when available.
+    try:
+        result = subprocess.run(
+            [
+                "wmic",
+                "/namespace:\\\\root\\wmi",
+                "PATH",
+                "MSAcpi_ThermalZoneTemperature",
+                "get",
+                "CurrentTemperature",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        values = [_extract_float(line) for line in (result.stdout or "").splitlines()]
+        values = [v for v in values if v is not None and v > 0]
+        if values:
+            return float(values[0]) / 10.0 - 273.15
+    except Exception:
+        pass
+    return None
+
+
+def _get_macos_cpu_temperature() -> Optional[float]:
+    """Best-effort macOS CPU temperature via powermetrics or osx-cpu-temp."""
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "powermetrics", "--samplers", "smc", "-n", "1"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        raw = (result.stdout or "") + "\n" + (result.stderr or "")
+        for line in raw.splitlines():
+            low = line.lower()
+            if "cpu die temperature" in low or "cpu temperature" in low:
+                value = _extract_float(line)
+                if value is not None:
+                    return value
+    except Exception:
+        pass
+
+    try:
+        if shutil.which("osx-cpu-temp") is None:
+            return None
+        out = subprocess.run(
+            ["osx-cpu-temp"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        value = _extract_float(out.stdout or "")
+        if value is not None:
+            return value
+    except Exception:
+        pass
+    return None
 
 
 def get_amd_gpu_metrics(index: int = 0) -> Optional[Dict[str, float]]:
@@ -292,6 +372,11 @@ def get_cpu_metrics() -> Optional[Dict[str, float]]:
                             break
         except Exception:
             temperature = None
+
+        if temperature is None and sys.platform.startswith("win"):
+            temperature = _get_windows_cpu_temperature()
+        if temperature is None and sys.platform == "darwin":
+            temperature = _get_macos_cpu_temperature()
         return {
             "cpu_utilization": cpu_util,
             "memory_percent": mem_percent,
