@@ -229,6 +229,14 @@ total_allreduce_time_ms       25300.000000 → 26850.000000 (+6.30%) ✗ REGRESS
 - `1`: Regressions found (exceeds thresholds)
 - `2`: Error (missing baseline, file not found)
 
+### Dashboard
+
+Launch the shared TrackIQ dashboard for a MiniCluster canonical result:
+
+```bash
+python dashboard.py --tool minicluster --result minicluster_power.json
+```
+
 ## Architecture
 
 ### Module Structure
