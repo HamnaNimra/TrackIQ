@@ -300,6 +300,32 @@ def generate_synthetic_demo_data() -> dict[str, Any]:
     }
 
 
+def build_sample_data_list() -> list[dict[str, Any]]:
+    """Build a one-click sample dataset for empty dashboard states."""
+    return [generate_synthetic_demo_data()]
+
+
+def build_run_overview_row(run: dict[str, Any]) -> dict[str, Any]:
+    """Build a normalized run overview row for UI tables."""
+    summary = run.get("summary", {}) if isinstance(run, dict) else {}
+    platform_meta = run.get("platform_metadata", {}) if isinstance(run, dict) else {}
+    inference_cfg = run.get("inference_config", {}) if isinstance(run, dict) else {}
+    latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
+    throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
+    power = summary.get("power", {}) if isinstance(summary, dict) else {}
+    return {
+        "Run": run.get("run_label") or run.get("collector_name") or "Current Run",
+        "Device": platform_meta.get("device_name") or inference_cfg.get("accelerator") or "Unknown",
+        "Precision": inference_cfg.get("precision") or "N/A",
+        "Batch Size": inference_cfg.get("batch_size") if inference_cfg.get("batch_size") is not None else "N/A",
+        "Samples": summary.get("sample_count"),
+        "Duration (s)": summary.get("duration_seconds"),
+        "P99 Latency (ms)": latency.get("p99_ms") if latency else None,
+        "Mean Throughput (FPS)": throughput.get("mean_fps") if throughput else None,
+        "Mean Power (W)": power.get("mean_w") if power else None,
+    }
+
+
 def samples_to_dataframe(samples: list[dict]) -> pd.DataFrame:
     """Convert samples list to pandas DataFrame.
 
@@ -618,6 +644,24 @@ def render_summary_metrics(data: dict[str, Any]):
         power = summary.get("power", {})
         mean_power = power.get("mean_w", "N/A")
         st.metric("Avg Power", f"{mean_power} W" if mean_power != "N/A" else "N/A")
+
+
+def render_overview_analysis(data: dict[str, Any], df: pd.DataFrame, summary: dict[str, Any]):
+    """Render first-pass overview with key metrics, one chart, and run configuration."""
+    st.subheader("Overview")
+    render_summary_metrics(data)
+    st.markdown("**Primary Signal Trend**")
+
+    fig = shared_charts.create_latency_timeline(df)
+    if fig is None:
+        fig = shared_charts.create_throughput_timeline(df, summary)
+    if fig:
+        st.plotly_chart(fig, width="stretch")
+    else:
+        st.info("No latency or throughput timeline data available.")
+
+    st.markdown("**Run Configuration**")
+    st.dataframe(pd.DataFrame([build_run_overview_row(data)]), width="stretch", hide_index=True)
 
 
 def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -1278,6 +1322,12 @@ def main():
         else:
             st.info("Please upload a data file or select Demo Data to get started")
 
+        if st.button("Load sample data", key="load_sample_data_empty_state"):
+            data_list = build_sample_data_list()
+            st.session_state["data_list"] = data_list
+            st.success("Loaded sample data.")
+
+    if not data_list:
         st.markdown("""
         ### Supported Data Formats
 
@@ -1359,14 +1409,10 @@ def main():
 
     st.divider()
 
-    # Summary metrics
-    render_summary_metrics(data)
-
-    st.divider()
-
     # Tabs for different analyses
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
+            "Overview",
             "Latency",
             "Utilization",
             "Power & Thermal",
@@ -1374,6 +1420,9 @@ def main():
             "Throughput",
         ]
     )
+
+    with tab0:
+        render_overview_analysis(data, display_df, summary)
 
     with tab1:
         render_latency_analysis(display_df, summary)
