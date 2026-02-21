@@ -8,6 +8,7 @@ from trackiq_core.ui.components.power_gauge import PowerGauge
 from trackiq_core.ui.components.comparison_table import ComparisonTable
 from trackiq_core.ui.components.device_panel import DevicePanel
 from trackiq_core.ui.components.result_browser import ResultBrowser
+from trackiq_core.ui.components.trend_chart import RunHistoryLoader, TrendChart
 
 __all__ = [
     "MetricTable",
@@ -18,4 +19,6 @@ __all__ = [
     "ComparisonTable",
     "DevicePanel",
     "ResultBrowser",
+    "RunHistoryLoader",
+    "TrendChart",
 ]

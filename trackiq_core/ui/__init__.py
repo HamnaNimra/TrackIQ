@@ -12,6 +12,8 @@ from trackiq_core.ui.components import (
     ComparisonTable,
     DevicePanel,
     ResultBrowser,
+    RunHistoryLoader,
+    TrendChart,
 )
 
 __all__ = [
@@ -28,4 +30,6 @@ __all__ = [
     "ComparisonTable",
     "DevicePanel",
     "ResultBrowser",
+    "RunHistoryLoader",
+    "TrendChart",
 ]
