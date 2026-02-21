@@ -759,306 +759,54 @@ def _write_result_to_csv(result: dict, path: str) -> bool:
 
 def run_analyze_latency(args, config):
     """Run latency analysis."""
-    csv_path = getattr(args, "csv", None)
-    cleanup_paths = []
-    if not csv_path:
-        print("No --csv provided; running a quick benchmark to generate data...")
-        try:
-            _, csv_path, json_path = _run_default_benchmark(
-                device_id=getattr(args, "device", None),
-                duration_seconds=getattr(args, "duration", 10),
-            )
-            if json_path:
-                cleanup_paths.append(json_path)
-            if not csv_path:
-                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
-                return None
-            cleanup_paths.append(csv_path)
-        except (HardwareNotFoundError, DependencyError) as e:
-            print(f"❌ Error: {e}", file=sys.stderr)
-            return None
-    try:
-        analyzer = PercentileLatencyAnalyzer(config)
-        result = analyzer.analyze(csv_path)
-
-        print("\n📊 Percentile Latency Analysis")
-        print("=" * 60)
-        for key, metrics in result.metrics.items():
-            print(f"\n{key}:")
-            print(f"  P99: {metrics.get('p99', 0):.2f}ms")
-            print(f"  P95: {metrics.get('p95', 0):.2f}ms")
-            print(f"  P50: {metrics.get('p50', 0):.2f}ms")
-            print(f"  Mean: {metrics.get('mean', 0):.2f}ms ± {metrics.get('std', 0):.2f}ms")
-
-        return result
-    finally:
-        for p in cleanup_paths:
-            try:
-                if p and os.path.exists(p):
-                    os.unlink(p)
-            except OSError:
-                pass
+    return _cmd_run_analyze_latency(
+        args,
+        config,
+        run_default_benchmark=_run_default_benchmark,
+    )
 
 
 def run_analyze_logs(args, config):
     """Run log analysis."""
-    analyzer = LogAnalyzer(config)
-    result = analyzer.analyze(args.log, args.threshold)
-
-    print("\n📋 Log Analysis")
-    print("=" * 60)
-    print(f"Threshold: {result.metrics['threshold_ms']}ms")
-    print(f"Total events: {result.metrics['total_events']}")
-    print(f"Spike events: {result.metrics['spike_events']}")
-    print(f"Spike percentage: {result.metrics['spike_percentage']:.2f}%")
-
-    return result
+    return _cmd_run_analyze_logs(args, config)
 
 
 def run_analyze_dnn_pipeline(args, config):
     """Run DNN pipeline analysis."""
-    analyzer_config = {
-        "top_n_layers": args.top_layers,
-    }
-    analyzer = DNNPipelineAnalyzer(config=analyzer_config)
-
-    if args.csv:
-        result = analyzer.analyze_layer_csv(args.csv, batch_size=args.batch_size)
-    elif args.profiler:
-        with open(args.profiler) as f:
-            content = f.read()
-        result = analyzer.analyze_profiler_output(content)
-    else:
-        print("❌ Error: Either --csv or --profiler must be specified")
-        return None
-
-    print("\n🧠 DNN Pipeline Analysis")
-    print("=" * 60)
-    metrics = result.metrics
-
-    print(f"\nSource: {metrics.get('source', 'unknown')}")
-    print(f"Batch Size: {metrics.get('batch_size', 1)}")
-    print(f"Number of Layers: {metrics.get('num_layers', 0)}")
-
-    timing = metrics.get("timing", {})
-    print("\n⏱️  Timing:")
-    print(f"  Total Time: {timing.get('total_time_ms', timing.get('avg_total_ms', 0)):.2f}ms")
-    print(f"  GPU Time: {timing.get('gpu_time_ms', 0):.2f}ms")
-    print(f"  DLA Time: {timing.get('dla_time_ms', 0):.2f}ms")
-
-    device_split = metrics.get("device_split", {})
-    print("\n📊 Device Split:")
-    print(f"  GPU: {device_split.get('gpu_percentage', 0):.1f}%")
-    print(f"  DLA: {device_split.get('dla_percentage', 0):.1f}%")
-
-    throughput = metrics.get("throughput_fps", metrics.get("throughput", {}).get("avg_fps", 0))
-    print(f"\n🚀 Throughput: {throughput:.1f} FPS")
-
-    slowest = metrics.get("slowest_layers", [])
-    if slowest:
-        print("\n🐢 Slowest Layers:")
-        for layer in slowest[:5]:
-            name = layer.get("name", "unknown")
-            time_ms = layer.get("time_ms", layer.get("avg_time_ms", 0))
-            device = layer.get("device", "GPU")
-            print(f"  {name}: {time_ms:.2f}ms ({device})")
-
-    recommendations = metrics.get("recommendations", [])
-    if recommendations:
-        print("\n💡 Recommendations:")
-        for rec in recommendations:
-            print(f"  • {rec}")
-
-    return result
+    return _cmd_run_analyze_dnn_pipeline(args, config)
 
 
 def run_analyze_tegrastats(args, _config):
     """Run tegrastats analysis."""
-    analyzer = TegrastatsAnalyzer(config={"throttle_temp_c": getattr(args, "throttle_threshold", 85.0)})
-    result = analyzer.analyze(args.log)
-
-    print("\n📊 Tegrastats Analysis")
-    print("=" * 60)
-    metrics = result.metrics
-
-    print(f"\nSamples Analyzed: {metrics.get('num_samples', 0)}")
-
-    # CPU metrics
-    cpu = metrics.get("cpu", {})
-    print("\n🖥️  CPU:")
-    print(f"  Average Utilization: {cpu.get('avg_utilization', 0):.1f}%")
-    print(f"  Max Utilization: {cpu.get('max_utilization', 0):.1f}%")
-
-    # GPU metrics
-    gpu = metrics.get("gpu", {})
-    print("\n🎮 GPU:")
-    print(f"  Average Utilization: {gpu.get('avg_utilization', 0):.1f}%")
-    print(f"  Max Utilization: {gpu.get('max_utilization', 0):.1f}%")
-    print(f"  Average Frequency: {gpu.get('avg_frequency_mhz', 0):.0f} MHz")
-
-    # Memory metrics
-    memory = metrics.get("memory", {})
-    print("\n💾 Memory:")
-    print(f"  Average Used: {memory.get('avg_used_mb', 0):.0f} MB")
-    print(f"  Max Used: {memory.get('max_used_mb', 0):.0f} MB")
-
-    # Thermal metrics
-    thermal = metrics.get("thermal", {})
-    print("\n🌡️  Thermal:")
-    print(f"  Average Temperature: {thermal.get('avg_temperature', 0):.1f}°C")
-    print(f"  Max Temperature: {thermal.get('max_temperature', 0):.1f}°C")
-    print(f"  Throttling Events: {thermal.get('throttle_events', 0)}")
-
-    # Health status
-    health = metrics.get("health", {})
-    status = health.get("status", "unknown")
-    status_emoji = "✅" if status == "healthy" else "⚠️" if status == "warning" else "❌"
-    print(f"\n{status_emoji} Health Status: {status.upper()}")
-
-    warnings = health.get("warnings", [])
-    if warnings:
-        print("  Warnings:")
-        for warning in warnings:
-            print(f"    • {warning}")
-
-    return result
+    return _cmd_run_analyze_tegrastats(args, _config)
 
 
 def run_analyze_efficiency(args, config):
     """Run efficiency analysis."""
-    csv_path = getattr(args, "csv", None)
-    cleanup_paths = []
-    if not csv_path:
-        print("No --csv provided; running a quick benchmark to generate data...")
-        try:
-            _, csv_path, json_path = _run_default_benchmark(
-                device_id=getattr(args, "device", None),
-                duration_seconds=getattr(args, "duration", 10),
-            )
-            if json_path:
-                cleanup_paths.append(json_path)
-            if not csv_path:
-                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
-                return None
-            cleanup_paths.append(csv_path)
-        except (HardwareNotFoundError, DependencyError) as e:
-            print(f"❌ Error: {e}", file=sys.stderr)
-            return None
-    try:
-        analyzer = EfficiencyAnalyzer(config)
-        result = analyzer.analyze(csv_path)
-
-        print("\n⚡ Efficiency Analysis")
-        print("=" * 60)
-        metrics = result.metrics
-
-        for workload, data in metrics.items():
-            if isinstance(data, dict):
-                print(f"\n{workload}:")
-                print(f"  Performance/Watt: {data.get('perf_per_watt', 0):.2f} infer/s/W")
-                print(f"  Energy/Inference: {data.get('energy_per_inference_j', 0):.4f} J")
-                print(f"  Throughput: {data.get('throughput_fps', 0):.1f} FPS")
-                print(f"  Average Power: {data.get('avg_power_w', 0):.1f} W")
-
-        return result
-    finally:
-        for p in cleanup_paths:
-            try:
-                if p and os.path.exists(p):
-                    os.unlink(p)
-            except OSError:
-                pass
+    return _cmd_run_analyze_efficiency(
+        args,
+        config,
+        run_default_benchmark=_run_default_benchmark,
+    )
 
 
 def run_analyze_variability(args, config):
     """Run variability analysis."""
-    csv_path = getattr(args, "csv", None)
-    cleanup_paths = []
-    if not csv_path:
-        print("No --csv provided; running a quick benchmark to generate data...")
-        try:
-            _, csv_path, json_path = _run_default_benchmark(
-                device_id=getattr(args, "device", None),
-                duration_seconds=getattr(args, "duration", 10),
-            )
-            if json_path:
-                cleanup_paths.append(json_path)
-            if not csv_path:
-                print("❌ Error: Could not generate benchmark CSV", file=sys.stderr)
-                return None
-            cleanup_paths.append(csv_path)
-        except (HardwareNotFoundError, DependencyError) as e:
-            print(f"❌ Error: {e}", file=sys.stderr)
-            return None
-    try:
-        analyzer = VariabilityAnalyzer(config)
-        result = analyzer.analyze(csv_path, latency_column=args.column)
-
-        print("\n📈 Variability Analysis")
-        print("=" * 60)
-        metrics = result.metrics
-
-        print(f"\nCoefficient of Variation: {metrics.get('cv_percent', 0):.2f}%")
-        print(f"Jitter (Std Dev): {metrics.get('jitter_ms', 0):.2f}ms")
-        print(f"IQR: {metrics.get('iqr_ms', 0):.2f}ms")
-        print(f"Outliers: {metrics.get('outlier_count', 0)}")
-        print(f"Consistency Rating: {metrics.get('consistency_rating', 'unknown')}")
-
-        print("\n📊 Percentiles:")
-        print(f"  P50: {metrics.get('p50_ms', 0):.2f}ms")
-        print(f"  P95: {metrics.get('p95_ms', 0):.2f}ms")
-        print(f"  P99: {metrics.get('p99_ms', 0):.2f}ms")
-
-        return result
-    finally:
-        for p in cleanup_paths:
-            try:
-                if p and os.path.exists(p):
-                    os.unlink(p)
-            except OSError:
-                pass
+    return _cmd_run_analyze_variability(
+        args,
+        config,
+        run_default_benchmark=_run_default_benchmark,
+    )
 
 
 def run_benchmark_batching(args, config):
     """Run batching trade-off benchmark."""
-    batch_sizes = [int(x) for x in args.batch_sizes.split(",")]
-    benchmark = BatchingTradeoffBenchmark(config)
-    results = benchmark.run(batch_sizes=batch_sizes, num_images=args.images)
-
-    print("\n⚡ Batching Trade-off Analysis")
-    print("=" * 60)
-    print(f"{'Batch':<10} {'Latency (ms)':<15} {'Throughput (img/s)':<20}")
-    print("-" * 60)
-    for i, batch in enumerate(results["batch_size"]):
-        latency = results["latency_ms"][i]
-        throughput = results["throughput_img_per_sec"][i]
-        print(f"{batch:<10} {latency:<15.2f} {throughput:<20.2f}")
-
-    return results
+    return _cmd_run_benchmark_batching(args, config)
 
 
 def run_benchmark_llm(args, config):
     """Run LLM latency benchmark."""
-    benchmark = LLMLatencyBenchmark(config)
-    results = benchmark.run(
-        prompt_tokens=args.prompt_length,
-        output_tokens=args.output_tokens,
-        num_runs=args.runs,
-    )
-
-    print("\n🤖 LLM Latency Benchmark")
-    print("=" * 60)
-    print("TTFT (Time-to-First-Token):")
-    print(f"  P50: {results['ttft_p50']:.1f}ms")
-    print(f"  P95: {results['ttft_p95']:.1f}ms")
-    print(f"  P99: {results['ttft_p99']:.1f}ms")
-    print("\nTime-per-Token (Decode):")
-    print(f"  P50: {results['tpt_p50']:.1f}ms")
-    print(f"  P95: {results['tpt_p95']:.1f}ms")
-    print(f"  P99: {results['tpt_p99']:.1f}ms")
-    print(f"\nThroughput: {results['throughput_tokens_per_sec']:.1f} tokens/sec")
-
-    return results
+    return _cmd_run_benchmark_llm(args, config)
 
 
 def run_benchmark_distributed(args, config):
@@ -1121,90 +869,12 @@ def run_benchmark_distributed(args, config):
 
 def run_monitor_gpu(args, config):
     """Run GPU monitoring."""
-    monitor = GPUMemoryMonitor(config)
-
-    print(f"\n📊 Monitoring GPU for {args.duration} seconds...")
-    monitor.start()
-
-    try:
-        remaining = args.duration
-        while remaining > 0:
-            metrics = monitor.get_metrics()
-            if metrics:
-                latest = metrics[-1]
-                print(
-                    f"GPU Memory: {latest['gpu_memory_used_mb']:.0f}MB / {latest['gpu_memory_total_mb']:.0f}MB "
-                    f"({latest['gpu_memory_percent']:.1f}%), Utilization: {latest['gpu_utilization_percent']:.1f}%"
-                )
-            remaining -= args.interval
-            time.sleep(args.interval)
-    except KeyboardInterrupt:
-        print("\n⏹️  Monitoring stopped by user")
-    finally:
-        monitor.stop()
-
-    summary = monitor.get_summary()
-    if summary:
-        print("\n📈 Summary:")
-        print(f"  Avg Memory: {summary['avg_memory_mb']:.0f}MB")
-        print(f"  Max Memory: {summary['max_memory_mb']:.0f}MB")
-        print(f"  Avg Utilization: {summary['avg_utilization_percent']:.1f}%")
-
-    return summary
+    return _cmd_run_monitor_gpu(args, config)
 
 
 def run_monitor_kv_cache(args, config):
     """Run KV cache estimation monitor."""
-    monitor = LLMKVCacheMonitor(config)
-    model_config = {
-        "num_layers": args.num_layers,
-        "num_heads": args.num_heads,
-        "head_size": args.head_size,
-        "batch_size": args.batch_size,
-        "precision": args.precision,
-    }
-    max_length = int(args.max_length)
-    step = max(1, max_length // 10)
-    samples = []
-    for seq_len in range(step, max_length + 1, step):
-        size_mb = monitor.estimate_kv_cache_size(seq_len, model_config)
-        samples.append(
-            {
-                "sequence_length": seq_len,
-                "kv_cache_mb": round(float(size_mb), 4),
-                "timestamp": time.time(),
-            }
-        )
-
-    final_size = samples[-1]["kv_cache_mb"] if samples else 0.0
-    print("\nKV Cache Monitor")
-    print("=" * 60)
-    print(f"Precision: {args.precision}")
-    print(f"Model: layers={args.num_layers}, heads={args.num_heads}, head_size={args.head_size}")
-    print(f"Batch size: {args.batch_size}")
-    print(f"Max sequence length: {max_length}")
-    print(f"Estimated KV cache @ max length: {final_size:.2f} MB")
-
-    return {
-        "kv_cache": {
-            "estimated_size_mb": float(final_size),
-            "max_sequence_length": max_length,
-            "batch_size": int(args.batch_size),
-            "num_layers": int(args.num_layers),
-            "num_heads": int(args.num_heads),
-            "head_size": int(args.head_size),
-            "precision": str(args.precision),
-            "samples": samples,
-        },
-        "summary": {
-            "sample_count": len(samples),
-            "latency": {"p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0},
-            "throughput": {"mean_fps": 0.0},
-            "power": {"mean_w": None},
-            "memory": {"mean_percent": 0.0},
-        },
-        "run_label": "kv_cache_monitor",
-    }
+    return _cmd_run_monitor_kv_cache(args, config)
 
 
 # Chart building is now in trackiq.reporting.charts
@@ -2258,3 +1928,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
