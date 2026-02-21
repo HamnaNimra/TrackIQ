@@ -681,6 +681,21 @@ def _output_path(args, filename: str) -> str:
     return os.path.join(out_dir, os.path.basename(filename))
 
 
+def _parse_precision_list(raw: str) -> Tuple[list[str], list[str]]:
+    """Parse comma-separated precision list into (valid, invalid)."""
+    tokens = [str(item).strip().lower() for item in str(raw or "").split(",")]
+    requested = [item for item in tokens if item]
+    valid: list[str] = []
+    invalid: list[str] = []
+    for item in requested:
+        if item in PRECISIONS:
+            if item not in valid:
+                valid.append(item)
+        else:
+            invalid.append(item)
+    return valid, invalid
+
+
 def _safe_torch_version() -> str:
     """Best-effort PyTorch version lookup."""
     try:
@@ -1911,6 +1926,9 @@ def run_profiles(args):
         print("\nSupported Collectors:")
         for c in profile.supported_collectors:
             print(f"  - {c.value}")
+        print("\nSupported Precisions:")
+        for p in profile.supported_precisions:
+            print(f"  - {p}")
         print(f"\nTags: {', '.join(profile.tags)}")
         return 0
 
@@ -1953,6 +1971,13 @@ def run_with_profile(args, _config):
     # Validate collector compatibility
     try:
         validate_profile_collector(profile, collector_type)
+    except ProfileValidationError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return None
+
+    requested_precision = str(getattr(args, "precision", PRECISION_FP32) or PRECISION_FP32).lower()
+    try:
+        validate_profile_precision(profile, requested_precision)
     except ProfileValidationError as e:
         print(f"Error: {e}", file=sys.stderr)
         return None
@@ -2038,9 +2063,20 @@ def run_with_profile(args, _config):
 
     # Optional: pass device/precision into run context (for app-specific use)
     _device = getattr(args, "device", None)
-    _precision = getattr(args, "precision", "fp32")
-    if not args.quiet and (_device is not None or _precision != "fp32"):
-        print(f"Device: {_device or 'default'} | Precision: {_precision}")
+    effective_precision = requested_precision
+    if _device is not None:
+        resolved = _resolve_device(_device)
+        if resolved is not None:
+            resolved_precision = resolve_precision_for_device(resolved, requested_precision)
+            if resolved_precision != requested_precision:
+                print(
+                    f"[WARN] Precision '{requested_precision}' is not supported on "
+                    f"{resolved.device_id}. Falling back to '{resolved_precision}'.",
+                    file=sys.stderr,
+                )
+            effective_precision = resolved_precision
+    if not args.quiet and (_device is not None or effective_precision != PRECISION_FP32):
+        print(f"Device: {_device or 'default'} | Precision: {effective_precision}")
 
     # Run collection
     profiler = None if getattr(args, "no_power", False) else PowerProfiler(detect_power_source())
@@ -2144,6 +2180,8 @@ def run_with_profile(args, _config):
         export_data = export.to_dict()
         if profiler is not None:
             export_data["power_profile"] = profiler.to_tool_payload().get("power_profile")
+        export_data.setdefault("inference_config", {})
+        export_data["inference_config"]["precision"] = effective_precision
         export_data["profile"] = profile.name
         export_data["validation"] = {
             "latency_pass": latency_pass,
@@ -2194,11 +2232,20 @@ def run_auto_benchmarks_cli(args) -> int:
     device_ids_filter = None
     if getattr(args, "devices", None):
         device_ids_filter = [s.strip() for s in args.devices.split(",") if s.strip()]
-    precisions = [
-        s.strip()
-        for s in getattr(args, "precisions", ",".join(PRECISIONS)).split(",")
-        if s.strip()
-    ]
+    raw_precisions = getattr(args, "precisions", ",".join(PRECISIONS))
+    precisions, invalid_precisions = _parse_precision_list(raw_precisions)
+    if invalid_precisions:
+        print(
+            f"[WARN] Ignoring unsupported precision(s): {', '.join(invalid_precisions)}. "
+            f"Supported values: {', '.join(PRECISIONS)}",
+            file=sys.stderr,
+        )
+    if not precisions:
+        precisions = [PRECISION_FP32]
+        print(
+            f"[WARN] No valid precision requested; defaulting to {PRECISION_FP32}.",
+            file=sys.stderr,
+        )
     batch_sizes = []
     for s in getattr(
         args, "batch_sizes", ",".join(map(str, DEFAULT_BATCH_SIZES))
@@ -2279,8 +2326,16 @@ def run_manual_single(args):
     if device is None:
         print("No device found. Use --device nvidia_0, cpu_0, or 0.", file=sys.stderr)
         return None
+    requested_precision = str(getattr(args, "precision", None) or PRECISION_FP32).lower()
+    effective_precision = resolve_precision_for_device(device, requested_precision)
+    if effective_precision != requested_precision:
+        print(
+            f"[WARN] Precision '{requested_precision}' is not supported on "
+            f"{device.device_id}; falling back to '{effective_precision}'.",
+            file=sys.stderr,
+        )
     config = InferenceConfig(
-        precision=getattr(args, "precision", None) or PRECISION_FP32,
+        precision=effective_precision,
         batch_size=getattr(args, "batch_size", None) or 1,
         accelerator=device.device_id,
         streams=1,
