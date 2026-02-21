@@ -407,7 +407,27 @@ def populate_standard_html_report(
         if inference_cfg.get("batch_size") is not None:
             report.add_metadata("Batch Size", str(inference_cfg["batch_size"]))
 
+    def _add_meta_if_present(label: str, value: Any) -> None:
+        if _is_missing(value):
+            return
+        report.add_metadata(label, _format_value(value))
+
+    if isinstance(platform_meta, dict):
+        _add_meta_if_present("GPU", platform_meta.get("gpu_model") or platform_meta.get("gpu"))
+        _add_meta_if_present("CPU", platform_meta.get("cpu_model") or platform_meta.get("cpu"))
+        _add_meta_if_present("SoC", platform_meta.get("soc"))
+        _add_meta_if_present("Power Mode", platform_meta.get("power_mode"))
+        _add_meta_if_present("OS", platform_meta.get("os"))
+
+    if isinstance(inference_cfg, dict):
+        _add_meta_if_present("Accelerator", inference_cfg.get("accelerator"))
+        _add_meta_if_present("Streams", inference_cfg.get("streams"))
+        _add_meta_if_present("Warmup Runs", inference_cfg.get("warmup_runs"))
+        _add_meta_if_present("Iterations", inference_cfg.get("iterations"))
+
     sample_count = merged_summary.get("sample_count") or data.get("sample_count") or len(data.get("samples", []))
+    _add_meta_if_present("Samples", sample_count)
+    _add_meta_if_present("Duration (s)", merged_summary.get("duration_seconds"))
     report.add_summary_item("Samples", sample_count, "", "neutral")
 
     latency = merged_summary.get("latency", {})

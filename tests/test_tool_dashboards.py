@@ -146,6 +146,45 @@ def test_dashboard_parser_accepts_cluster_health_optional_inputs() -> None:
     assert args.scaling_runs == ["run1.json", "run2.json"]
 
 
+def test_extract_minicluster_payload_unwraps_tool_payload_and_steps_alias() -> None:
+    """Cluster-health payload extraction should support wrapped and per_step keys."""
+    raw = {
+        "tool_payload": {
+            "per_step_metrics": [
+                {"step": 0, "loss": 1.2, "allreduce_time_ms": 1.0, "compute_time_ms": 2.0},
+            ],
+            "average_throughput_samples_per_sec": 120.0,
+        },
+        "metrics": {"throughput_samples_per_sec": 121.0},
+    }
+    payload = root_dashboard._extract_minicluster_payload(raw)  # type: ignore[attr-defined]
+    assert "steps" in payload
+    assert isinstance(payload["steps"], list)
+    assert payload["average_throughput_samples_per_sec"] == 120.0
+
+
+def test_extract_step_rows_normalizes_minicluster_step_data() -> None:
+    """Cluster-health step-row extraction should normalize numeric fields."""
+    rows = root_dashboard._extract_step_rows(  # type: ignore[attr-defined]
+        {
+            "steps": [
+                {
+                    "step": 5,
+                    "loss": 0.9,
+                    "allreduce_time_ms": 1.5,
+                    "compute_time_ms": 2.5,
+                    "throughput_samples_per_sec": 99.0,
+                }
+            ]
+        }
+    )
+    assert len(rows) == 1
+    assert rows[0]["step"] == 5.0
+    assert rows[0]["loss"] == 0.9
+    assert rows[0]["allreduce_ms"] == 1.5
+    assert rows[0]["compute_ms"] == 2.5
+
+
 def test_detect_platform_vendor_cases() -> None:
     """Vendor detection should normalize known platform names."""
     assert detect_platform_vendor("AMD MI300X") == "AMD"
