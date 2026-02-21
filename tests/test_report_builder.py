@@ -144,3 +144,63 @@ def test_populate_multi_run_html_report_includes_all_run_labels() -> None:
     labels = {row[0] for row in table["rows"]}
     assert "cpu_0_fp32_bs1" in labels
     assert "nvidia_0_fp16_bs4" in labels
+
+
+def test_populate_standard_html_report_adds_metadata_and_detailed_summary_tables() -> None:
+    """Single-run reports should include detailed run metadata and expanded summary rows."""
+    report = HTMLReportGenerator()
+    data = {
+        "collector_name": "PsutilCollector",
+        "run_label": "cpu_0_fp32_bs2",
+        "platform_metadata": {
+            "device_name": "CPU 0",
+            "cpu": "AMD Ryzen",
+            "gpu": "N/A",
+            "soc": "N/A",
+            "power_mode": "balanced",
+        },
+        "inference_config": {
+            "accelerator": "cpu_0",
+            "precision": "fp32",
+            "batch_size": 2,
+        },
+        "summary": {
+            "sample_count": 8,
+            "warmup_samples": 2,
+            "duration_seconds": 1.5,
+            "latency": {
+                "min_ms": 20.0,
+                "p50_ms": 25.0,
+                "mean_ms": 27.0,
+                "p95_ms": 35.0,
+                "p99_ms": 40.0,
+                "max_ms": 45.0,
+            },
+            "throughput": {"mean_fps": 30.0, "min_fps": 22.0},
+            "power": {"mean_w": 50.0, "max_w": 65.0},
+            "temperature": {"mean_c": 51.0, "max_c": 61.0},
+        },
+        "samples": [
+            {"timestamp": 1.0, "metrics": {"latency_ms": 22.0, "throughput_fps": 30.0}},
+            {"timestamp": 2.0, "metrics": {"latency_ms": 28.0, "throughput_fps": 26.0}},
+        ],
+    }
+
+    populate_standard_html_report(report, data, data_source="unit-test")
+
+    run_meta_tables = [table for table in report.tables if table["section"] == "Run Metadata"]
+    assert any(table["title"] == "Run Overview" for table in run_meta_tables)
+    assert any(table["title"] == "Platform Metadata" for table in run_meta_tables)
+    assert any(table["title"] == "Inference Configuration" for table in run_meta_tables)
+
+    platform_table = next(table for table in run_meta_tables if table["title"] == "Platform Metadata")
+    platform_keys = {row[0] for row in platform_table["rows"]}
+    assert "device_name" in platform_keys
+    assert "cpu" in platform_keys
+    assert "power_mode" in platform_keys
+
+    detail_table = next(table for table in report.tables if table["title"] == "Detailed Summary Metrics")
+    metric_names = {row[0] for row in detail_table["rows"]}
+    assert "latency.p95_ms" in metric_names
+    assert "power.max_w" in metric_names
+    assert "temperature.max_c" in metric_names

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -26,6 +27,139 @@ def _merge_missing(base: dict[str, Any], fallback: dict[str, Any]) -> dict[str, 
         if key not in merged or _is_missing(current_value):
             merged[key] = fallback_value
     return merged
+
+
+def _format_value(value: Any) -> str:
+    """Format values for report tables and metadata."""
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=True)
+    text = str(value).strip()
+    return text if text else "-"
+
+
+def _flatten_mapping(
+    payload: dict[str, Any],
+    *,
+    prefix: str = "",
+    max_depth: int = 2,
+) -> list[tuple[str, Any]]:
+    """Flatten nested mappings into key/value pairs for display."""
+    rows: list[tuple[str, Any]] = []
+
+    def _walk(mapping: dict[str, Any], current_prefix: str, depth: int) -> None:
+        for key, value in mapping.items():
+            key_text = str(key)
+            path = f"{current_prefix}.{key_text}" if current_prefix else key_text
+            if isinstance(value, dict) and depth < max_depth:
+                _walk(value, path, depth + 1)
+            else:
+                rows.append((path, value))
+
+    _walk(payload, prefix, 1)
+    return rows
+
+
+def _add_run_metadata_tables(
+    report: Any,
+    data: dict[str, Any],
+    merged_summary: dict[str, Any],
+) -> None:
+    """Add run/platform metadata tables for parity with Streamlit metadata view."""
+    rows: list[list[str]] = []
+    overview_pairs = [
+        ("Collector", data.get("collector_name")),
+        ("Profile", data.get("profile")),
+        ("Run Label", data.get("run_label")),
+        ("Sample Count", merged_summary.get("sample_count")),
+        ("Warmup Samples", merged_summary.get("warmup_samples")),
+        ("Duration (s)", merged_summary.get("duration_seconds")),
+    ]
+    validation = data.get("validation", {})
+    if isinstance(validation, dict) and "overall_pass" in validation:
+        overview_pairs.append(("Validation Status", "PASS" if validation.get("overall_pass") else "FAIL"))
+    for label, value in overview_pairs:
+        if not _is_missing(value):
+            rows.append([label, _format_value(value)])
+
+    if rows:
+        report.add_section("Run Metadata", "Platform, configuration, and run metadata captured for this benchmark.")
+        report.add_table("Run Overview", ["Field", "Value"], rows, "Run Metadata")
+
+    for title, payload in [
+        ("Platform Metadata", data.get("platform_metadata")),
+        ("Inference Configuration", data.get("inference_config")),
+        ("Device Information", data.get("device_info")),
+        ("Validation Details", data.get("validation")),
+    ]:
+        if not isinstance(payload, dict) or not payload:
+            continue
+        flat_rows = [[key, _format_value(value)] for key, value in _flatten_mapping(payload, max_depth=3)]
+        if flat_rows:
+            if not rows:
+                report.add_section(
+                    "Run Metadata",
+                    "Platform, configuration, and run metadata captured for this benchmark.",
+                )
+                rows = [["_", "_"]]  # sentinel to avoid duplicate add_section
+            report.add_table(title, ["Field", "Value"], flat_rows, "Run Metadata")
+
+
+def _add_detailed_summary_table(report: Any, merged_summary: dict[str, Any]) -> None:
+    """Add detailed summary metrics table matching Streamlit metric sections."""
+    rows: list[list[str]] = []
+
+    # Include top-level summary fields first.
+    for field, label in [
+        ("sample_count", "Sample Count"),
+        ("warmup_samples", "Warmup Samples"),
+        ("duration_seconds", "Duration (s)"),
+    ]:
+        if field in merged_summary and not _is_missing(merged_summary.get(field)):
+            rows.append([label, _format_value(merged_summary.get(field)), ""])
+
+    group_specs = [
+        ("latency", "ms"),
+        ("throughput", "FPS"),
+        ("power", "W"),
+        ("temperature", "C"),
+        ("cpu", "%"),
+        ("gpu", "%"),
+        ("memory", "MB"),
+    ]
+    for group_name, default_unit in group_specs:
+        group = merged_summary.get(group_name)
+        if not isinstance(group, dict) or not group:
+            continue
+        for key, value in group.items():
+            if _is_missing(value):
+                continue
+            metric_name = f"{group_name}.{key}"
+            unit = default_unit
+            if isinstance(key, str) and key.endswith("_percent"):
+                unit = "%"
+            elif isinstance(key, str) and key.endswith("_fps"):
+                unit = "FPS"
+            elif isinstance(key, str) and key.endswith("_ms"):
+                unit = "ms"
+            elif isinstance(key, str) and key.endswith("_w"):
+                unit = "W"
+            elif isinstance(key, str) and key.endswith("_c"):
+                unit = "C"
+            rows.append([metric_name, _format_value(value), unit])
+
+    if rows:
+        report.add_section("Summary Details", "Expanded summary metrics generated from the run payload.")
+        report.add_table("Detailed Summary Metrics", ["Metric", "Value", "Unit"], rows, "Summary Details")
 
 
 def prepare_report_dataframe_and_summary(
@@ -56,6 +190,28 @@ def prepare_report_dataframe_and_summary(
         if _is_missing(sample_count):
             sample_count = len(report_df) if report_df is not None else len(samples) if isinstance(samples, list) else 0
         summary["sample_count"] = sample_count
+
+    if _is_missing(summary.get("warmup_samples")):
+        warmup_samples = data.get("warmup_samples")
+        if _is_missing(warmup_samples) and report_df is not None and "is_warmup" in report_df.columns:
+            warmup_series = report_df["is_warmup"].fillna(False)
+            warmup_samples = int(warmup_series.astype(bool).sum())
+        if not _is_missing(warmup_samples):
+            summary["warmup_samples"] = warmup_samples
+
+    if _is_missing(summary.get("duration_seconds")):
+        start_time = data.get("start_time")
+        end_time = data.get("end_time")
+        duration_seconds = None
+        if isinstance(start_time, (int, float)) and isinstance(end_time, (int, float)):
+            duration_seconds = max(0.0, float(end_time) - float(start_time))
+        elif report_df is not None and "elapsed_seconds" in report_df.columns and len(report_df) > 0:
+            try:
+                duration_seconds = float(report_df["elapsed_seconds"].max())
+            except (TypeError, ValueError):
+                duration_seconds = None
+        if duration_seconds is not None:
+            summary["duration_seconds"] = duration_seconds
 
     return report_df, summary
 
@@ -114,16 +270,22 @@ def populate_standard_html_report(
     latency = merged_summary.get("latency", {})
     if isinstance(latency, dict) and latency:
         report.add_summary_item("P99 Latency", f"{latency.get('p99_ms', 0):.2f}", "ms", "neutral")
+        if latency.get("p95_ms") is not None:
+            report.add_summary_item("P95 Latency", f"{latency.get('p95_ms', 0):.2f}", "ms", "neutral")
         report.add_summary_item("P50 Latency", f"{latency.get('p50_ms', 0):.2f}", "ms", "neutral")
         report.add_summary_item("Mean Latency", f"{latency.get('mean_ms', 0):.2f}", "ms", "neutral")
 
     throughput = merged_summary.get("throughput", {})
     if isinstance(throughput, dict) and throughput:
         report.add_summary_item("Mean Throughput", f"{throughput.get('mean_fps', 0):.1f}", "FPS", "neutral")
+        if throughput.get("min_fps") is not None:
+            report.add_summary_item("Min Throughput", f"{throughput.get('min_fps', 0):.1f}", "FPS", "neutral")
 
     power = merged_summary.get("power", {})
     if isinstance(power, dict) and power.get("mean_w") is not None:
         report.add_summary_item("Mean Power", f"{power.get('mean_w', 0):.1f}", "W", "neutral")
+    if isinstance(power, dict) and power.get("max_w") is not None:
+        report.add_summary_item("Max Power", f"{power.get('max_w', 0):.1f}", "W", "neutral")
 
     gpu = merged_summary.get("gpu", {})
     if isinstance(gpu, dict) and gpu.get("mean_percent") is not None:
@@ -137,10 +299,20 @@ def populate_standard_html_report(
     if isinstance(memory, dict) and memory.get("mean_mb") is not None:
         report.add_summary_item("Mean Memory", f"{memory.get('mean_mb', 0):.0f}", "MB", "neutral")
 
+    temperature = merged_summary.get("temperature", {})
+    if isinstance(temperature, dict) and temperature.get("max_c") is not None:
+        report.add_summary_item("Max Temp", f"{temperature.get('max_c', 0):.1f}", "C", "neutral")
+
+    if merged_summary.get("duration_seconds") is not None:
+        report.add_summary_item("Duration", f"{float(merged_summary.get('duration_seconds', 0)):.1f}", "s", "neutral")
+
     validation = data.get("validation", {})
     if isinstance(validation, dict) and validation:
         status = "good" if validation.get("overall_pass") else "critical"
         report.add_summary_item("Run Status", "PASS" if validation.get("overall_pass") else "FAIL", "", status)
+
+    _add_run_metadata_tables(report, data, merged_summary)
+    _add_detailed_summary_table(report, merged_summary)
 
     if add_charts and report_df is not None and len(report_df) > 0:
         shared_charts.add_charts_to_html_report(report, report_df, merged_summary)
