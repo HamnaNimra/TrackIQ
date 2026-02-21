@@ -7,7 +7,7 @@ from typing import Dict
 
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    LIGHT_THEME,
+    DARK_THEME,
     MetricTable,
     PowerGauge,
     RegressionBadge,
@@ -22,7 +22,7 @@ class AutoPerfDashboard(TrackiqDashboard):
     def __init__(
         self,
         result: TrackiqResult,
-        theme: TrackiqTheme = LIGHT_THEME,
+        theme: TrackiqTheme = DARK_THEME,
         title: str = "AutoPerfPy Dashboard",
     ) -> None:
         super().__init__(result=result, theme=theme, title=title)
