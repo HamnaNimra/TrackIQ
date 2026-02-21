@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean, pstdev
-from typing import Any, Dict, List, Literal
+from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
-from minicluster.runner.distributed_runner import HealthCheckpoint, WorkerSnapshot
+if TYPE_CHECKING:
+    from minicluster.runner.distributed_runner import HealthCheckpoint
 
 
 @dataclass
@@ -126,4 +127,3 @@ class AnomalyDetector:
             "by_type": by_type,
             "most_affected_workers": hot_workers,
         }
-
