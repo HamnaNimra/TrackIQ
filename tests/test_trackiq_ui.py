@@ -224,6 +224,41 @@ def test_result_browser_to_dict_returns_metadata_for_valid_result(tmp_path: Path
     assert rows[0]["path"] == str(out)
 
 
+def test_result_browser_to_dict_filters_by_allowed_tools(tmp_path: Path) -> None:
+    """ResultBrowser should filter rows when allowed_tools is specified."""
+    out_a = tmp_path / "tool_a.json"
+    out_m = tmp_path / "minicluster.json"
+    result_a = _result()
+    result_m = _result()
+    result_m.tool_name = "minicluster"
+    save_trackiq_result(result_a, out_a)
+    save_trackiq_result(result_m, out_m)
+
+    browser = ResultBrowser(search_paths=[str(tmp_path)], allowed_tools=["minicluster"])
+    rows = browser.to_dict()
+    assert len(rows) == 1
+    assert rows[0]["tool_name"] == "minicluster"
+
+
+def test_dashboard_tool_compatibility_filter() -> None:
+    """Dashboards should be able to validate loaded-result tool compatibility."""
+
+    class _Dash(TrackiqDashboard):
+        def expected_tool_names(self) -> list[str]:
+            return ["autoperfpy"]
+
+        def render_body(self) -> None:
+            return None
+
+    dash = _Dash(result=_result(), theme=DARK_THEME, title="T")
+    auto = _result()
+    auto.tool_name = "autoperfpy"
+    mini = _result()
+    mini.tool_name = "minicluster"
+    assert dash._is_result_compatible(auto) is True
+    assert dash._is_result_compatible(mini) is False
+
+
 def test_run_history_loader_loads_sorted_results_and_skips_invalid(tmp_path: Path) -> None:
     """RunHistoryLoader should return valid results sorted by timestamp."""
     history_dir = tmp_path / "history"

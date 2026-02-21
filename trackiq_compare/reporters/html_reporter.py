@@ -1,6 +1,6 @@
 """HTML reporter for polished TrackIQ comparison artifacts."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from html import escape
 from typing import List, Optional
 
@@ -25,7 +25,7 @@ class HtmlReporter:
         rows = self._metric_rows(comparison)
         platform_diff = self._platform_comparison(result_a, result_b)
         highlighted = self._highlighted_metrics(summary)
-        generated = datetime.utcnow().isoformat()
+        generated = datetime.now(UTC).isoformat()
 
         html = f"""<!doctype html>
 <html lang="en">

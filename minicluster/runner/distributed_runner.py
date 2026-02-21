@@ -11,7 +11,7 @@ import time
 import uuid
 import platform as _platform
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 # Import from trackiq_core - the single source of truth for distributed training
@@ -428,7 +428,7 @@ def _convert_to_run_metrics(
                 )
             )
             worker_snapshots: List[WorkerSnapshot] = []
-            now_iso = datetime.utcnow().isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             for worker_id in range(num_workers):
                 snap = WorkerSnapshot(
                     worker_id=worker_id,
@@ -468,7 +468,7 @@ def _convert_to_run_metrics(
                         s for s in all_worker_snapshots
                         if s.step == all_worker_snapshots[-1].step
                     ],
-                    timestamp=datetime.utcnow().isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     is_complete=True,
                 ),
                 health_checkpoint_path,
@@ -510,7 +510,7 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
     result = TrackiqResult(
         tool_name="minicluster",
         tool_version="0.1.0",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         platform=PlatformInfo(
             hardware_name="CPU",
             os=f"{_platform.system()} {_platform.release()}",

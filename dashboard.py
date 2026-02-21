@@ -11,7 +11,7 @@ from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import ResultBrowser, run_dashboard
+from trackiq_core.ui import LIGHT_THEME, ResultBrowser, run_dashboard
 
 
 def _validate_path(path: Optional[str], label: str) -> str:
@@ -84,7 +84,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.tool == "autoperfpy":
             if args.result:
                 result_path = _validate_path(args.result, "--result")
-                run_dashboard(AutoPerfDashboard, result_path=result_path)
+                run_dashboard(AutoPerfDashboard, result_path=result_path, theme=LIGHT_THEME)
             else:
                 class _AutoPerfBrowserDashboard(AutoPerfDashboard):
                     def render_body(self) -> None:
@@ -101,6 +101,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 run_dashboard(
                     _AutoPerfBrowserDashboard,
                     result=_placeholder_result("autoperfpy", workload_type="inference"),
+                    theme=LIGHT_THEME,
                 )
             return 0
 

@@ -30,6 +30,10 @@ class MiniClusterDashboard(TrackiqDashboard):
     ) -> None:
         super().__init__(result=result, theme=theme, title=title)
 
+    def expected_tool_names(self) -> list[str]:
+        """MiniCluster dashboard should only load MiniCluster results."""
+        return ["minicluster"]
+
     def _tool_payload(self) -> Dict[str, Any]:
         result = self._primary_result()
         return result.tool_payload if isinstance(result.tool_payload, dict) else {}
