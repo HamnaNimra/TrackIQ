@@ -10,7 +10,7 @@ import platform as _platform
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, Optional, Tuple
 
 from autoperfpy.config import ConfigManager
@@ -742,7 +742,7 @@ def _infer_trackiq_result(
     return TrackiqResult(
         tool_name="autoperfpy",
         tool_version="1.0",
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         platform=PlatformInfo(
             hardware_name=str(
                 platform_metadata.get("device_name")
