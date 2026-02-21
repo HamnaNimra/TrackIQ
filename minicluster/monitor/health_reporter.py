@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from html import escape
 from typing import TYPE_CHECKING, Any, Dict, List
 
@@ -15,6 +14,51 @@ if TYPE_CHECKING:
 
 class HealthReporter:
     """Generate summary, HTML, and JSON health reports."""
+
+    @staticmethod
+    def _build_bar_svg(labels: List[str], values: List[float], title: str) -> str:
+        """Build a simple inline SVG bar chart for fully self-contained HTML."""
+        if not labels or not values or len(labels) != len(values):
+            return f"<p>No data available for {escape(title)}.</p>"
+
+        width = 820
+        height = 260
+        margin_left = 50
+        margin_bottom = 45
+        chart_w = width - margin_left - 20
+        chart_h = height - 40 - margin_bottom
+        max_value = max(values) if max(values) > 0 else 1.0
+        bar_w = max(12.0, chart_w / max(1, len(values)) - 8.0)
+
+        bars: List[str] = []
+        for idx, value in enumerate(values):
+            scaled = (value / max_value) * chart_h
+            x = margin_left + idx * (bar_w + 8.0)
+            y = 20 + (chart_h - scaled)
+            bars.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" '
+                f'height="{scaled:.1f}" fill="#cc3333" />'
+            )
+            bars.append(
+                f'<text x="{x + bar_w / 2:.1f}" y="{height - 20}" text-anchor="middle" '
+                f'font-size="11" fill="#444">{escape(labels[idx])}</text>'
+            )
+            bars.append(
+                f'<text x="{x + bar_w / 2:.1f}" y="{max(12.0, y - 4.0):.1f}" '
+                f'text-anchor="middle" font-size="10" fill="#222">{value:.2f}</text>'
+            )
+
+        return (
+            f"<h3>{escape(title)}</h3>"
+            f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+            f'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{escape(title)}">'
+            f'<rect x="0" y="0" width="{width}" height="{height}" fill="#ffffff" />'
+            f'<line x1="{margin_left}" y1="20" x2="{margin_left}" y2="{20 + chart_h}" stroke="#666" />'
+            f'<line x1="{margin_left}" y1="{20 + chart_h}" x2="{margin_left + chart_w}" '
+            f'y2="{20 + chart_h}" stroke="#666" />'
+            + "".join(bars)
+            + "</svg>"
+        )
 
     def generate_summary(self, checkpoint: HealthCheckpoint, anomalies: List[Anomaly]) -> str:
         """Generate plain-English cluster health paragraph."""
@@ -63,6 +107,9 @@ class HealthReporter:
         loss_series = [w.loss for w in checkpoint.workers]
         labels = [str(w.worker_id) for w in checkpoint.workers]
 
+        throughput_svg = self._build_bar_svg(labels, throughput_series, "Per-Worker Throughput")
+        loss_svg = self._build_bar_svg(labels, loss_series, "Per-Worker Loss")
+
         html = f"""<!doctype html>
 <html>
 <head>
@@ -76,7 +123,6 @@ class HealthReporter:
     .critical {{ color: #b91c1c; font-weight: 700; }}
     .warning {{ color: #a16207; font-weight: 700; }}
   </style>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body>
   <h1>MiniCluster Health Report</h1>
@@ -91,14 +137,8 @@ class HealthReporter:
     <thead><tr><th>Severity</th><th>Step</th><th>Worker</th><th>Type</th><th>Description</th></tr></thead>
     <tbody>{anomaly_rows}</tbody>
   </table>
-  <h2>Per-Worker Throughput</h2>
-  <div id="throughput"></div>
-  <h2>Per-Worker Loss</h2>
-  <div id="loss"></div>
-  <script>
-    Plotly.newPlot('throughput', [{{x: {json.dumps(labels)}, y: {json.dumps(throughput_series)}, type: 'bar'}}], {{margin: {{t: 20}}}});
-    Plotly.newPlot('loss', [{{x: {json.dumps(labels)}, y: {json.dumps(loss_series)}, type: 'bar'}}], {{margin: {{t: 20}}}});
-  </script>
+  {throughput_svg}
+  {loss_svg}
 </body>
 </html>"""
         with open(output_path, "w", encoding="utf-8") as handle:
