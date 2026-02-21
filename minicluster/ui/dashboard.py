@@ -52,7 +52,11 @@ class MiniClusterDashboard(TrackiqDashboard):
         result = self._primary_result()
         return result.tool_payload if isinstance(result.tool_payload, dict) else {}
 
-    def _payload_from_checkpoint(self, checkpoint: Any) -> dict[str, Any]:
+    def _payload_from_checkpoint(
+        self,
+        checkpoint: Any,
+        base_payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         workers = [
             {
                 "worker_id": worker.worker_id,
@@ -72,12 +76,12 @@ class MiniClusterDashboard(TrackiqDashboard):
                     "worker_id": worker.worker_id,
                 }
             )
-        return {
-            "workers": workers,
-            "steps": snapshots,
-            "health_checkpoint_path": self._tool_payload().get("health_checkpoint_path"),
-            "faults_detected": self._tool_payload().get("faults_detected"),
-        }
+        payload = dict(base_payload) if isinstance(base_payload, dict) else {}
+        payload["workers"] = workers
+        payload["steps"] = snapshots
+        payload.setdefault("health_checkpoint_path", self._tool_payload().get("health_checkpoint_path"))
+        payload.setdefault("faults_detected", self._tool_payload().get("faults_detected"))
+        return payload
 
     def _render_dynamic_sections(self, payload: dict[str, Any]) -> None:
         """Render worker grid and loss chart from the provided payload."""
@@ -132,10 +136,46 @@ class MiniClusterDashboard(TrackiqDashboard):
         with right:
             st.markdown("**Runtime**")
             st.markdown(f"- Workers: `{config.get('num_processes', config.get('num_workers', 'N/A'))}`")
+            st.markdown(f"- Collective Backend: `{config.get('collective_backend', payload.get('collective_backend', 'N/A'))}`")
+            st.markdown(f"- Workload: `{config.get('workload', payload.get('workload_type', 'N/A'))}`")
+            st.markdown(f"- Baseline Throughput: `{config.get('baseline_throughput', 'N/A')}`")
             st.markdown(f"- Seed: `{config.get('seed', 'N/A')}`")
             st.markdown(f"- TDP (W): `{config.get('tdp_watts', 'N/A')}`")
             st.markdown(f"- Loss Tolerance: `{config.get('loss_tolerance', 'N/A')}`")
             st.markdown(f"- Regression Threshold (%): `{config.get('regression_threshold', 'N/A')}`")
+
+    def _render_cluster_health_summary(self, payload: dict[str, Any]) -> None:
+        """Render aggregate all-reduce and scaling metrics for this run."""
+        import streamlit as st
+
+        result = self._primary_result()
+        avg_thr = payload.get("average_throughput_samples_per_sec", result.metrics.throughput_samples_per_sec)
+        p99_allreduce = payload.get("p99_allreduce_ms")
+        p95_allreduce = payload.get("p95_allreduce_ms")
+        allreduce_stdev = payload.get("allreduce_stdev_ms")
+        scaling_efficiency = payload.get("scaling_efficiency_pct", result.metrics.scaling_efficiency_pct)
+
+        st.markdown("### Cluster Health Summary")
+        col_a, col_b, col_c, col_d = st.columns(4)
+        with col_a:
+            st.metric("Avg Throughput (samples/s)", f"{float(avg_thr):.2f}" if isinstance(avg_thr, (int, float)) else "N/A")
+        with col_b:
+            st.metric("P99 All-Reduce (ms)", f"{float(p99_allreduce):.3f}" if isinstance(p99_allreduce, (int, float)) else "N/A")
+        with col_c:
+            st.metric("P95 All-Reduce (ms)", f"{float(p95_allreduce):.3f}" if isinstance(p95_allreduce, (int, float)) else "N/A")
+        with col_d:
+            st.metric(
+                "Scaling Efficiency (%)",
+                f"{float(scaling_efficiency):.2f}" if isinstance(scaling_efficiency, (int, float)) else "N/A",
+            )
+        st.caption(
+            "All-Reduce variability (stdev ms): "
+            + (
+                f"{float(allreduce_stdev):.3f}"
+                if isinstance(allreduce_stdev, (int, float))
+                else "N/A"
+            )
+        )
 
     def _render_training_graphs(self, payload: dict[str, Any]) -> None:
         """Render graph-heavy training timelines from step payload."""
@@ -224,6 +264,25 @@ class MiniClusterDashboard(TrackiqDashboard):
         )
         st.plotly_chart(fig_timing, use_container_width=True)
 
+        allreduce_values = [row["allreduce_ms"] for row in rows if row["allreduce_ms"] > 0]
+        if allreduce_values:
+            fig_hist = px.histogram(
+                x=allreduce_values,
+                nbins=30,
+                title="All-Reduce Latency Distribution (ms)",
+                labels={"x": "allreduce_time_ms"},
+            )
+            p99 = payload.get("p99_allreduce_ms")
+            if isinstance(p99, (int, float)):
+                fig_hist.add_vline(
+                    x=float(p99),
+                    line_dash="dash",
+                    line_color="#dc2626",
+                    annotation_text="P99",
+                    annotation_position="top right",
+                )
+            st.plotly_chart(fig_hist, use_container_width=True)
+
     def render_sidebar(self) -> None:
         """Render shared sidebar plus MiniCluster auto-refresh controls."""
         import streamlit as st
@@ -289,7 +348,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             reader = HealthReader(str(checkpoint_path), timeout_seconds=2.0)
             checkpoint = reader.read()
             if checkpoint is not None:
-                local_payload = self._payload_from_checkpoint(checkpoint)
+                local_payload = self._payload_from_checkpoint(checkpoint, base_payload=local_payload)
 
         with dynamic_container.container():
             self._render_dynamic_sections(local_payload)
@@ -299,7 +358,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             checkpoint = reader.read()
             if checkpoint is not None:
                 st.session_state["minicluster_refresh_failures"] = 0
-                local_payload = self._payload_from_checkpoint(checkpoint)
+                local_payload = self._payload_from_checkpoint(checkpoint, base_payload=local_payload)
                 with dynamic_container.container():
                     self._render_dynamic_sections(local_payload)
                 if checkpoint.is_complete:
@@ -333,6 +392,7 @@ class MiniClusterDashboard(TrackiqDashboard):
         else:
             st.session_state["minicluster_refresh_failures"] = 0
 
+        self._render_cluster_health_summary(local_payload)
         self._render_config_section(local_payload)
         self._render_training_graphs(local_payload)
         components["power_gauge"].render()

@@ -361,6 +361,8 @@ def train_distributed(
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
+    # Non-MLP synthetic workloads currently use single-process simulation until
+    # dedicated multi-process kernels are added for these shapes.
     losses = (
         _train_multi_process_impl(core_cfg)
         if config.workload == "mlp"
@@ -415,6 +417,8 @@ def run_distributed(config: RunConfig, health_checkpoint_path: str | None = None
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
+    # Non-MLP synthetic workloads currently use single-process simulation until
+    # dedicated multi-process kernels are added for these shapes.
     losses = (
         _train_multi_process_impl(core_cfg)
         if config.workload == "mlp"

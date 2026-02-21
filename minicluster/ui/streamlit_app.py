@@ -64,6 +64,8 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Run Settings")
         workers = st.number_input("Workers", min_value=1, max_value=16, value=1, step=1)
+        backend = st.selectbox("Collective Backend", options=["gloo", "nccl"], index=0)
+        workload = st.selectbox("Workload", options=["mlp", "transformer", "embedding"], index=0)
         steps = st.number_input("Steps", min_value=1, max_value=5000, value=100, step=1)
         batch_size = st.number_input("Batch Size", min_value=1, max_value=4096, value=32, step=1)
         learning_rate = st.number_input(
@@ -71,6 +73,15 @@ def main() -> None:
         )
         seed = st.number_input("Seed", min_value=0, max_value=2_147_483_647, value=42, step=1)
         tdp_watts = st.number_input("TDP Watts", min_value=10.0, max_value=1000.0, value=150.0, step=1.0)
+        use_baseline = st.checkbox("Use Baseline Throughput", value=False)
+        baseline_throughput = st.number_input(
+            "Baseline Throughput (samples/s)",
+            min_value=0.0,
+            max_value=1_000_000.0,
+            value=100.0,
+            step=1.0,
+            disabled=not use_baseline,
+        )
         run_clicked = st.button("Run MiniCluster", use_container_width=True)
         quick_clicked = st.button("Quick Smoke Run (20 steps)", use_container_width=True)
         st.markdown("---")
@@ -97,6 +108,9 @@ def main() -> None:
             learning_rate=float(learning_rate),
             seed=int(seed),
             tdp_watts=float(tdp_watts),
+            collective_backend=str(backend),
+            workload=str(workload),
+            baseline_throughput=float(baseline_throughput) if use_baseline else None,
         )
         with st.spinner("Running MiniCluster..."):
             st.session_state["minicluster_result"] = _run_and_load_result(cfg)
@@ -110,6 +124,9 @@ def main() -> None:
             learning_rate=0.01,
             seed=42,
             tdp_watts=float(tdp_watts),
+            collective_backend=str(backend),
+            workload=str(workload),
+            baseline_throughput=float(baseline_throughput) if use_baseline else None,
         )
         with st.spinner("Running quick MiniCluster smoke run..."):
             st.session_state["minicluster_result"] = _run_and_load_result(cfg)
@@ -135,6 +152,13 @@ def main() -> None:
         with c3:
             st.metric("Seed", int(seed))
             st.metric("TDP (W)", float(tdp_watts))
+        c4, c5 = st.columns(2)
+        with c4:
+            st.metric("Backend", str(backend))
+        with c5:
+            st.metric("Workload", str(workload))
+        if use_baseline:
+            st.metric("Baseline Throughput (samples/s)", float(baseline_throughput))
         st.info(
             "Configure run settings and click 'Run MiniCluster', or load an existing " "result JSON from the sidebar."
         )

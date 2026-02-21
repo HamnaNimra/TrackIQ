@@ -642,11 +642,17 @@ class MiniClusterHtmlReporter:
             ("Throughput (samples/sec)", result.metrics.throughput_samples_per_sec),
             ("Final Loss", run["final_loss"]),
             ("Total Time (s)", run["total_time_sec"]),
+            ("P50 All-Reduce (ms)", run.get("p50_allreduce_ms")),
+            ("P95 All-Reduce (ms)", run.get("p95_allreduce_ms")),
+            ("P99 All-Reduce (ms)", run.get("p99_allreduce_ms")),
+            ("Max All-Reduce (ms)", run.get("max_allreduce_ms")),
+            ("All-Reduce StdDev (ms)", run.get("allreduce_stdev_ms")),
             ("Power (W)", result.metrics.power_consumption_watts),
             ("Performance/Watt", result.metrics.performance_per_watt),
             ("Energy/Step (J)", result.metrics.energy_per_step_joules),
             ("Temperature (C)", result.metrics.temperature_celsius),
             ("Communication Overhead (%)", result.metrics.communication_overhead_percent),
+            ("Scaling Efficiency (%)", run.get("scaling_efficiency_pct")),
         ]
         return "".join(
             f"<tr><th>{escape(name)}</th><td>{escape(self._fmt(value))}</td></tr>" for name, value in metrics
@@ -660,6 +666,9 @@ class MiniClusterHtmlReporter:
             "learning_rate",
             "hidden_size",
             "num_layers",
+            "collective_backend",
+            "workload",
+            "baseline_throughput",
             "seed",
             "tdp_watts",
             "loss_tolerance",
@@ -698,6 +707,12 @@ class MiniClusterHtmlReporter:
     def _run_data(self, result: Any, default_label: str) -> dict[str, Any]:
         payload = result.tool_payload if isinstance(result.tool_payload, dict) else {}
         config = payload.get("config", {}) if isinstance(payload.get("config"), dict) else {}
+        if "collective_backend" not in config and "collective_backend" in payload:
+            config = dict(config)
+            config["collective_backend"] = payload.get("collective_backend")
+        if "workload" not in config and "workload_type" in payload:
+            config = dict(config)
+            config["workload"] = payload.get("workload_type")
         steps = payload.get("steps", []) if isinstance(payload.get("steps"), list) else []
         parsed_steps: list[dict[str, float]] = []
         for index, item in enumerate(steps):
@@ -736,6 +751,14 @@ class MiniClusterHtmlReporter:
             "throughput": self._to_float(result.metrics.throughput_samples_per_sec),
             "final_loss": final_loss,
             "total_time_sec": total_time_sec,
+            "p50_allreduce_ms": self._to_float(payload.get("p50_allreduce_ms")),
+            "p95_allreduce_ms": self._to_float(payload.get("p95_allreduce_ms")),
+            "p99_allreduce_ms": self._to_float(payload.get("p99_allreduce_ms")),
+            "max_allreduce_ms": self._to_float(payload.get("max_allreduce_ms")),
+            "allreduce_stdev_ms": self._to_float(payload.get("allreduce_stdev_ms")),
+            "scaling_efficiency_pct": self._to_float(
+                payload.get("scaling_efficiency_pct", result.metrics.scaling_efficiency_pct)
+            ),
             "power_w": self._to_float(result.metrics.power_consumption_watts),
             "perf_per_watt": self._to_float(result.metrics.performance_per_watt),
             "step_points": step_points,

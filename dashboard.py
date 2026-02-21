@@ -423,6 +423,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                         step=1,
                         key="trackiq_unified_mini_workers",
                     )
+                    backend = st.selectbox(
+                        "Collective Backend",
+                        options=["gloo", "nccl"],
+                        index=0,
+                        key="trackiq_unified_mini_backend",
+                    )
+                    workload = st.selectbox(
+                        "Workload",
+                        options=["mlp", "transformer", "embedding"],
+                        index=0,
+                        key="trackiq_unified_mini_workload",
+                    )
                     steps = st.number_input(
                         "Steps",
                         min_value=1,
@@ -464,6 +476,20 @@ def main(argv: Optional[List[str]] = None) -> int:
                         step=1.0,
                         key="trackiq_unified_mini_tdp",
                     )
+                    use_baseline = st.checkbox(
+                        "Use Baseline Throughput",
+                        value=False,
+                        key="trackiq_unified_mini_use_baseline",
+                    )
+                    baseline_throughput = st.number_input(
+                        "Baseline Throughput (samples/s)",
+                        min_value=0.0,
+                        max_value=1_000_000.0,
+                        value=100.0,
+                        step=1.0,
+                        disabled=not bool(use_baseline),
+                        key="trackiq_unified_mini_baseline",
+                    )
                     run_clicked = st.button(
                         "Run MiniCluster",
                         use_container_width=True,
@@ -486,6 +512,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                         learning_rate=float(0.01 if quick_clicked else learning_rate),
                         seed=int(42 if quick_clicked else seed),
                         tdp_watts=float(tdp_watts),
+                        collective_backend=str(backend),
+                        workload=str(workload),
+                        baseline_throughput=(
+                            float(baseline_throughput)
+                            if bool(use_baseline)
+                            else None
+                        ),
                     )
                     with st.spinner("Running MiniCluster..."):
                         st.session_state["trackiq_unified_minicluster_result"] = _run_minicluster_once(cfg)
