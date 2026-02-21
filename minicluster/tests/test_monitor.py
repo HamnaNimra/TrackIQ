@@ -94,12 +94,14 @@ def test_anomaly_detector_detects_slow_worker() -> None:
 def test_anomaly_detector_detects_loss_divergence() -> None:
     detector = AnomalyDetector()
     workers = [
-        WorkerSnapshot(0, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
-        WorkerSnapshot(1, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
-        WorkerSnapshot(2, 1, 50.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
+        WorkerSnapshot(i, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00")
+        for i in range(9)
     ]
+    workers.append(
+        WorkerSnapshot(9, 1, 10.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00")
+    )
     anomalies = detector.detect(_checkpoint(workers))
-    assert any(a.anomaly_type == "loss_divergence" and a.worker_id == 2 for a in anomalies)
+    assert any(a.anomaly_type == "loss_divergence" and a.worker_id == 9 for a in anomalies)
 
 
 def test_anomaly_detector_detects_allreduce_spike() -> None:
@@ -107,10 +109,11 @@ def test_anomaly_detector_detects_allreduce_spike() -> None:
     workers = [
         WorkerSnapshot(0, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
         WorkerSnapshot(1, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
-        WorkerSnapshot(2, 1, 1.0, 100.0, 13.0, 1.0, "healthy", "2026-02-21T00:00:00"),
+        WorkerSnapshot(2, 1, 1.0, 100.0, 1.0, 1.0, "healthy", "2026-02-21T00:00:00"),
+        WorkerSnapshot(3, 1, 1.0, 100.0, 10.0, 1.0, "healthy", "2026-02-21T00:00:00"),
     ]
     anomalies = detector.detect(_checkpoint(workers))
-    assert any(a.anomaly_type == "allreduce_spike" and a.worker_id == 2 for a in anomalies)
+    assert any(a.anomaly_type == "allreduce_spike" and a.worker_id == 3 for a in anomalies)
 
 
 def test_anomaly_detector_returns_empty_for_healthy_checkpoint() -> None:
