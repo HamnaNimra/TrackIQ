@@ -12,7 +12,7 @@ from trackiq_compare.comparator import MetricComparator, SummaryGenerator
 from trackiq_compare.reporters import HtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    DARK_THEME,
+    LIGHT_THEME,
     ComparisonTable,
     RegressionBadge,
     TrackiqDashboard,
@@ -74,9 +74,10 @@ class CompareDashboard(TrackiqDashboard):
         label_a: str | None = None,
         label_b: str | None = None,
         result: list[TrackiqResult] | None = None,
-        theme: TrackiqTheme = DARK_THEME,
+        theme: TrackiqTheme = LIGHT_THEME,
         title: str = "TrackIQ Compare Dashboard",
         regression_threshold_percent: float = 5.0,
+        variance_threshold_percent: float = 25.0,
     ) -> None:
         if result is not None:
             if len(result) != 2:
@@ -92,6 +93,7 @@ class CompareDashboard(TrackiqDashboard):
         self.label_a = label_a or left.tool_name
         self.label_b = label_b or right.tool_name
         self.regression_threshold_percent = float(regression_threshold_percent)
+        self.variance_threshold_percent = float(variance_threshold_percent)
         super().__init__(result=[left, right], theme=theme, title=title)
 
     def _vendors(self) -> tuple[str, str]:
@@ -265,7 +267,11 @@ class CompareDashboard(TrackiqDashboard):
 
     def _build_html_report(self, _result: TrackiqResult) -> str:
         """Generate the same compare HTML artifact used by CLI."""
-        comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
+        comparator = MetricComparator(
+            label_a=self.label_a,
+            label_b=self.label_b,
+            variance_threshold_percent=self.variance_threshold_percent,
+        )
         comparison = comparator.compare(self.result_a, self.result_b)
         summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -369,6 +375,10 @@ class CompareDashboard(TrackiqDashboard):
         import streamlit as st
 
         st.markdown("### Comparison Configuration")
+        st.caption(
+            f"Regression threshold: {self.regression_threshold_percent:.2f}% | "
+            f"Variance threshold: {self.variance_threshold_percent:.2f}%"
+        )
         left, right = st.columns(2)
         with left:
             st.markdown(f"**{self.label_a}**")
@@ -569,6 +579,10 @@ class CompareDashboard(TrackiqDashboard):
         import streamlit as st
 
         components = self.build_components()
+        st.info(
+            "Use this view in order: check top-level winner and flagged regressions, validate confidence/coverage, "
+            "then review consistency findings for hidden straggler risk."
+        )
         self._render_input_context()
         if self.is_platform_comparison_mode():
             self._render_platform_comparison_mode()
@@ -584,9 +598,33 @@ class CompareDashboard(TrackiqDashboard):
             st.caption(f"Regression: {self.label_b}")
             components["regression_badge_b"].render()
 
-        comparator = MetricComparator(label_a=self.label_a, label_b=self.label_b)
+        comparator = MetricComparator(
+            label_a=self.label_a,
+            label_b=self.label_b,
+            variance_threshold_percent=self.variance_threshold_percent,
+        )
         comparison = comparator.compare(self.result_a, self.result_b)
         summary = SummaryGenerator(regression_threshold_percent=self.regression_threshold_percent).generate(comparison)
+        if comparison.consistency_findings:
+            st.markdown("### Consistency Analysis")
+            st.dataframe(
+                [
+                    {
+                        "Code": finding.code,
+                        "Label": finding.label,
+                        "Status": finding.status,
+                        "StdDev A (ms)": finding.stddev_a_ms,
+                        "StdDev B (ms)": finding.stddev_b_ms,
+                        "Increase %": finding.increase_percent,
+                        "Threshold %": finding.threshold_percent,
+                    }
+                    for finding in comparison.consistency_findings
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("Consistency Analysis: no variance regression detected or all-reduce step data unavailable.")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             report_path = str(Path(tmpdir) / "trackiq_compare_report.html")

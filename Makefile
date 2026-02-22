@@ -75,7 +75,7 @@ format:
 	isort autoperfpy trackiq_core minicluster trackiq_compare tests
 
 regression-example:
-	python examples/regression_detection_example.py
+	python -m autoperfpy.examples.collector_demo --collector synthetic --samples 10
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

@@ -1,16 +1,22 @@
 """Terminal reporter using rich output."""
 
+import importlib
 from typing import Any
-
-try:
-    from rich.console import Console
-    from rich.table import Table
-except Exception:  # pragma: no cover - fallback path only when rich is absent
-    Console = None
-    Table = None
 
 from trackiq_compare.comparator.metric_comparator import ComparisonResult, MetricComparison
 from trackiq_compare.comparator.summary_generator import SummaryResult
+
+
+def _load_optional_module(module_name: str) -> Any:
+    """Import optional dependency module, returning None if unavailable."""
+    try:
+        return importlib.import_module(module_name)
+    except Exception:  # pragma: no cover - fallback path only when optional deps are absent
+        return None
+
+
+rich_console: Any = _load_optional_module("rich.console")
+rich_table: Any = _load_optional_module("rich.table")
 
 
 class TerminalReporter:
@@ -18,15 +24,15 @@ class TerminalReporter:
 
     def __init__(self, tolerance_percent: float = 0.5, console: Any | None = None):
         self.tolerance_percent = tolerance_percent
-        self.console = console or (Console() if Console is not None else None)
+        self.console = console or (rich_console.Console() if rich_console is not None else None)
 
     def render(self, comparison: ComparisonResult, summary: SummaryResult) -> None:
         """Print comparison table and plain-English summary."""
-        if Table is None or self.console is None:
+        if rich_table is None or self.console is None:
             self._render_plain(comparison, summary)
             return
 
-        table = Table(title="TrackIQ Metric Comparison")
+        table = rich_table.Table(title="TrackIQ Metric Comparison")
         table.add_column("Metric", style="bold")
         table.add_column(comparison.label_a)
         table.add_column(comparison.label_b)
@@ -48,6 +54,15 @@ class TerminalReporter:
         self.console.print("")
         self.console.print("[bold]Summary[/bold]")
         self.console.print(summary.text)
+        if comparison.consistency_findings:
+            self.console.print("")
+            self.console.print("[bold]Consistency Analysis[/bold]")
+            for finding in comparison.consistency_findings:
+                self.console.print(
+                    f"[yellow]{finding.code}[/yellow]: {finding.label} | "
+                    f"stdev A={finding.stddev_a_ms:.4f} ms, stdev B={finding.stddev_b_ms:.4f} ms, "
+                    f"increase={finding.increase_percent:+.2f}% (threshold {finding.threshold_percent:.2f}%)"
+                )
 
     def _render_plain(self, comparison: ComparisonResult, summary: SummaryResult) -> None:
         """Fallback renderer when rich is unavailable."""
@@ -67,6 +82,14 @@ class TerminalReporter:
             )
         print("\nSummary")
         print(summary.text)
+        if comparison.consistency_findings:
+            print("\nConsistency Analysis")
+            for finding in comparison.consistency_findings:
+                print(
+                    f"{finding.code}: {finding.label} | "
+                    f"stdev A={finding.stddev_a_ms:.4f} ms, stdev B={finding.stddev_b_ms:.4f} ms, "
+                    f"increase={finding.increase_percent:+.2f}% (threshold {finding.threshold_percent:.2f}%)"
+                )
 
     @staticmethod
     def _fmt_value(value: float | None) -> str:

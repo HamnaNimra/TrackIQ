@@ -113,6 +113,78 @@ def test_dashboard_launcher_missing_file_raises_clear_system_exit() -> None:
         root_dashboard.main(["--tool", "autoperfpy", "--result", "missing-result.json"])
 
 
+def test_cluster_health_launcher_requires_result_argument() -> None:
+    """Cluster-health mode should require --result path."""
+    with pytest.raises(SystemExit, match="--result is required"):
+        root_dashboard.main(["--tool", "cluster-health"])
+
+
+def test_cluster_health_launcher_missing_result_file_raises_clear_system_exit() -> None:
+    """Cluster-health mode should fail clearly when --result does not exist."""
+    with pytest.raises(SystemExit, match="--result does not exist"):
+        root_dashboard.main(["--tool", "cluster-health", "--result", "missing-minicluster.json"])
+
+
+def test_dashboard_parser_accepts_cluster_health_optional_inputs() -> None:
+    """Root parser should accept cluster-health fault and scaling arguments."""
+    args = root_dashboard._parse_args(  # type: ignore[attr-defined]
+        [
+            "--tool",
+            "cluster-health",
+            "--result",
+            "result.json",
+            "--fault-report",
+            "fault.json",
+            "--scaling-runs",
+            "run1.json",
+            "run2.json",
+        ]
+    )
+    assert args.tool == "cluster-health"
+    assert args.result == "result.json"
+    assert args.fault_report == "fault.json"
+    assert args.scaling_runs == ["run1.json", "run2.json"]
+
+
+def test_extract_minicluster_payload_unwraps_tool_payload_and_steps_alias() -> None:
+    """Cluster-health payload extraction should support wrapped and per_step keys."""
+    raw = {
+        "tool_payload": {
+            "per_step_metrics": [
+                {"step": 0, "loss": 1.2, "allreduce_time_ms": 1.0, "compute_time_ms": 2.0},
+            ],
+            "average_throughput_samples_per_sec": 120.0,
+        },
+        "metrics": {"throughput_samples_per_sec": 121.0},
+    }
+    payload = root_dashboard._extract_minicluster_payload(raw)  # type: ignore[attr-defined]
+    assert "steps" in payload
+    assert isinstance(payload["steps"], list)
+    assert payload["average_throughput_samples_per_sec"] == 120.0
+
+
+def test_extract_step_rows_normalizes_minicluster_step_data() -> None:
+    """Cluster-health step-row extraction should normalize numeric fields."""
+    rows = root_dashboard._extract_step_rows(  # type: ignore[attr-defined]
+        {
+            "steps": [
+                {
+                    "step": 5,
+                    "loss": 0.9,
+                    "allreduce_time_ms": 1.5,
+                    "compute_time_ms": 2.5,
+                    "throughput_samples_per_sec": 99.0,
+                }
+            ]
+        }
+    )
+    assert len(rows) == 1
+    assert rows[0]["step"] == 5.0
+    assert rows[0]["loss"] == 0.9
+    assert rows[0]["allreduce_ms"] == 1.5
+    assert rows[0]["compute_ms"] == 2.5
+
+
 def test_detect_platform_vendor_cases() -> None:
     """Vendor detection should normalize known platform names."""
     assert detect_platform_vendor("AMD MI300X") == "AMD"
@@ -213,6 +285,9 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
             "learning_rate": 0.01,
             "hidden_size": 128,
             "num_layers": 2,
+            "collective_backend": "gloo",
+            "workload": "mlp",
+            "baseline_throughput": 50.0,
             "seed": 42,
             "tdp_watts": 150.0,
         },
@@ -234,6 +309,8 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
         ],
         "total_time_sec": 0.2,
         "final_loss": 1.0,
+        "p99_allreduce_ms": 1.2,
+        "scaling_efficiency_pct": 95.0,
     }
     result = _result(tool_name="minicluster", workload_type="training", tool_payload=payload)
     dash = MiniClusterDashboard(result=result)
@@ -241,4 +318,6 @@ def test_minicluster_dashboard_download_html_uses_minicluster_report_builder() -
 
     assert "MiniCluster Performance Report" in html
     assert "Training Graphs" in html
+    assert "Scaling Efficiency (%)" in html
+    assert "collective_backend" in html
     assert ("plotly-graph-div" in html) or ("<svg" in html)

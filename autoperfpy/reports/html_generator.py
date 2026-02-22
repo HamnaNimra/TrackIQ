@@ -1,4 +1,4 @@
-"""HTML report generation for performance analysis."""
+﻿"""HTML report generation for performance analysis."""
 
 import base64
 import io
@@ -155,6 +155,12 @@ class HTMLReportGenerator:
                 section_added = True
 
         def _plotly_to_html(fig) -> str:
+            try:
+                from autoperfpy.reports import charts as shared_charts
+
+                shared_charts.apply_report_figure_style(fig)
+            except Exception:
+                pass
             fig.update_layout(
                 autosize=True,
                 height=380,
@@ -543,7 +549,8 @@ class HTMLReportGenerator:
             card_bg = "#16213e"
             text_color = "#eaeaea"
             border_color = "#0f3460"
-            accent_color = "#e94560"
+            accent_color = "#0ea5e9"
+            accent_secondary = "#14b8a6"
             secondary_color = "#0f3460"
             table_header_bg = "#0f3460"
             table_row_hover = "#1a1a4e"
@@ -552,21 +559,27 @@ class HTMLReportGenerator:
             card_bg = "#ffffff"
             text_color = "#2d3748"
             border_color = "#e2e8f0"
-            accent_color = "#4299e1"
+            accent_color = "#0f6feb"
+            accent_secondary = "#0ea5a4"
             secondary_color = "#edf2f7"
-            table_header_bg = "#4299e1"
+            table_header_bg = "#0f6feb"
             table_row_hover = "#f7fafc"
 
         return f"""
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
         :root {{
             --bg-color: {bg_color};
             --card-bg: {card_bg};
             --text-color: {text_color};
             --border-color: {border_color};
             --accent-color: {accent_color};
+            --accent-secondary: {accent_secondary};
             --secondary-color: {secondary_color};
             --table-header-bg: {table_header_bg};
             --table-row-hover: {table_row_hover};
+            --surface-strong: rgba(255, 255, 255, 0.14);
+            --surface-soft: rgba(255, 255, 255, 0.08);
         }}
 
         * {{
@@ -576,50 +589,166 @@ class HTMLReportGenerator:
         }}
 
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             line-height: 1.6;
+            background-image:
+                radial-gradient(circle at 2% 10%, rgba(15, 111, 235, 0.14) 0%, transparent 35%),
+                radial-gradient(circle at 98% 5%, rgba(14, 165, 164, 0.12) 0%, transparent 30%);
         }}
 
         .container {{
             max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 28px;
         }}
 
         /* Header */
         .header {{
-            background: linear-gradient(135deg, var(--accent-color), #805ad5);
+            background:
+                linear-gradient(135deg, rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05)),
+                linear-gradient(125deg, var(--accent-color), var(--accent-secondary));
             color: white;
             padding: 40px;
-            border-radius: 12px;
+            border-radius: 18px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .header::after {{
+            content: '';
+            position: absolute;
+            width: 340px;
+            height: 340px;
+            right: -120px;
+            top: -220px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.18);
+            pointer-events: none;
+        }}
+
+        .header-top {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            position: relative;
+            z-index: 1;
         }}
 
         .header h1 {{
+            font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
             font-size: 2.5rem;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
+            letter-spacing: 0.01em;
         }}
 
         .header .subtitle {{
             font-size: 1.1rem;
-            opacity: 0.9;
+            opacity: 0.94;
+            max-width: 760px;
         }}
 
         .header .meta {{
-            margin-top: 20px;
+            margin-top: 22px;
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 10px;
+            position: relative;
+            z-index: 1;
         }}
 
         .header .meta-item {{
-            background: rgba(255, 255, 255, 0.2);
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 0.9rem;
+            background: var(--surface-soft);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }}
+
+        .header-kpi-grid {{
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+            position: relative;
+            z-index: 1;
+        }}
+
+        .header-kpi-card {{
+            background: var(--surface-strong);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px 12px;
+            backdrop-filter: blur(4px);
+            min-height: 72px;
+        }}
+
+        .header-kpi-label {{
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            opacity: 0.84;
+        }}
+
+        .header-kpi-value {{
+            font-size: 1.2rem;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-top: 4px;
+            word-break: break-word;
+        }}
+
+        .platform-strip {{
+            margin-top: 16px;
+            padding: 14px;
+            border-radius: 14px;
+            background: var(--surface-soft);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            z-index: 1;
+        }}
+
+        .platform-strip h3 {{
+            margin: 0 0 10px 0;
+            font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 0.01em;
+        }}
+
+        .platform-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }}
+
+        .platform-card {{
+            background: var(--surface-strong);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 8px 10px;
+        }}
+
+        .platform-card .platform-label {{
+            display: block;
+            font-size: 0.72rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            opacity: 0.82;
+        }}
+
+        .platform-card .platform-value {{
+            display: block;
+            margin-top: 2px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.25;
+            word-break: break-word;
         }}
 
         /* Navigation */
@@ -679,9 +808,9 @@ class HTMLReportGenerator:
         }}
 
         .print-btn:hover {{
-            background: #3182ce;
+            background: #0b5ec7;
             transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(66, 153, 225, 0.4);
+            box-shadow: 0 2px 8px rgba(15, 111, 235, 0.4);
         }}
 
         .print-btn svg {{
@@ -920,13 +1049,17 @@ class HTMLReportGenerator:
             }}
             
             .header {{
-                background: linear-gradient(135deg, #4299e1 0%, #805ad5 100%) !important;
+                background: linear-gradient(135deg, #0f6feb 0%, #0ea5a4 100%) !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 padding: 25px !important;
                 margin-bottom: 20px !important;
             }}
-            
+
+            .header::after {{
+                display: none !important;
+            }}
+
             .header h1 {{
                 font-size: 1.8rem !important;
             }}
@@ -1019,8 +1152,24 @@ class HTMLReportGenerator:
 
         /* Responsive */
         @media (max-width: 768px) {{
+            .container {{
+                padding: 16px;
+            }}
+            .header {{
+                padding: 24px;
+                border-radius: 14px;
+            }}
+            .header-top {{
+                display: block;
+            }}
             .header h1 {{
                 font-size: 1.8rem;
+            }}
+            .header-kpi-grid {{
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }}
+            .platform-grid {{
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }}
             .figure-grid {{
                 grid-template-columns: 1fr;
@@ -1143,6 +1292,148 @@ class HTMLReportGenerator:
             </button>
         </nav>
         """
+
+    def _format_header_value(self, value: Any) -> str:
+        """Format values for compact display in header cards/chips."""
+        if value is None:
+            return ""
+        if isinstance(value, float):
+            if value.is_integer():
+                return str(int(value))
+            return f"{value:.3f}".rstrip("0").rstrip(".")
+        text = str(value).strip()
+        return text if text else ""
+
+    def _metadata_lookup(self) -> dict[str, tuple[str, str]]:
+        """Return lowercase metadata index: lower-key -> (display key, display value)."""
+        lookup: dict[str, tuple[str, str]] = {}
+        for key, value in self.metadata.items():
+            display_key = str(key).strip()
+            display_value = self._format_header_value(value)
+            if not display_key or not display_value:
+                continue
+            lookup[display_key.lower()] = (display_key, display_value)
+        return lookup
+
+    def _build_header_meta_items(self, timestamp: str) -> list[tuple[str, str]]:
+        """Select key metadata chips for the top hero panel."""
+        lookup = self._metadata_lookup()
+        selected: list[tuple[str, str]] = []
+        used: set[str] = set()
+
+        preferred_keys = [
+            "Collector",
+            "Run Label",
+            "Data Source",
+            "Profile",
+            "Device",
+            "Accelerator",
+            "Precision",
+            "Batch Size",
+            "Run Count",
+            "Run Labels",
+        ]
+        for key in preferred_keys:
+            hit = lookup.get(key.lower())
+            if not hit:
+                continue
+            marker = hit[0].lower()
+            if marker in used:
+                continue
+            selected.append(hit)
+            used.add(marker)
+
+        for key, value in self.metadata.items():
+            key_text = str(key).strip()
+            marker = key_text.lower()
+            value_text = self._format_header_value(value)
+            if not key_text or not value_text or marker in used:
+                continue
+            selected.append((key_text, value_text))
+            used.add(marker)
+            if len(selected) >= 10:
+                break
+
+        selected.append(("Generated", timestamp))
+        return selected
+
+    def _build_header_kpis(self) -> list[tuple[str, str]]:
+        """Build compact top KPI cards using the same summary cards as Streamlit report."""
+        if not self.summary_items:
+            return []
+
+        def _render_summary_value(item: dict[str, Any]) -> str:
+            value_text = self._format_header_value(item.get("value"))
+            if not value_text:
+                return ""
+            unit = self._format_header_value(item.get("unit"))
+            return f"{value_text} {unit}".strip()
+
+        by_label: dict[str, dict[str, Any]] = {}
+        for item in self.summary_items:
+            label = self._format_header_value(item.get("label"))
+            if label:
+                by_label[label] = item
+
+        preferred = [
+            "Samples",
+            "Runs",
+            "P99 Latency",
+            "Mean Throughput",
+            "Mean Power",
+            "Duration",
+            "Total Samples",
+        ]
+        cards: list[tuple[str, str]] = []
+        used_labels: set[str] = set()
+        for label in preferred:
+            item = by_label.get(label)
+            if not item:
+                continue
+            value = _render_summary_value(item)
+            if not value:
+                continue
+            cards.append((label, value))
+            used_labels.add(label)
+            if len(cards) >= 6:
+                return cards
+
+        for item in self.summary_items:
+            label = self._format_header_value(item.get("label"))
+            if not label or label in used_labels:
+                continue
+            value = _render_summary_value(item)
+            if not value:
+                continue
+            cards.append((label, value))
+            used_labels.add(label)
+            if len(cards) >= 6:
+                break
+        return cards
+
+    def _build_platform_snapshot(self) -> list[tuple[str, str]]:
+        """Extract platform-oriented metadata fields for the top metadata strip."""
+        lookup = self._metadata_lookup()
+
+        def _pick(*keys: str) -> str:
+            for key in keys:
+                hit = lookup.get(key.lower())
+                if hit:
+                    return hit[1]
+            return ""
+
+        entries = [
+            ("Device", _pick("Device")),
+            ("Accelerator", _pick("Accelerator")),
+            ("GPU", _pick("GPU")),
+            ("CPU", _pick("CPU")),
+            ("Precision", _pick("Precision")),
+            ("Batch", _pick("Batch Size")),
+            ("SoC", _pick("SoC")),
+            ("Power Mode", _pick("Power Mode")),
+            ("OS", _pick("OS")),
+        ]
+        return [(label, value) for label, value in entries if value]
 
     def _generate_summary_html(self) -> str:
         """Generate summary section HTML.
@@ -1823,12 +2114,44 @@ class HTMLReportGenerator:
                 </section>
                 """)
 
-        # Generate meta items for header
-        meta_html = ""
-        for key, value in list(self.metadata.items())[:4]:  # Show first 4 in header
-            meta_html += f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
-
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        header_meta_html = "".join(
+            f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
+            for key, value in self._build_header_meta_items(timestamp)
+        )
+        header_kpi_html = "".join(f"""
+            <div class="header-kpi-card">
+                <div class="header-kpi-label">{label}</div>
+                <div class="header-kpi-value">{value}</div>
+            </div>
+            """ for label, value in self._build_header_kpis())
+        header_kpi_section = f'<div class="header-kpi-grid">{header_kpi_html}</div>' if header_kpi_html else ""
+        platform_cards_html = "".join(f"""
+            <div class="platform-card">
+                <span class="platform-label">{label}</span>
+                <span class="platform-value">{value}</span>
+            </div>
+            """ for label, value in self._build_platform_snapshot())
+        platform_section = (
+            f"""
+            <div class="platform-strip">
+                <h3>Platform & Run Metadata</h3>
+                <div class="platform-grid">
+                    {platform_cards_html}
+                </div>
+            </div>
+            """
+            if platform_cards_html
+            else ""
+        )
+        plotly_script = ""
+        if self.html_figures:
+            try:
+                from plotly.offline.offline import get_plotlyjs
+
+                plotly_script = f"<script>{get_plotlyjs()}</script>"
+            except Exception:
+                plotly_script = '<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>'
 
         # Complete HTML document
         html = f"""<!DOCTYPE html>
@@ -1842,17 +2165,22 @@ class HTMLReportGenerator:
     <style>
         {self._get_css_styles()}
     </style>
-    {('<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>' if self.html_figures else '')}
+    {plotly_script}
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>{self.title}</h1>
-            <p class="subtitle">Performance Analysis Report</p>
-            <div class="meta">
-                {meta_html}
-                <span class="meta-item"><strong>Generated:</strong> {timestamp}</span>
+            <div class="header-top">
+                <div>
+                    <h1>{self.title}</h1>
+                    <p class="subtitle">Performance Analysis Report</p>
+                </div>
             </div>
+            <div class="meta">
+                {header_meta_html}
+            </div>
+            {header_kpi_section}
+            {platform_section}
         </header>
 
         {self._generate_nav_html(section_names)}
@@ -1865,7 +2193,7 @@ class HTMLReportGenerator:
 
         <footer class="footer">
             <p>Generated by AutoPerfPy HTML Report Generator</p>
-            <p>© {datetime.now().year} {self.author}</p>
+            <p>(c) {datetime.now().year} {self.author}</p>
         </footer>
     </div>
 

@@ -3,6 +3,7 @@
 from . import charts
 from .html_generator import HTMLReportGenerator
 from .pdf_generator import PDF_BACKEND_AUTO, PDF_BACKENDS, PDFReportGenerator
+from .plotly_report import generate_plotly_report
 from .visualizer import PerformanceVisualizer
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "PDF_BACKENDS",
     "PDF_BACKEND_AUTO",
     "HTMLReportGenerator",
+    "generate_plotly_report",
     "charts",
 ]

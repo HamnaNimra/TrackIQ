@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from .metric_comparator import ComparisonResult, MetricComparison
+from .metric_comparator import ComparisonResult, ConsistencyFinding, MetricComparison
 
 
 @dataclass
@@ -12,6 +12,7 @@ class SummaryResult:
     overall_winner: str
     largest_deltas: list[MetricComparison] = field(default_factory=list)
     flagged_regressions: list[MetricComparison] = field(default_factory=list)
+    consistency_findings: list[ConsistencyFinding] = field(default_factory=list)
     text: str = ""
 
 
@@ -64,12 +65,20 @@ class SummaryGenerator:
             if regressions
             else f"No regressions exceeded {self.regression_threshold_percent:.1f}%."
         )
+        consistency = comparison.consistency_findings
+        consistency_text = (
+            f"Consistency findings: {len(consistency)}." if consistency else "Consistency findings: none."
+        )
 
-        text = f"Overall winner: {winner}. {winner_reason} " f"Largest deltas: {largest_text}. {regression_text}"
+        text = (
+            f"Overall winner: {winner}. {winner_reason} "
+            f"Largest deltas: {largest_text}. {regression_text} {consistency_text}"
+        )
 
         return SummaryResult(
             overall_winner=winner,
             largest_deltas=largest,
             flagged_regressions=regressions,
+            consistency_findings=consistency,
             text=text,
         )

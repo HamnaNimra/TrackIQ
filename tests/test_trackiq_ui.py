@@ -238,6 +238,24 @@ def test_result_browser_to_dict_filters_by_allowed_tools(tmp_path: Path) -> None
     assert rows[0]["tool_name"] == "minicluster"
 
 
+def test_result_browser_to_dict_sorts_mixed_naive_and_aware_timestamps(tmp_path: Path) -> None:
+    """ResultBrowser should sort mixed timestamp types without raising TypeError."""
+    older_aware = _result(throughput=90.0)
+    older_aware.timestamp = datetime(2026, 2, 21, 9, 0, 0, tzinfo=timezone.utc)
+    newer_naive = _result(throughput=120.0)
+    newer_naive.timestamp = datetime(2026, 2, 21, 10, 0, 0)
+
+    save_trackiq_result(newer_naive, tmp_path / "newer_naive.json")
+    save_trackiq_result(older_aware, tmp_path / "older_aware.json")
+
+    browser = ResultBrowser(search_paths=[str(tmp_path)])
+    rows = browser.to_dict()
+
+    assert len(rows) == 2
+    assert rows[0]["path"].endswith("newer_naive.json")
+    assert rows[1]["path"].endswith("older_aware.json")
+
+
 def test_dashboard_tool_compatibility_filter() -> None:
     """Dashboards should be able to validate loaded-result tool compatibility."""
 

@@ -406,6 +406,20 @@ class TestHTMLReportGenerator:
         assert "plotly" in content.lower()
         assert "plotly-div" in content or "placeholder" in content
 
+    def test_generate_html_prefers_inline_plotly_bundle_when_available(self, report, tmp_path):
+        """Plotly should be inlined for self-contained reports when plotly is installed."""
+        pytest.importorskip("plotly")
+        report.add_html_figure(
+            "<div id='plotly-inline'>placeholder</div>",
+            caption="Plot",
+            section="Charts",
+        )
+        output_path = tmp_path / "inline_plotly_report.html"
+        report.generate_html(str(output_path))
+        content = output_path.read_text(encoding="utf-8")
+        assert "plotly.js v" in content.lower()
+        assert '<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>' not in content
+
 
 class TestHTMLReportGeneratorIntegration:
     """Integration tests for HTMLReportGenerator with full workflow."""
@@ -570,3 +584,18 @@ class TestChartsReportIntegration:
         content = out.read_text(encoding="utf-8")
         assert "Latency" in content
         assert "Summary Statistics" in content or "Key metrics" in content
+
+    def test_warmup_only_samples_fallback_keeps_charts_non_empty(self):
+        """When all samples are warmup, chart builders should fall back to full data."""
+        df, summary = self._minimal_df_summary()
+        df["is_warmup"] = True
+
+        # Plotly paths should still return figures instead of empty charts.
+        assert shared_charts.create_latency_histogram(df, summary, exclude_warmup=True) is not None
+        assert shared_charts.create_throughput_timeline(df, summary, exclude_warmup=True) is not None
+
+        # Chart.js report path should still include throughput chart.
+        report = HTMLReportGenerator(title="Warmup Fallback", author="Test", theme="light")
+        shared_charts.add_interactive_charts_to_html_report(report, df, summary)
+        titles = [chart.get("title") for chart in report.interactive_charts]
+        assert "Throughput Over Time" in titles

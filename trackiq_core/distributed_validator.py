@@ -1,7 +1,7 @@
 """Distributed training validation module for AutoPerfPy.
 
 Validates PyTorch distributed training by comparing single-process vs multi-process
-loss convergence using torch.distributed with Gloo backend.
+loss convergence using torch.distributed with configurable collective backend.
 """
 
 import json
@@ -9,7 +9,7 @@ import multiprocessing
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     import torch
@@ -53,6 +53,7 @@ class DistributedValidationConfig:
     loss_tolerance: float = 0.01  # Relative tolerance for loss comparison (1%)
     num_processes: int = 2
     regression_threshold: float = 5.0  # Percent threshold for regression detection
+    backend: Literal["gloo", "nccl"] = "gloo"
 
 
 if nn is not None:
@@ -144,7 +145,10 @@ def train_worker(rank: int, world_size: int, config: DistributedValidationConfig
     # Some Windows/CPU PyTorch builds do not include libuv support.
     # Force the TCPStore path to avoid "use_libuv was requested" runtime failures.
     os.environ.setdefault("USE_LIBUV", "0")
-    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+    # Use 'nccl' for GPU hardware. ROCm uses the nccl alias for RCCL
+    # (ROCm Collective Communication Library). Gloo is the CPU-only mock
+    # backend for local CI.
+    dist.init_process_group(config.backend, rank=rank, world_size=world_size)
 
     # Set device (CPU for Gloo)
     torch.manual_seed(42)  # Same seed for all processes to ensure deterministic training
@@ -287,6 +291,7 @@ class DistributedValidator:
                 "loss_tolerance": config.loss_tolerance,
                 "num_processes": config.num_processes,
                 "regression_threshold": config.regression_threshold,
+                "backend": config.backend,
             },
             "single_process_losses": single_losses,
             "multi_process_losses": multi_losses,

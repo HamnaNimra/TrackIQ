@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -190,6 +191,158 @@ def test_e2e_cli_reports_and_cross_tool_compare(e2e_cli_artifacts: dict[str, Pat
     assert "TrackIQ Comparison Report" in compare_html
     assert "autoperf-e2e" in compare_html
     assert "minicluster-e2e" in compare_html
+
+
+@pytest.mark.integration
+def test_e2e_autoperf_bench_inference_and_plotly_report(tmp_path: Path) -> None:
+    """bench-inference mock backend should produce JSON and feed into Plotly HTML report generation."""
+    output_dir = tmp_path / "autoperf-bench"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    bench_name = "bench_inference.json"
+    bench_json = output_dir / bench_name
+
+    _run_command(
+        [
+            sys.executable,
+            str(AUTOPERFPY_CLI),
+            "--output-dir",
+            str(output_dir),
+            "bench-inference",
+            "--model",
+            "mock-model",
+            "--backend",
+            "mock",
+            "--num-prompts",
+            "16",
+            "--input-len",
+            "64",
+            "--output-len",
+            "64",
+            "--output",
+            bench_name,
+        ]
+    )
+    assert bench_json.exists()
+    payload = json.loads(bench_json.read_text(encoding="utf-8"))
+    assert payload["backend"] == "mock"
+    assert payload["throughput_tokens_per_sec"] > 0
+
+    report_name = "bench_inference_report.html"
+    report_path = output_dir / report_name
+    _run_command(
+        [
+            sys.executable,
+            str(AUTOPERFPY_CLI),
+            "--output-dir",
+            str(output_dir),
+            "report",
+            "html",
+            "--json",
+            str(bench_json),
+            "--output",
+            report_name,
+            "--title",
+            "Bench Inference Report",
+        ]
+    )
+
+    assert report_path.exists()
+    html = report_path.read_text(encoding="utf-8")
+    assert "AutoPerfPy Inference Benchmark Report" in html
+    assert "Latency Percentiles (ms)" in html
+
+
+@pytest.mark.integration
+def test_e2e_minicluster_heatmap_and_fault_timeline_reports(tmp_path: Path) -> None:
+    """minicluster report heatmap/fault-timeline commands should generate HTML outputs from JSON inputs."""
+    workers_dir = tmp_path / "workers"
+    workers_dir.mkdir(parents=True, exist_ok=True)
+    (workers_dir / "worker_0.json").write_text(json.dumps({"worker_id": 0, "allreduce_time_ms": 4.0}), encoding="utf-8")
+    (workers_dir / "worker_1.json").write_text(json.dumps({"worker_id": 1, "allreduce_time_ms": 9.5}), encoding="utf-8")
+
+    heatmap_path = tmp_path / "heatmap.html"
+    _run_command(
+        [
+            sys.executable,
+            "-m",
+            "minicluster",
+            "report",
+            "heatmap",
+            "--results-dir",
+            str(workers_dir),
+            "--metric",
+            "allreduce_time_ms",
+            "--output",
+            str(heatmap_path),
+        ]
+    )
+    assert heatmap_path.exists()
+    assert "Cluster Heatmap" in heatmap_path.read_text(encoding="utf-8")
+
+    fault_report = {
+        "loss_curve": [1.0, 0.9, 0.82, 0.8, 0.78],
+        "results": [
+            {
+                "fault_type": "SLOW_WORKER",
+                "injection_step": 2,
+                "detected_step": 4,
+                "was_detected": True,
+            }
+        ],
+        "num_detected": 1,
+        "num_faults": 1,
+    }
+    fault_json = tmp_path / "fault_report.json"
+    fault_json.write_text(json.dumps(fault_report), encoding="utf-8")
+    fault_timeline_path = tmp_path / "fault_timeline.html"
+
+    _run_command(
+        [
+            sys.executable,
+            "-m",
+            "minicluster",
+            "report",
+            "fault-timeline",
+            "--json",
+            str(fault_json),
+            "--output",
+            str(fault_timeline_path),
+        ]
+    )
+    assert fault_timeline_path.exists()
+    assert "Fault Injection Validation Report" in fault_timeline_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.integration
+def test_e2e_minicluster_bench_collective_smoke(tmp_path: Path) -> None:
+    """minicluster bench-collective should run a tiny gloo benchmark and emit expected JSON fields."""
+    pytest.importorskip("torch")
+
+    output = tmp_path / "collective_bench.json"
+    _run_command(
+        [
+            sys.executable,
+            "-m",
+            "minicluster",
+            "bench-collective",
+            "--workers",
+            "2",
+            "--size-mb",
+            "1.0",
+            "--iterations",
+            "2",
+            "--backend",
+            "gloo",
+            "--output",
+            str(output),
+        ]
+    )
+    assert output.exists()
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["workers"] == 2
+    assert payload["backend"] == "gloo"
+    assert payload["iterations"] == 2
+    assert "p99_bandwidth_gbps" in payload
 
 
 @pytest.mark.integration

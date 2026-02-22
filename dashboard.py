@@ -1,12 +1,17 @@
 """Unified dashboard launcher for AutoPerfPy, MiniCluster, and trackiq-compare."""
 
+# Cluster Health Dashboard — the single-pane view for a MiniCluster validation run.
+# In production, replace static JSON inputs with a live telemetry sink (PostgreSQL or OpenSearch)
+# and refresh on a configurable interval.
+
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from autoperfpy.ui.dashboard import AutoPerfDashboard
 from minicluster.runner import RunConfig, run_distributed, save_metrics
@@ -14,7 +19,48 @@ from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import DARK_THEME, ResultBrowser, run_dashboard
+from trackiq_core.ui import LIGHT_THEME, ResultBrowser, run_dashboard
+
+
+def _apply_unified_ui_style() -> None:
+    """Apply shared visual polish for unified Streamlit pages."""
+    import streamlit as st
+
+    if not hasattr(st, "markdown"):
+        return
+
+    st.markdown(
+        """
+        <style>
+        .trackiq-hero {
+            border: 1px solid rgba(59,130,246,0.20);
+            background: linear-gradient(135deg, rgba(59,130,246,0.10), rgba(16,185,129,0.10));
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .trackiq-hero h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.22rem;
+        }
+        .trackiq-hero p {
+            margin: 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid rgba(148,163,184,0.20);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background: rgba(15,23,42,0.02);
+        }
+        button[kind="primary"] {
+            border-radius: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _validate_path(path: Optional[str], label: str) -> str:
@@ -25,13 +71,538 @@ def _validate_path(path: Optional[str], label: str) -> str:
     return path
 
 
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _to_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
+
+
+def _load_json_dict(path: str, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"{label} is not valid JSON: {path} ({exc})") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{label} must contain a JSON object: {path}")
+    return payload
+
+
+def _extract_minicluster_payload(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw JSON into a minicluster-like payload dictionary."""
+    payload = raw.get("tool_payload")
+    if isinstance(payload, dict):
+        result = dict(payload)
+    else:
+        result = dict(raw)
+
+    steps = result.get("steps")
+    if not isinstance(steps, list):
+        per_step = result.get("per_step_metrics")
+        if isinstance(per_step, list):
+            result["steps"] = per_step
+
+    # Fallbacks for canonical wrapper fields.
+    metrics = raw.get("metrics")
+    if isinstance(metrics, dict):
+        if result.get("average_throughput_samples_per_sec") is None:
+            result["average_throughput_samples_per_sec"] = metrics.get("throughput_samples_per_sec")
+        if result.get("scaling_efficiency_pct") is None:
+            result["scaling_efficiency_pct"] = metrics.get("scaling_efficiency_pct")
+    if result.get("run_label") is None and isinstance(raw.get("workload"), dict):
+        result["run_label"] = raw["workload"].get("name")
+
+    return result
+
+
+def _extract_step_rows(payload: dict[str, Any]) -> list[dict[str, float]]:
+    """Extract normalized per-step rows for cluster-health charts."""
+    source = payload.get("steps")
+    if not isinstance(source, list):
+        return []
+    rows: list[dict[str, float]] = []
+    for idx, item in enumerate(source):
+        if not isinstance(item, dict):
+            continue
+        step = _to_float(item.get("step"))
+        loss = _to_float(item.get("loss"))
+        allreduce_ms = _to_float(item.get("allreduce_time_ms"))
+        compute_ms = _to_float(item.get("compute_time_ms"))
+        throughput = _to_float(item.get("throughput_samples_per_sec"))
+        rows.append(
+            {
+                "step": float(idx if step is None else step),
+                "loss": float(0.0 if loss is None else loss),
+                "allreduce_ms": float(0.0 if allreduce_ms is None else allreduce_ms),
+                "compute_ms": float(0.0 if compute_ms is None else compute_ms),
+                "throughput": float(0.0 if throughput is None else throughput),
+            }
+        )
+    return rows
+
+
+def _status_from_metric(name: str, value: Any, payload: dict[str, Any]) -> str:
+    metric = str(name).lower()
+    if metric == "fabric":
+        text = str(value or "").strip().lower()
+        if "pass" in text or "ok" in text:
+            return "PASS"
+        if "warn" in text:
+            return "WARN"
+        if "fail" in text or "error" in text:
+            return "FAIL"
+        return "WARN"
+    numeric = _to_float(value)
+    if metric == "workers":
+        return "PASS" if isinstance(value, int) and value > 0 else "FAIL"
+    if metric == "throughput":
+        return "PASS" if numeric is not None and numeric > 0 else "WARN"
+    if metric == "p99":
+        if numeric is None:
+            return "WARN"
+        if numeric <= 5.0:
+            return "PASS"
+        if numeric <= 15.0:
+            return "WARN"
+        return "FAIL"
+    if metric == "scaling":
+        if numeric is None:
+            return "WARN"
+        if numeric >= 90.0:
+            return "PASS"
+        if numeric >= 75.0:
+            return "WARN"
+        return "FAIL"
+    if metric == "workers_from_config":
+        workers_cfg = _to_int(value)
+        if workers_cfg is None:
+            return "WARN"
+        return "PASS" if workers_cfg > 0 else "FAIL"
+    return "WARN"
+
+
+def _badge_html(status: str) -> str:
+    label = status.upper().strip()
+    if label == "PASS":
+        bg = "#16a34a"
+    elif label == "FAIL":
+        bg = "#dc2626"
+    else:
+        bg = "#ca8a04"
+    return (
+        f"<span style='display:inline-block;padding:2px 8px;border-radius:999px;"
+        f"background:{bg};color:#fff;font-size:11px;font-weight:700'>{label}</span>"
+    )
+
+
+def _extract_loss_curve(fault_report: dict[str, Any]) -> list[float]:
+    explicit = fault_report.get("loss_curve")
+    if isinstance(explicit, list):
+        values = [float(v) for v in explicit if isinstance(v, (int, float))]
+        if values:
+            return values
+    losses = fault_report.get("losses")
+    if isinstance(losses, list):
+        values = [float(v) for v in losses if isinstance(v, (int, float))]
+        if values:
+            return values
+    steps = fault_report.get("steps")
+    if isinstance(steps, list):
+        values = [
+            float(item.get("loss"))
+            for item in steps
+            if isinstance(item, dict) and isinstance(item.get("loss"), (int, float))
+        ]
+        if values:
+            return values
+    return []
+
+
+def _build_fault_timeline_figure(fault_report: dict[str, Any]) -> Any | None:
+    """Build the fault timeline plotly figure used in cluster-health mode."""
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+    except Exception:
+        return None
+
+    results = fault_report.get("results", [])
+    if not isinstance(results, list):
+        results = []
+    fault_count = int(fault_report.get("num_faults", len(results)))
+    if fault_count < len(results):
+        fault_count = len(results)
+
+    loss_values = _extract_loss_curve(fault_report)
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.22,
+        subplot_titles=("Loss Curve with Fault Injection Points", "Fault Detection Summary"),
+    )
+
+    if loss_values:
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(len(loss_values))),
+                y=loss_values,
+                mode="lines+markers",
+                name="loss",
+                line=dict(color="#2563eb", width=2),
+            ),
+            row=1,
+            col=1,
+        )
+    else:
+        fig.add_annotation(
+            text="Loss curve unavailable in fault report.",
+            xref="x domain",
+            yref="y domain",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            row=1,
+            col=1,
+        )
+
+    fault_labels: list[str] = []
+    latencies: list[float] = []
+    colors: list[str] = []
+    bar_text: list[str] = []
+
+    for idx, entry in enumerate(results):
+        if not isinstance(entry, dict):
+            continue
+        fault_type = str(entry.get("fault_type", f"fault_{idx}")).upper()
+        detected = bool(entry.get("was_detected", False))
+        injection_step = _to_int(entry.get("injection_step"))
+        detected_step = _to_int(entry.get("detected_step"))
+        explicit_latency = _to_float(entry.get("detection_latency_steps"))
+
+        if injection_step is not None:
+            fig.add_vline(
+                x=injection_step,
+                line_dash="dash",
+                line_color="#dc2626",
+                annotation_text=fault_type,
+                annotation_position="top left",
+                row=1,
+                col=1,
+            )
+
+        if detected_step is not None:
+            y_val = loss_values[detected_step] if loss_values and 0 <= detected_step < len(loss_values) else 0.0
+            fig.add_trace(
+                go.Scatter(
+                    x=[detected_step],
+                    y=[y_val],
+                    mode="markers",
+                    marker=dict(color="#16a34a", size=10),
+                    name=f"{fault_type} detected",
+                    showlegend=False,
+                ),
+                row=1,
+                col=1,
+            )
+
+        latency_steps = explicit_latency
+        if latency_steps is None and injection_step is not None and detected_step is not None:
+            latency_steps = float(max(detected_step - injection_step, 0))
+        if latency_steps is None:
+            latency_steps = 0.0
+
+        fault_labels.append(fault_type)
+        latencies.append(float(latency_steps))
+        colors.append("#16a34a" if detected else "#dc2626")
+        bar_text.append(f"Detected at step {detected_step}" if detected else "MISSED")
+
+    if not fault_labels:
+        fault_labels = ["NO_FAULTS"]
+        latencies = [0.0]
+        colors = ["#9ca3af"]
+        bar_text = ["No fault records"]
+    elif len(fault_labels) < fault_count:
+        for missing_idx in range(len(fault_labels), fault_count):
+            fault_labels.append(f"MISSING_FAULT_{missing_idx + 1}")
+            latencies.append(0.0)
+            colors.append("#dc2626")
+            bar_text.append("MISSED")
+
+    # Keep zero-latency/missed faults visible as thin bars in screenshots/exports.
+    display_latencies = [value if value > 0.0 else 0.05 for value in latencies]
+
+    fig.add_trace(
+        go.Bar(
+            x=display_latencies,
+            y=fault_labels,
+            orientation="h",
+            marker_color=colors,
+            text=bar_text,
+            textposition="auto",
+            name="Detection Latency (steps)",
+        ),
+        row=2,
+        col=1,
+    )
+
+    detected_count = int(
+        fault_report.get("num_detected", sum(1 for e in results if isinstance(e, dict) and e.get("was_detected")))
+    )
+    fig.update_layout(
+        title="Fault Injection Validation Report",
+        template="plotly_white",
+        height=900,
+        margin=dict(l=60, r=40, t=110, b=60),
+        showlegend=False,
+    )
+    fig.add_annotation(
+        x=0.0,
+        y=1.08,
+        xref="paper",
+        yref="paper",
+        text=f"Detection Rate: {detected_count}/{fault_count} faults caught",
+        showarrow=False,
+        font=dict(size=13, color="#1f2937"),
+    )
+    fig.update_xaxes(title_text="Step", row=1, col=1)
+    fig.update_yaxes(title_text="Loss", row=1, col=1)
+    fig.update_xaxes(title_text="Detection latency (steps)", row=2, col=1)
+    fig.update_yaxes(title_text="Fault Type", row=2, col=1)
+    return fig
+
+
+def _render_cluster_health_page(
+    *,
+    result_payload: dict[str, Any],
+    fault_report_payload: dict[str, Any] | None = None,
+    scaling_payloads: list[dict[str, Any]] | None = None,
+) -> None:
+    """Render the unified cluster-health dashboard layout."""
+    import streamlit as st
+
+    try:
+        import pandas as pd
+        import plotly.express as px
+        import plotly.graph_objects as go
+    except Exception as exc:
+        st.error(f"Plotly/pandas are required for cluster-health dashboard rendering: {exc}")
+        return
+
+    st.title("Cluster Health Dashboard")
+    run_label = result_payload.get("run_label")
+    if run_label:
+        st.caption(f"Run: {run_label}")
+
+    config = result_payload.get("config")
+    config = config if isinstance(config, dict) else {}
+    steps = _extract_step_rows(result_payload)
+    df = pd.DataFrame(steps) if steps else pd.DataFrame()
+
+    num_workers = _to_int(result_payload.get("num_workers"))
+    if num_workers is None:
+        num_workers = _to_int(config.get("num_processes"))
+    if num_workers is None:
+        num_workers = _to_int(config.get("num_workers"))
+    if num_workers is None and not df.empty:
+        num_workers = 1
+
+    avg_thr = _to_float(result_payload.get("average_throughput_samples_per_sec"))
+    p99_allreduce = _to_float(result_payload.get("p99_allreduce_ms"))
+    scaling_eff = _to_float(result_payload.get("scaling_efficiency_pct"))
+    fabric_status = result_payload.get("fabric_probe_status", "N/A")
+
+    # Row 1: Summary cards with PASS/WARN/FAIL badges.
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.metric("Workers", num_workers if num_workers is not None else "N/A")
+        st.markdown(_badge_html(_status_from_metric("workers", num_workers, result_payload)), unsafe_allow_html=True)
+    with c2:
+        st.metric(
+            "Avg Throughput (samples/s)",
+            f"{avg_thr:.2f}" if isinstance(avg_thr, float) else "N/A",
+        )
+        st.markdown(_badge_html(_status_from_metric("throughput", avg_thr, result_payload)), unsafe_allow_html=True)
+    with c3:
+        st.metric(
+            "P99 All-Reduce (ms)",
+            f"{p99_allreduce:.3f}" if isinstance(p99_allreduce, float) else "N/A",
+        )
+        st.markdown(_badge_html(_status_from_metric("p99", p99_allreduce, result_payload)), unsafe_allow_html=True)
+    with c4:
+        st.metric(
+            "Scaling Efficiency (%)",
+            f"{scaling_eff:.2f}" if isinstance(scaling_eff, float) else "N/A",
+        )
+        st.markdown(_badge_html(_status_from_metric("scaling", scaling_eff, result_payload)), unsafe_allow_html=True)
+    with c5:
+        st.metric("Fabric Probe Status", str(fabric_status))
+        st.markdown(_badge_html(_status_from_metric("fabric", fabric_status, result_payload)), unsafe_allow_html=True)
+
+    # Row 2: Loss + timing breakdown.
+    col_left, col_right = st.columns(2)
+    with col_left:
+        if not df.empty and "loss" in df.columns:
+            fig_loss = px.line(df, x="step", y="loss", title="Loss Curve", labels={"step": "Step", "loss": "Loss"})
+            st.plotly_chart(fig_loss, use_container_width=True)
+        else:
+            st.info("Loss curve data unavailable.")
+        st.caption(
+            "Loss should trend down or stabilize. Sudden spikes often indicate instability, "
+            "bad gradients, or injected faults."
+        )
+    with col_right:
+        if not df.empty:
+            fig_timing = go.Figure()
+            if "compute_ms" in df.columns:
+                fig_timing.add_trace(
+                    go.Bar(x=df["step"], y=df["compute_ms"], name="compute_time_ms", marker_color="#2563eb")
+                )
+            if "allreduce_ms" in df.columns:
+                fig_timing.add_trace(
+                    go.Bar(x=df["step"], y=df["allreduce_ms"], name="allreduce_time_ms", marker_color="#f97316")
+                )
+            fig_timing.update_layout(
+                title="Step Time Breakdown: Compute vs All-Reduce (ms)",
+                xaxis_title="Step",
+                yaxis_title="Time (ms)",
+                barmode="stack",
+                legend_title_text="Time Source",
+            )
+            st.plotly_chart(fig_timing, use_container_width=True)
+        else:
+            st.info("Per-step timing data unavailable.")
+        st.caption(
+            "If all-reduce dominates step time, communication is throttling training even when compute is healthy."
+        )
+
+    # Row 3: All-reduce histogram with optional P99 marker.
+    if not df.empty and "allreduce_ms" in df.columns:
+        allreduce_values = [
+            float(v) for v in df["allreduce_ms"].tolist() if isinstance(v, (int, float)) and float(v) > 0.0
+        ]
+        if allreduce_values:
+            fig_hist = px.histogram(
+                x=allreduce_values,
+                nbins=30,
+                title="All-Reduce Latency Distribution (ms)",
+                labels={"x": "allreduce_time_ms", "y": "Count"},
+            )
+            if isinstance(p99_allreduce, float):
+                fig_hist.add_vline(
+                    x=p99_allreduce,
+                    line_dash="dash",
+                    line_color="#dc2626",
+                    annotation_text="P99",
+                    annotation_position="top right",
+                )
+            st.plotly_chart(fig_hist, use_container_width=True)
+        else:
+            st.info("All-reduce values unavailable or zero-only for histogram.")
+    else:
+        st.info("All-reduce values unavailable for histogram.")
+    st.caption(
+        "A long right tail means one or more workers are taking significantly longer than the median "
+        "for gradient synchronization. This is your straggler indicator."
+    )
+
+    # Row 4: Optional fault timeline.
+    if isinstance(fault_report_payload, dict):
+        fig_fault = _build_fault_timeline_figure(fault_report_payload)
+        if fig_fault is not None:
+            st.plotly_chart(fig_fault, use_container_width=True)
+        else:
+            st.info("Fault report visualization unavailable (plotly missing).")
+        st.caption(
+            "Fault injections validate detection coverage: SLOW_WORKER, GRADIENT_SYNC_ANOMALY, and WORKER_TIMEOUT. "
+            "Detection latency estimates how long bad steps can slip through in production."
+        )
+
+    # Row 5: Optional scaling chart from multiple runs.
+    if scaling_payloads:
+        records: list[dict[str, Any]] = []
+        for idx, item in enumerate(scaling_payloads):
+            if not isinstance(item, dict):
+                continue
+            run = _extract_minicluster_payload(item)
+            run_cfg = run.get("config")
+            run_cfg = run_cfg if isinstance(run_cfg, dict) else {}
+            workers = _to_int(run.get("num_workers"))
+            if workers is None:
+                workers = _to_int(run_cfg.get("num_processes"))
+            if workers is None:
+                workers = _to_int(run_cfg.get("num_workers"))
+            throughput = _to_float(run.get("average_throughput_samples_per_sec"))
+            scaling = _to_float(run.get("scaling_efficiency_pct"))
+            label = str(run.get("run_label") or f"run_{idx + 1}")
+            if workers is None:
+                continue
+            records.append(
+                {
+                    "workers": workers,
+                    "scaling_efficiency_pct": scaling,
+                    "throughput": throughput,
+                    "label": label,
+                }
+            )
+
+        if records:
+            baseline_candidates = [
+                row for row in records if row["workers"] == 1 and isinstance(row["throughput"], float)
+            ]
+            baseline_thr = baseline_candidates[0]["throughput"] if baseline_candidates else None
+            if baseline_thr is None:
+                sorted_records = sorted(records, key=lambda row: row["workers"])
+                first = sorted_records[0] if sorted_records else None
+                baseline_thr = first["throughput"] if first and isinstance(first.get("throughput"), float) else None
+
+            for row in records:
+                if row["scaling_efficiency_pct"] is None and isinstance(row["throughput"], float) and baseline_thr:
+                    row["scaling_efficiency_pct"] = (row["throughput"] / (row["workers"] * baseline_thr)) * 100.0
+
+            plot_rows = [row for row in records if isinstance(row.get("scaling_efficiency_pct"), float)]
+            if plot_rows:
+                sdf = pd.DataFrame(plot_rows).sort_values("workers")
+                fig_scaling = px.line(
+                    sdf,
+                    x="workers",
+                    y="scaling_efficiency_pct",
+                    markers=True,
+                    text="label",
+                    title="Scaling Efficiency vs Workers",
+                    labels={"workers": "Workers", "scaling_efficiency_pct": "Scaling Efficiency (%)"},
+                )
+                fig_scaling.add_hline(
+                    y=90.0,
+                    line_dash="dash",
+                    line_color="#ca8a04",
+                    annotation_text="90% target",
+                )
+                st.plotly_chart(fig_scaling, use_container_width=True)
+                st.caption(
+                    "Scaling efficiency near 100% indicates near-linear scaling. "
+                    "Sustained drops below 90% usually point to interconnect or memory bottlenecks."
+                )
+
+
 def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Unified TrackIQ dashboard launcher")
     parser.add_argument(
         "--tool",
         required=False,
         default="all",
-        choices=["all", "autoperfpy", "minicluster", "compare"],
+        choices=["all", "autoperfpy", "minicluster", "compare", "cluster-health"],
         help="Tool dashboard to launch (default: all)",
     )
     parser.add_argument("--result", help="Single TrackiqResult JSON path")
@@ -39,6 +610,16 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--result-b", help="Compare mode: result B path")
     parser.add_argument("--label-a", help="Compare mode: display label A")
     parser.add_argument("--label-b", help="Compare mode: display label B")
+    parser.add_argument(
+        "--fault-report",
+        help="Cluster-health mode: optional fault report JSON path",
+    )
+    parser.add_argument(
+        "--scaling-runs",
+        nargs="*",
+        default=None,
+        help="Cluster-health mode: optional list of scaling-run JSON paths",
+    )
     return parser.parse_args(argv)
 
 
@@ -189,6 +770,7 @@ def _render_autoperf_interactive(
 ) -> int:
     """Render AutoPerfPy with rich run configuration and graph output."""
     import streamlit as st
+
     from autoperfpy.device_config import (
         DEFAULT_BATCH_SIZES,
         DEFAULT_ITERATIONS,
@@ -330,7 +912,7 @@ def _render_autoperf_interactive(
                         st.session_state[f"{key_prefix}_selected_idx"] = 0
 
     with st.sidebar.expander("Load AutoPerfPy Result", expanded=False):
-        ResultBrowser(theme=DARK_THEME, allowed_tools=["autoperfpy"]).render()
+        ResultBrowser(theme=LIGHT_THEME, allowed_tools=["autoperfpy"]).render()
 
     results = st.session_state.get(f"{key_prefix}_results")
     selected: Optional[TrackiqResult] = None
@@ -360,11 +942,7 @@ def _render_autoperf_interactive(
                 selected = only
 
     loaded = st.session_state.get("loaded_result")
-    if (
-        selected is None
-        and isinstance(loaded, TrackiqResult)
-        and str(loaded.tool_name).lower() == "autoperfpy"
-    ):
+    if selected is None and isinstance(loaded, TrackiqResult) and str(loaded.tool_name).lower() == "autoperfpy":
         selected = loaded
     if selected is None and args.result and Path(args.result).exists():
         loaded_arg = load_trackiq_result(args.result)
@@ -397,12 +975,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                 layout="wide",
                 initial_sidebar_state="expanded",
             )
+            _apply_unified_ui_style()
             st.title("TrackIQ Unified Dashboard")
             st.caption("Switch between AutoPerfPy, MiniCluster, and Compare in one app.")
+            st.markdown(
+                """
+                <div class="trackiq-hero">
+                  <h2>Unified Validation Workspace</h2>
+                  <p>Use the sidebar to choose a tool and run profile. Each view keeps the same output contract.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
             tool_choice = st.sidebar.selectbox(
                 "Tool",
-                options=["autoperfpy", "minicluster", "compare"],
+                options=["autoperfpy", "minicluster", "compare", "cluster-health"],
                 index=0,
                 key="trackiq_unified_tool_choice",
             )
@@ -422,6 +1010,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                         value=1,
                         step=1,
                         key="trackiq_unified_mini_workers",
+                    )
+                    backend = st.selectbox(
+                        "Collective Backend",
+                        options=["gloo", "nccl"],
+                        index=0,
+                        key="trackiq_unified_mini_backend",
+                    )
+                    workload = st.selectbox(
+                        "Workload",
+                        options=["mlp", "transformer", "embedding"],
+                        index=0,
+                        key="trackiq_unified_mini_workload",
                     )
                     steps = st.number_input(
                         "Steps",
@@ -464,6 +1064,20 @@ def main(argv: Optional[List[str]] = None) -> int:
                         step=1.0,
                         key="trackiq_unified_mini_tdp",
                     )
+                    use_baseline = st.checkbox(
+                        "Use Baseline Throughput",
+                        value=False,
+                        key="trackiq_unified_mini_use_baseline",
+                    )
+                    baseline_throughput = st.number_input(
+                        "Baseline Throughput (samples/s)",
+                        min_value=0.0,
+                        max_value=1_000_000.0,
+                        value=100.0,
+                        step=1.0,
+                        disabled=not bool(use_baseline),
+                        key="trackiq_unified_mini_baseline",
+                    )
                     run_clicked = st.button(
                         "Run MiniCluster",
                         use_container_width=True,
@@ -476,7 +1090,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     )
 
                 with st.sidebar.expander("Load MiniCluster Result", expanded=False):
-                    ResultBrowser(theme=DARK_THEME, allowed_tools=["minicluster"]).render()
+                    ResultBrowser(theme=LIGHT_THEME, allowed_tools=["minicluster"]).render()
 
                 if run_clicked or quick_clicked:
                     cfg = RunConfig(
@@ -486,6 +1100,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         learning_rate=float(0.01 if quick_clicked else learning_rate),
                         seed=int(42 if quick_clicked else seed),
                         tdp_watts=float(tdp_watts),
+                        collective_backend=str(backend),
+                        workload=str(workload),
+                        baseline_throughput=(float(baseline_throughput) if bool(use_baseline) else None),
                     )
                     with st.spinner("Running MiniCluster..."):
                         st.session_state["trackiq_unified_minicluster_result"] = _run_minicluster_once(cfg)
@@ -498,19 +1115,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                     and str(loaded.tool_name).lower() == "minicluster"
                 ):
                     selected = loaded
-                if (
-                    not isinstance(selected, TrackiqResult)
-                    and args.result
-                    and Path(args.result).exists()
-                ):
+                if not isinstance(selected, TrackiqResult) and args.result and Path(args.result).exists():
                     loaded_arg = load_trackiq_result(args.result)
                     if str(loaded_arg.tool_name).lower() == "minicluster":
                         selected = loaded_arg
 
                 if not isinstance(selected, TrackiqResult):
-                    st.info(
-                        "Use sidebar run configuration to generate a MiniCluster run, or load an existing result."
-                    )
+                    st.info("Use sidebar run configuration to generate a MiniCluster run, or load an existing result.")
                     return 0
 
                 dashboard = MiniClusterDashboard(result=selected)
@@ -519,6 +1130,66 @@ def main(argv: Optional[List[str]] = None) -> int:
                 dashboard.render_sidebar()
                 dashboard.render_body()
                 dashboard.render_footer()
+                return 0
+
+            if tool_choice == "cluster-health":
+                st.sidebar.markdown("---")
+                st.sidebar.subheader("Cluster Health Inputs")
+                result_path = st.sidebar.text_input(
+                    "Result JSON",
+                    value=str(st.session_state.get("trackiq_cluster_result_path", args.result or "")),
+                    key="trackiq_cluster_result_path_input",
+                )
+                fault_path = st.sidebar.text_input(
+                    "Fault Report JSON (optional)",
+                    value=str(st.session_state.get("trackiq_cluster_fault_path", args.fault_report or "")),
+                    key="trackiq_cluster_fault_path_input",
+                )
+                scaling_paths_raw = st.sidebar.text_area(
+                    "Scaling Run JSON Paths (optional, one per line)",
+                    value=str(
+                        st.session_state.get(
+                            "trackiq_cluster_scaling_paths_raw",
+                            "\n".join(args.scaling_runs or []),
+                        )
+                    ),
+                    key="trackiq_cluster_scaling_paths_input",
+                )
+
+                if st.sidebar.button("Load Cluster Health", use_container_width=True):
+                    st.session_state["trackiq_cluster_result_path"] = result_path.strip()
+                    st.session_state["trackiq_cluster_fault_path"] = fault_path.strip()
+                    st.session_state["trackiq_cluster_scaling_paths_raw"] = scaling_paths_raw
+
+                selected_result = str(st.session_state.get("trackiq_cluster_result_path", "")).strip()
+                if not selected_result:
+                    st.info("Provide a MiniCluster result JSON path in the sidebar and click 'Load Cluster Health'.")
+                    return 0
+                if not Path(selected_result).exists():
+                    st.error(f"Result JSON not found: {selected_result}")
+                    return 0
+
+                result_raw = _load_json_dict(selected_result, "Result")
+                result_payload = _extract_minicluster_payload(result_raw)
+
+                selected_fault = str(st.session_state.get("trackiq_cluster_fault_path", "")).strip()
+                fault_payload = _load_json_dict(selected_fault, "Fault report") if selected_fault else None
+
+                scaling_raw = str(st.session_state.get("trackiq_cluster_scaling_paths_raw", "")).strip()
+                scaling_payloads: list[dict[str, Any]] = []
+                if scaling_raw:
+                    scaling_paths = [line.strip() for line in scaling_raw.splitlines() if line.strip()]
+                    for idx, path in enumerate(scaling_paths):
+                        if not Path(path).exists():
+                            st.warning(f"Scaling run path not found (skipped): {path}")
+                            continue
+                        scaling_payloads.append(_load_json_dict(path, f"Scaling run {idx + 1}"))
+
+                _render_cluster_health_page(
+                    result_payload=result_payload,
+                    fault_report_payload=fault_payload,
+                    scaling_payloads=scaling_payloads or None,
+                )
                 return 0
 
             st.sidebar.markdown("---")
@@ -531,7 +1202,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             result_a_path = ""
             result_b_path = ""
-            rows = ResultBrowser(theme=DARK_THEME).to_dict()
+            rows = ResultBrowser(theme=LIGHT_THEME).to_dict()
             if input_mode == "Browse discovered results":
                 if not rows:
                     st.sidebar.info("No result files discovered. Switch to manual paths.")
@@ -585,6 +1256,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                 step=0.5,
                 key="trackiq_unified_compare_regression_threshold",
             )
+            variance_threshold = st.sidebar.slider(
+                "Variance Threshold (%)",
+                min_value=1.0,
+                max_value=200.0,
+                value=25.0,
+                step=1.0,
+                key="trackiq_unified_compare_variance_threshold",
+            )
 
             if st.sidebar.button("Load Comparison", use_container_width=True):
                 if not result_a_path or not Path(result_a_path).exists():
@@ -596,9 +1275,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                     st.session_state["trackiq_unified_compare_b"] = load_trackiq_result(result_b_path)
                     st.session_state["trackiq_unified_compare_label_a"] = label_a
                     st.session_state["trackiq_unified_compare_label_b"] = label_b
-                    st.session_state["trackiq_unified_compare_regression_threshold"] = float(
-                        regression_threshold
-                    )
+                    st.session_state["trackiq_unified_compare_regression_threshold"] = float(regression_threshold)
+                    st.session_state["trackiq_unified_compare_variance_threshold"] = float(variance_threshold)
 
             result_a = st.session_state.get("trackiq_unified_compare_a")
             result_b = st.session_state.get("trackiq_unified_compare_b")
@@ -617,11 +1295,43 @@ def main(argv: Optional[List[str]] = None) -> int:
                         regression_threshold,
                     )
                 ),
+                variance_threshold_percent=float(
+                    st.session_state.get(
+                        "trackiq_unified_compare_variance_threshold",
+                        variance_threshold,
+                    )
+                ),
             )
             dashboard.apply_theme(dashboard.theme)
             dashboard.render_header()
             dashboard.render_body()
             dashboard.render_footer()
+            return 0
+
+        if args.tool == "cluster-health":
+            import streamlit as st
+
+            result_path = _validate_path(args.result, "--result")
+            fault_path = _validate_path(args.fault_report, "--fault-report") if args.fault_report else None
+            scaling_paths = [_validate_path(path, "--scaling-runs") for path in (args.scaling_runs or [])]
+
+            st.set_page_config(
+                page_title="Cluster Health Dashboard",
+                layout="wide",
+                initial_sidebar_state="expanded",
+            )
+            _apply_unified_ui_style()
+
+            result_payload = _extract_minicluster_payload(_load_json_dict(result_path, "Result"))
+            fault_payload = _load_json_dict(fault_path, "Fault report") if fault_path else None
+            scaling_payloads = (
+                [_load_json_dict(path, "Scaling run") for path in scaling_paths] if scaling_paths else None
+            )
+            _render_cluster_health_page(
+                result_payload=result_payload,
+                fault_report_payload=fault_payload,
+                scaling_payloads=scaling_payloads,
+            )
             return 0
 
         if args.tool == "autoperfpy":
@@ -635,6 +1345,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 layout="wide",
                 initial_sidebar_state="expanded",
             )
+            _apply_unified_ui_style()
             return _render_autoperf_interactive(
                 args=args,
                 key_prefix="trackiq_autoperf_only",
@@ -647,6 +1358,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 result_path = _validate_path(args.result, "--result")
                 run_dashboard(MiniClusterDashboard, result_path=result_path)
             else:
+
                 class _MiniClusterBrowserDashboard(MiniClusterDashboard):
                     def render_body(self) -> None:
                         import streamlit as st

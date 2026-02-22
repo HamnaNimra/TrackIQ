@@ -77,12 +77,11 @@ tmp/
 _bench_results.json
 run_results.json
 benchmark_report.html
-docs/IMPROVEMENTS_RECOMMENDATIONS.md
+docs/
 test_performance_report.html
 interactive_report.html
 .gitignore
 debug_test_report.html
-.trackiq/
 output/
 minicluster_results/
 coverage.xml

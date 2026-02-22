@@ -43,15 +43,35 @@ def _variant_result():
 def test_minicluster_html_reporter_single_run_contains_training_graphs(tmp_path) -> None:
     """Single result HTML should include training graph sections."""
     result = load_trackiq_result(FIXTURE)
+    payload = result.tool_payload if isinstance(result.tool_payload, dict) else {}
+    config = payload.get("config", {}) if isinstance(payload.get("config"), dict) else {}
+    config["collective_backend"] = "gloo"
+    config["workload"] = "mlp"
+    config["baseline_throughput"] = 50.0
+    payload["config"] = config
+    payload["p50_allreduce_ms"] = 1.1
+    payload["p95_allreduce_ms"] = 1.4
+    payload["p99_allreduce_ms"] = 1.8
+    payload["max_allreduce_ms"] = 2.0
+    payload["allreduce_stdev_ms"] = 0.2
+    payload["scaling_efficiency_pct"] = 92.0
+    result.tool_payload = payload
     out = tmp_path / "single_report.html"
     MiniClusterHtmlReporter().generate(str(out), [result], title="MiniCluster Single Report")
     html = out.read_text(encoding="utf-8")
 
     assert "MiniCluster HTML Report" in html
     assert "Training Graphs" in html
+    assert "How To Read This Report" in html
+    assert "Coverage" in html
     assert "Loss by Step" in html
     assert "Throughput by Step" in html
     assert "Per-Step Timing (Compute + AllReduce)" in html
+    assert "All-Reduce Latency Distribution (ms)" in html
+    assert "P99 All-Reduce (ms)" in html
+    assert "Scaling Efficiency (%)" in html
+    assert "collective_backend" in html
+    assert "baseline_throughput" in html
 
 
 def test_minicluster_html_reporter_multi_run_contains_consolidated_graphs(tmp_path) -> None:

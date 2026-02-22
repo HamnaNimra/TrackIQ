@@ -5,6 +5,8 @@ import os
 import sys
 import tempfile
 from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
 
 from trackiq_compare.comparator import MetricComparator, SummaryGenerator
@@ -17,6 +19,11 @@ from trackiq_compare.deps import (
     render_pdf_from_html_file,
 )
 from trackiq_compare.reporters import HtmlReporter, TerminalReporter
+
+try:
+    TRACKIQ_COMPARE_CLI_VERSION = package_version("trackiq_compare")
+except PackageNotFoundError:
+    TRACKIQ_COMPARE_CLI_VERSION = "0.2.0"
 
 
 def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
@@ -54,7 +61,11 @@ def run_compare(args: argparse.Namespace) -> int:
     if args.label_b:
         print(f"[INFO] label-b is display-only. Actual Result B platform: " f"{result_b.platform.hardware_name}")
 
-    comparator = MetricComparator(label_a=label_a, label_b=label_b)
+    comparator = MetricComparator(
+        label_a=label_a,
+        label_b=label_b,
+        variance_threshold_percent=float(getattr(args, "variance_threshold", 25.0)),
+    )
     comparison = comparator.compare(result_a, result_b)
 
     summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
@@ -83,7 +94,11 @@ def run_report_pdf(args: argparse.Namespace) -> int:
     label_a = args.label_a or result_a.platform.hardware_name or "Result A"
     label_b = args.label_b or result_b.platform.hardware_name or "Result B"
 
-    comparator = MetricComparator(label_a=label_a, label_b=label_b)
+    comparator = MetricComparator(
+        label_a=label_a,
+        label_b=label_b,
+        variance_threshold_percent=float(getattr(args, "variance_threshold", 25.0)),
+    )
     comparison = comparator.compare(result_a, result_b)
     summary = SummaryGenerator(regression_threshold_percent=args.regression_threshold).generate(comparison)
 
@@ -99,7 +114,7 @@ def run_report_pdf(args: argparse.Namespace) -> int:
             author="trackiq-compare",
         )
     except PdfBackendError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"[ERROR] {exc}", file=sys.stderr)
         return 2
     finally:
         try:
@@ -144,6 +159,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="trackiq-compare",
         description="Compare TrackiqResult outputs across tools/platforms.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"trackiq-compare {TRACKIQ_COMPARE_CLI_VERSION}",
+        help="Show CLI version and exit",
+    )
     sub = parser.add_subparsers(dest="command")
 
     run = sub.add_parser("run", help="Compare two TrackiqResult JSON files")
@@ -163,6 +184,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         help="Regression threshold (%%) for summary flagging",
+    )
+    run.add_argument(
+        "--variance-threshold",
+        type=float,
+        default=25.0,
+        help="All-reduce variance regression threshold (%% increase, default: 25.0)",
     )
     run.set_defaults(func=run_compare)
 
@@ -188,6 +215,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=5.0,
         help="Regression threshold (%%) for summary flagging",
+    )
+    report_pdf.add_argument(
+        "--variance-threshold",
+        type=float,
+        default=25.0,
+        help="All-reduce variance regression threshold (%% increase, default: 25.0)",
     )
     report_pdf.add_argument(
         "--pdf-backend",

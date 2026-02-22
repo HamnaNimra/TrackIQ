@@ -18,6 +18,7 @@ def _result(
     hardware: str = "CPU",
     *,
     metric_overrides: dict[str, float | None] | None = None,
+    tool_payload: dict | None = None,
 ) -> TrackiqResult:
     metrics = Metrics(
         throughput_samples_per_sec=100.0,
@@ -58,6 +59,7 @@ def _result(
             status="pass",
             failed_metrics=[],
         ),
+        tool_payload=tool_payload,
     )
 
 
@@ -84,6 +86,8 @@ def test_compare_html_report_includes_visualization_parity_sections(tmp_path) ->
     html = out.read_text(encoding="utf-8")
 
     assert "Visual Overview" in html
+    assert "How To Read This Report" in html
+    assert "Comparable metrics:" in html
     assert "Top Normalized Deltas" in html
     assert "Winner Distribution" in html
     assert "Confidence Distribution" in html
@@ -155,3 +159,41 @@ def test_compare_html_report_confidence_rows_flag_missing_metrics() -> None:
     assert confidence_rows["throughput_samples_per_sec"]["confidence"] == "strong"
     assert confidence_rows["communication_overhead_percent"]["confidence"] == "insufficient"
     assert confidence_rows["power_consumption_watts"]["confidence"] == "insufficient"
+
+
+def test_compare_html_report_includes_consistency_analysis_section_when_variance_regresses(tmp_path) -> None:
+    """HTML report should include consistency section and variance-regression finding."""
+    left = _result(
+        tool_name="left",
+        hardware="HW-A",
+        tool_payload={
+            "steps": [
+                {"allreduce_time_ms": 10.0},
+                {"allreduce_time_ms": 10.2},
+                {"allreduce_time_ms": 9.8},
+                {"allreduce_time_ms": 10.1},
+            ]
+        },
+    )
+    right = _result(
+        tool_name="right",
+        hardware="HW-B",
+        tool_payload={
+            "steps": [
+                {"allreduce_time_ms": 5.0},
+                {"allreduce_time_ms": 18.0},
+                {"allreduce_time_ms": 7.0},
+                {"allreduce_time_ms": 22.0},
+            ]
+        },
+    )
+
+    comparison = MetricComparator("A", "B", variance_threshold_percent=25.0).compare(left, right)
+    summary = SummaryGenerator().generate(comparison)
+    out = tmp_path / "compare_report_consistency.html"
+    HtmlReporter().generate(str(out), comparison, summary, left, right)
+    html = out.read_text(encoding="utf-8")
+
+    assert "Consistency Analysis" in html
+    assert "VARIANCE_REGRESSION" in html
+    assert "All-Reduce Consistency Degraded" in html

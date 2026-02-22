@@ -10,16 +10,33 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _package_dir_for(pkg_name: str) -> Path | None:
+    """Return local package directory for ``pkg_name`` when available."""
+    candidate = _ROOT.joinpath(*pkg_name.split("."))
+    return candidate if candidate.is_dir() else None
+
 
 def _ensure_parent_packages(module_name: str) -> None:
     """Create placeholder parent packages in ``sys.modules`` as needed."""
     parts = module_name.split(".")
     for idx in range(1, len(parts)):
         pkg_name = ".".join(parts[:idx])
+        package_dir = _package_dir_for(pkg_name)
         if pkg_name in sys.modules:
+            # Keep existing modules, but ensure namespace path includes local source dir.
+            pkg = sys.modules[pkg_name]
+            if package_dir is not None and hasattr(pkg, "__path__"):
+                pkg_path = list(getattr(pkg, "__path__", []))
+                package_dir_str = str(package_dir)
+                if package_dir_str not in pkg_path:
+                    pkg_path.append(package_dir_str)
+                    pkg.__path__ = pkg_path  # type: ignore[attr-defined]
             continue
         pkg = ModuleType(pkg_name)
-        pkg.__path__ = []  # type: ignore[attr-defined]
+        pkg.__path__ = [str(package_dir)] if package_dir is not None else []  # type: ignore[attr-defined]
         sys.modules[pkg_name] = pkg
 
 
@@ -37,7 +54,6 @@ def _load_core_module(module_name: str, file_path: Path) -> ModuleType:
     return module
 
 
-_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMA = _load_core_module("trackiq_core.schema", _ROOT / "trackiq_core" / "schema.py")
 _VALIDATOR = _load_core_module("trackiq_core.validator", _ROOT / "trackiq_core" / "validator.py")
 _SERIALIZER = _load_core_module("trackiq_core.serializer", _ROOT / "trackiq_core" / "serializer.py")

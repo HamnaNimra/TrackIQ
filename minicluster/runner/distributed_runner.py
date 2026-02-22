@@ -7,6 +7,7 @@ minicluster-compatible config and metrics serialization.
 import json
 import os
 import platform as _platform
+import statistics
 import tempfile
 import time
 import uuid
@@ -72,6 +73,22 @@ class HealthCheckpoint:
     is_complete: bool = False
 
 
+def _percentile(values: list[float], p: float) -> float:
+    """Compute percentile with linear interpolation."""
+    if not values:
+        raise ValueError("Cannot compute percentile of empty list.")
+    if p <= 0:
+        return float(min(values))
+    if p >= 100:
+        return float(max(values))
+    ordered = sorted(float(v) for v in values)
+    rank = (len(ordered) - 1) * (p / 100.0)
+    low = int(rank)
+    high = min(low + 1, len(ordered) - 1)
+    weight = rank - low
+    return ordered[low] * (1.0 - weight) + ordered[high] * weight
+
+
 @dataclass
 class RunMetrics:
     """Aggregated metrics for a training run (minicluster format)."""
@@ -92,6 +109,30 @@ class RunMetrics:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
+        average_throughput = (
+            sum(s.throughput_samples_per_sec for s in self.steps) / len(self.steps) if self.steps else 0.0
+        )
+        allreduce_values = [float(step.allreduce_time_ms) for step in self.steps]
+        if len(allreduce_values) >= 2:
+            # p99 is the straggler detection metric.
+            p50_allreduce_ms: float | None = _percentile(allreduce_values, 50.0)
+            p95_allreduce_ms: float | None = _percentile(allreduce_values, 95.0)
+            p99_allreduce_ms: float | None = _percentile(allreduce_values, 99.0)
+            max_allreduce_ms: float | None = float(max(allreduce_values))
+            allreduce_stdev_ms: float | None = float(statistics.stdev(allreduce_values))
+        else:
+            p50_allreduce_ms = None
+            p95_allreduce_ms = None
+            p99_allreduce_ms = None
+            max_allreduce_ms = None
+            allreduce_stdev_ms = None
+
+        scaling_efficiency_pct: float | None = None
+        baseline = self.config.get("baseline_throughput")
+        if isinstance(baseline, (int, float)) and float(baseline) > 0:
+            # Scaling efficiency: 100% = perfect linear scaling. Below 90% indicates interconnect or memory bottleneck.
+            scaling_efficiency_pct = (average_throughput / (self.num_workers * float(baseline))) * 100.0
+
         return {
             "config": self.config,
             "num_workers": self.num_workers,
@@ -108,9 +149,15 @@ class RunMetrics:
             "health_checkpoint_path": self.health_checkpoint_path,
             "average_loss": sum(s.loss for s in self.steps) / len(self.steps) if self.steps else 0.0,
             "final_loss": self.steps[-1].loss if self.steps else 0.0,
-            "average_throughput_samples_per_sec": (
-                sum(s.throughput_samples_per_sec for s in self.steps) / len(self.steps) if self.steps else 0.0
-            ),
+            "average_throughput_samples_per_sec": average_throughput,
+            "p50_allreduce_ms": p50_allreduce_ms,
+            "p95_allreduce_ms": p95_allreduce_ms,
+            "p99_allreduce_ms": p99_allreduce_ms,
+            "max_allreduce_ms": max_allreduce_ms,
+            "allreduce_stdev_ms": allreduce_stdev_ms,
+            "collective_backend": self.config.get("collective_backend", "gloo"),
+            "workload_type": self.config.get("workload", "mlp"),
+            "scaling_efficiency_pct": scaling_efficiency_pct,
         }
 
 
@@ -134,6 +181,9 @@ class RunConfig:
     regression_threshold: float = 5.0
     seed: int = 42
     tdp_watts: float = 150.0
+    collective_backend: Literal["gloo", "nccl"] = "gloo"
+    baseline_throughput: float | None = None
+    workload: Literal["mlp", "transformer", "embedding"] = "mlp"
 
     @property
     def num_workers(self) -> int:
@@ -153,6 +203,7 @@ class RunConfig:
             loss_tolerance=self.loss_tolerance,
             num_processes=self.num_processes,
             regression_threshold=self.regression_threshold,
+            backend=self.collective_backend,
         )
 
 
@@ -188,6 +239,52 @@ def create_synthetic_dataset(
     )
 
 
+def _train_single_process_custom_workload(config: RunConfig) -> list[float]:
+    """Train synthetic non-MLP workloads for a fixed number of steps."""
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+
+    from minicluster.runner.workloads import EmbeddingWorkload, TransformerWorkload
+
+    torch.manual_seed(config.seed)
+    criterion = nn.MSELoss()
+
+    losses: list[float] = []
+    if config.workload == "transformer":
+        model = TransformerWorkload()
+        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+        for _ in range(config.num_steps):
+            x_batch = torch.randn(config.batch_size, 32, 256)
+            y_batch = torch.randn(config.batch_size, 1)
+            optimizer.zero_grad()
+            output = model(x_batch)
+            loss = criterion(output, y_batch)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+        return losses
+
+    if config.workload == "embedding":
+        model = EmbeddingWorkload()
+        optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+        bag_size = 16
+        for _ in range(config.num_steps):
+            total_indices = config.batch_size * bag_size
+            indices = torch.randint(0, 10_000, (total_indices,), dtype=torch.long)
+            offsets = torch.arange(0, total_indices, bag_size, dtype=torch.long)
+            y_batch = torch.randn(config.batch_size, 1)
+            optimizer.zero_grad()
+            output = model(indices, offsets)
+            loss = criterion(output, y_batch)
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+        return losses
+
+    return _train_single_process_impl(config.to_core())
+
+
 def train_single_process(config: RunConfig, health_checkpoint_path: str | None = None) -> RunMetrics:
     """Train in single-process mode using trackiq_core implementation.
 
@@ -203,9 +300,9 @@ def train_single_process(config: RunConfig, health_checkpoint_path: str | None =
 
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
-    # Call trackiq_core implementation
+    # Call trackiq_core implementation for MLP, local synthetic loops for other workloads.
     start = time.time()
-    losses = _train_single_process_impl(config.to_core())
+    losses = _train_single_process_custom_workload(config)
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -264,7 +361,13 @@ def train_distributed(
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg)
+    # Non-MLP synthetic workloads currently use single-process simulation until
+    # dedicated multi-process kernels are added for these shapes.
+    losses = (
+        _train_multi_process_impl(core_cfg)
+        if config.workload == "mlp"
+        else _train_single_process_custom_workload(config)
+    )
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -314,7 +417,13 @@ def run_distributed(config: RunConfig, health_checkpoint_path: str | None = None
     profiler = PowerProfiler(SimulatedPowerReader(tdp_watts=config.tdp_watts))
     profiler.start_session()
     start = time.time()
-    losses = _train_multi_process_impl(core_cfg)
+    # Non-MLP synthetic workloads currently use single-process simulation until
+    # dedicated multi-process kernels are added for these shapes.
+    losses = (
+        _train_multi_process_impl(core_cfg)
+        if config.workload == "mlp"
+        else _train_single_process_custom_workload(config)
+    )
     elapsed = time.time() - start
     throughput = (config.batch_size * len(losses) / elapsed) if elapsed > 0 and losses else 0.0
     for idx in range(len(losses)):
@@ -470,8 +579,8 @@ def _convert_to_run_metrics(
         num_steps=config.num_steps,
         steps=steps,
         total_time_sec=metrics_dict.get("total_time_sec", 0.0),
-        total_allreduce_time_ms=0.0,
-        total_compute_time_ms=0.0,
+        total_allreduce_time_ms=float(metrics_dict.get("total_allreduce_time_ms", 0.0) or 0.0),
+        total_compute_time_ms=float(metrics_dict.get("total_compute_time_ms", 0.0) or 0.0),
         start_timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
         end_timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
         power_metrics=metrics_dict.get("power_metrics"),
@@ -536,6 +645,11 @@ def save_metrics(metrics: RunMetrics, output_path: str) -> None:
             temperature_celsius=(
                 float(metrics.power_metrics.get("temperature_celsius"))
                 if metrics.power_metrics and metrics.power_metrics.get("temperature_celsius") is not None
+                else None
+            ),
+            scaling_efficiency_pct=(
+                float(metrics_dict["scaling_efficiency_pct"])
+                if isinstance(metrics_dict.get("scaling_efficiency_pct"), (int, float))
                 else None
             ),
         ),

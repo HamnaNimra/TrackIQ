@@ -1,4 +1,4 @@
-"""Command-line interface for AutoPerfPy.
+﻿"""Command-line interface for AutoPerfPy.
 This CLI uses generic utilities from trackiq_core.cli and adds automotive-specific
 commands for profiles, tegrastats analysis, and DNN pipeline analysis.
 """
@@ -10,6 +10,8 @@ import platform as _platform
 import sys
 import tempfile
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from typing import Any
 
 from autoperfpy.auto_runner import run_auto_benchmarks, run_single_benchmark
@@ -25,7 +27,7 @@ from autoperfpy.device_config import (
     InferenceConfig,
     resolve_device,
 )
-from autoperfpy.profiles import ProfileValidationError
+from autoperfpy.profiles import ProfileValidationError, list_profiles
 from trackiq_core.distributed_validator import DistributedValidationConfig, DistributedValidator
 from trackiq_core.hardware import DeviceProfile
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PDF_BACKENDS, PdfBackendError
@@ -41,6 +43,30 @@ from trackiq_core.schema import (
 )
 from trackiq_core.serializer import save_trackiq_result
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
+
+try:
+    AUTOPERFPY_CLI_VERSION = package_version("autoperfpy")
+except PackageNotFoundError:
+    AUTOPERFPY_CLI_VERSION = "1.0"
+
+DEFAULT_PROFILE_NAMES = [
+    "automotive_safety",
+    "edge_max_perf",
+    "edge_low_power",
+    "ci_smoke",
+]
+
+
+def _available_profile_names() -> list[str]:
+    """Return profile names for help text, with safe fallback."""
+    try:
+        names = [str(name).strip() for name in list_profiles()]
+        names = [name for name in names if name]
+        if names:
+            return sorted(dict.fromkeys(names))
+    except Exception:
+        pass
+    return list(DEFAULT_PROFILE_NAMES)
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -69,6 +95,7 @@ Examples:
 
   # Latency analysis
   autoperfpy analyze latency --csv data.csv
+  autoperfpy analyze latency --json results.json
   autoperfpy analyze logs --log performance.log --threshold 50
 
   # DNN pipeline analysis
@@ -86,6 +113,7 @@ Examples:
   # Benchmarking
   autoperfpy benchmark batching --batch-sizes 1,4,8,16
   autoperfpy benchmark llm --prompt-length 512
+  autoperfpy bench-inference --model meta-llama/Llama-3-8B --backend mock --output llm_bench.json
 
   # Monitoring
   autoperfpy monitor gpu --duration 300
@@ -107,6 +135,12 @@ Environment Variables:
     )
 
     parser.add_argument("--config", help="Path to configuration file (YAML/JSON)")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"autoperfpy {AUTOPERFPY_CLI_VERSION}",
+        help="Show CLI version and exit",
+    )
     parser.add_argument("--output", help="Output file for results (JSON)")
     parser.add_argument(
         "--output-dir",
@@ -114,10 +148,13 @@ Environment Variables:
         metavar="DIR",
         help="Directory for report and export files (default: output). Created if missing.",
     )
+    profile_names = _available_profile_names()
+    profile_list_help = ", ".join(profile_names)
+
     parser.add_argument(
         "--profile",
         "-p",
-        help="Performance profile to use (automotive_safety, edge_max_perf, edge_low_power, ci_smoke)",
+        help=f"Performance profile to use ({profile_list_help})",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
@@ -140,7 +177,7 @@ Environment Variables:
         "--profile",
         "-p",
         default=None,
-        help="Profile to use (e.g. ci_smoke). If omitted, auto mode runs on all detected devices.",
+        help=(f"Profile to use ({profile_list_help}). " "If omitted, auto mode runs on all detected devices."),
     )
     run_parser.add_argument(
         "--auto",
@@ -245,7 +282,15 @@ Environment Variables:
     # Analyze latency
     latency_parser = analyze_subparsers.add_parser("latency", help="Analyze percentile latencies")
     latency_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
-    latency_parser.add_argument("--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)")
+    latency_parser.add_argument(
+        "--json",
+        help="Benchmark JSON file from autoperfpy run --export (converted to analyzer CSV format)",
+    )
+    latency_parser.add_argument(
+        "--device",
+        "-D",
+        help="Device to use when no --csv/--json (e.g. nvidia_0, cpu_0)",
+    )
     latency_parser.add_argument(
         "--duration",
         "-d",
@@ -273,7 +318,7 @@ Environment Variables:
         "--throttle-threshold",
         type=float,
         default=85.0,
-        help="Thermal throttling threshold (°C)",
+        help="Thermal throttling threshold (Â°C)",
     )
 
     # Analyze efficiency
@@ -315,6 +360,47 @@ Environment Variables:
     llm_parser.add_argument("--prompt-length", type=int, default=512, help="Prompt token count")
     llm_parser.add_argument("--output-tokens", type=int, default=256, help="Output token count")
     llm_parser.add_argument("--runs", type=int, default=10, help="Number of benchmark runs")
+
+    # Inference benchmark (mock/vLLM backends)
+    bench_inference_parser = subparsers.add_parser(
+        "bench-inference",
+        help="Benchmark LLM inference backend (mock or vLLM) and export JSON",
+    )
+    bench_inference_parser.add_argument(
+        "--model",
+        required=True,
+        help="Model name or local path",
+    )
+    bench_inference_parser.add_argument(
+        "--backend",
+        choices=["vllm", "mock"],
+        default="mock",
+        help="Inference benchmark backend (default: mock)",
+    )
+    bench_inference_parser.add_argument(
+        "--num-prompts",
+        type=int,
+        default=100,
+        help="Number of prompts to benchmark (default: 100)",
+    )
+    bench_inference_parser.add_argument(
+        "--input-len",
+        type=int,
+        default=128,
+        help="Input prompt length in tokens (default: 128)",
+    )
+    bench_inference_parser.add_argument(
+        "--output-len",
+        type=int,
+        default=128,
+        help="Output generation length in tokens (default: 128)",
+    )
+    bench_inference_parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help="Output JSON path for benchmark result",
+    )
 
     # Distributed validation
     distributed_parser = bench_subparsers.add_parser("distributed", help="Validate distributed training correctness")
@@ -696,23 +782,9 @@ def _normalize_report_input_data(data: object) -> dict[str, Any]:
 
 def _write_result_to_csv(result: dict, path: str) -> bool:
     """Write run result samples to a CSV file. Returns True if written."""
-    samples = result.get("samples", [])
-    if not samples:
-        return False
-    batch_size = result.get("inference_config", {}).get("batch_size", 1)
-    rows = []
-    for s in samples:
-        ts = s.get("timestamp", 0)
-        m = s.get("metrics", s) if isinstance(s, dict) else {}
-        lat = m.get("latency_ms", 0)
-        pwr = m.get("power_w", 0)
-        throughput = (1000 / lat) if lat else 0
-        rows.append((ts, "default", batch_size, lat, pwr, throughput))
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("timestamp,workload,batch_size,latency_ms,power_w,throughput\n")
-        for r in rows:
-            f.write(",".join(str(x) for x in r) + "\n")
-    return True
+    from autoperfpy.reports.export_csv import write_single_run_csv
+
+    return write_single_run_csv(result, path)
 
 
 def run_analyze_latency(args, config):
@@ -783,6 +855,13 @@ def run_benchmark_llm(args, config):
     return _cmd_run_benchmark_llm(args, config)
 
 
+def run_bench_inference(args, config):
+    """Run LLM inference benchmark (mock/vLLM) and export JSON."""
+    from autoperfpy.commands.benchmark import run_bench_inference as _cmd_run_bench_inference
+
+    return _cmd_run_bench_inference(args, config, output_path=_output_path)
+
+
 def run_benchmark_distributed(args, config):
     """Run distributed training validation."""
     validator = DistributedValidator()
@@ -795,7 +874,7 @@ def run_benchmark_distributed(args, config):
         regression_threshold=5.0,  # Default
     )
 
-    print("\n🔄 Distributed Training Validation")
+    print("\nðŸ”„ Distributed Training Validation")
     print("=" * 60)
     print(f"Steps: {val_config.num_steps}")
     print(f"Processes: {val_config.num_processes}")
@@ -1019,6 +1098,10 @@ def main():
                 result = run_benchmark_llm(args, config)
             elif args.bench_type == "distributed":
                 result = run_benchmark_distributed(args, config)
+        elif args.command == "bench-inference":
+            result = run_bench_inference(args, config)
+            if result is None:
+                return 1
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
@@ -1034,14 +1117,14 @@ def main():
         elif args.command == "compare":
             return run_compare(args)
     except (HardwareNotFoundError, DependencyError, ProfileValidationError, PdfBackendError) as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
     except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"❌ Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         return 1
 
     # Save output if requested (report html/pdf already write to output dir; do not overwrite)
-    if args.output and result and getattr(args, "command", None) != "report":
+    if args.output and result and getattr(args, "command", None) not in {"report", "bench-inference"}:
         out_path = _output_path(args, args.output)
         if hasattr(result, "to_dict"):
             _save_trackiq_wrapped_json(out_path, result.to_dict())

@@ -1,4 +1,4 @@
-"""Command-line interface for minicluster.
+﻿"""Command-line interface for minicluster.
 
 Provides subcommands for:
 - run: Execute distributed training harness
@@ -9,11 +9,20 @@ Provides subcommands for:
 """
 
 import argparse
+import json
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 
+from minicluster.benchmarks import run_collective_benchmark, save_collective_benchmark
 from minicluster.deps import RegressionDetector, RegressionThreshold
 from minicluster.monitor.cli import register_monitor_subcommand
-from minicluster.reporting import MiniClusterHtmlReporter
+from minicluster.reporting import (
+    MiniClusterHtmlReporter,
+    generate_cluster_heatmap,
+    generate_fault_timeline,
+    load_worker_results_from_dir,
+)
 from minicluster.runner import RunConfig, run_distributed, save_metrics
 from trackiq_core.reporting import (
     PDF_BACKENDS,
@@ -22,6 +31,11 @@ from trackiq_core.reporting import (
     render_trackiq_result_html,
 )
 from trackiq_core.serializer import load_trackiq_result
+
+try:
+    MINICLUSTER_CLI_VERSION = package_version("minicluster")
+except PackageNotFoundError:
+    MINICLUSTER_CLI_VERSION = "0.1.0"
 
 
 def _print_subcommand_help(parser: argparse.ArgumentParser, command: str) -> None:
@@ -48,6 +62,24 @@ def setup_run_parser(subparsers):
         type=int,
         default=2,
         help="Number of worker processes (default: 2)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["gloo", "nccl"],
+        default="gloo",
+        help="Collective communication backend (default: gloo)",
+    )
+    parser.add_argument(
+        "--workload",
+        choices=["mlp", "transformer", "embedding"],
+        default="mlp",
+        help="Synthetic workload type (default: mlp)",
+    )
+    parser.add_argument(
+        "--baseline-throughput",
+        type=float,
+        default=None,
+        help="Single-worker baseline throughput for scaling efficiency calculation",
     )
     parser.add_argument(
         "--steps",
@@ -314,6 +346,88 @@ def setup_report_parser(subparsers):
     )
     pdf_parser.set_defaults(func=cmd_report_pdf)
 
+    heatmap_parser = report_subparsers.add_parser(
+        "heatmap",
+        help="Generate cluster health heatmap from per-worker JSON files",
+    )
+    heatmap_parser.add_argument(
+        "--results-dir",
+        required=True,
+        help="Directory containing per-worker JSON files",
+    )
+    heatmap_parser.add_argument(
+        "--metric",
+        choices=[
+            "allreduce_time_ms",
+            "p99_allreduce_ms",
+            "throughput_samples_per_sec",
+            "compute_time_ms",
+        ],
+        default="allreduce_time_ms",
+        help="Metric to visualize in heatmap (default: allreduce_time_ms)",
+    )
+    heatmap_parser.add_argument(
+        "--output",
+        default="./minicluster_results/heatmap.html",
+        help="Output HTML file path (default: ./minicluster_results/heatmap.html)",
+    )
+    heatmap_parser.set_defaults(func=cmd_report_heatmap)
+
+    fault_timeline_parser = report_subparsers.add_parser(
+        "fault-timeline",
+        help="Generate fault injection timeline HTML report",
+    )
+    fault_timeline_parser.add_argument(
+        "--json",
+        required=True,
+        help="Path to fault-test report JSON (e.g. output from `minicluster fault-test`)",
+    )
+    fault_timeline_parser.add_argument(
+        "--output",
+        default="./minicluster_results/fault_timeline.html",
+        help="Output HTML file path (default: ./minicluster_results/fault_timeline.html)",
+    )
+    fault_timeline_parser.set_defaults(func=cmd_report_fault_timeline)
+
+
+def setup_bench_collective_parser(subparsers):
+    """Setup 'minicluster bench-collective' subcommand."""
+    parser = subparsers.add_parser(
+        "bench-collective",
+        help="Benchmark all-reduce bandwidth without compute overhead",
+        description="Run communication-only collective benchmark",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Number of worker processes (default: 2)",
+    )
+    parser.add_argument(
+        "--size-mb",
+        type=float,
+        default=256.0,
+        help="All-reduce tensor size in MB (default: 256.0)",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=50,
+        help="Number of all-reduce iterations (default: 50)",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["gloo", "nccl"],
+        default="gloo",
+        help="Collective communication backend (default: gloo)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Optional output path for benchmark JSON",
+    )
+    parser.set_defaults(func=cmd_bench_collective)
+
 
 def cmd_run(args):
     """Execute 'minicluster run' command."""
@@ -326,6 +440,9 @@ def cmd_run(args):
         num_processes=args.workers,
         seed=args.seed,
         tdp_watts=args.tdp_watts,
+        collective_backend=args.backend,
+        baseline_throughput=args.baseline_throughput,
+        workload=args.workload,
     )
 
     if args.verbose:
@@ -334,6 +451,10 @@ def cmd_run(args):
         print(f"  Steps: {config.num_steps}")
         print(f"  Batch size: {config.batch_size}")
         print(f"  Learning rate: {config.learning_rate}")
+        print(f"  Backend: {config.collective_backend}")
+        print(f"  Workload: {config.workload}")
+        if config.baseline_throughput is not None:
+            print(f"  Baseline throughput: {config.baseline_throughput}")
 
     print("\nStarting distributed training run...")
     metrics = run_distributed(config, health_checkpoint_path=args.health_checkpoint_path)
@@ -344,6 +465,35 @@ def cmd_run(args):
     print(f"  Final loss: {metrics.steps[-1].loss:.6f}")
     print(f"  Avg throughput: {metrics.to_dict()['average_throughput_samples_per_sec']:.1f} samples/sec")
     print(f"  Metrics saved to: {args.output}")
+
+
+def cmd_bench_collective(args):
+    """Execute 'minicluster bench-collective' command."""
+    try:
+        result = run_collective_benchmark(
+            workers=int(args.workers),
+            size_mb=float(args.size_mb),
+            iterations=int(args.iterations),
+            backend=args.backend,
+        )
+    except ValueError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"[ERROR] Collective benchmark failed: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.output:
+        save_collective_benchmark(result, args.output)
+        print(f"[OK] Collective benchmark written to: {args.output}")
+    else:
+        print(json.dumps(result, indent=2))
+
+    print(
+        f"[OK] mean={result['mean_bandwidth_gbps']:.3f} GB/s, "
+        f"p99={result['p99_bandwidth_gbps']:.3f} GB/s, "
+        f"min={result['min_bandwidth_gbps']:.3f} GB/s"
+    )
 
 
 def cmd_validate(args):
@@ -362,10 +512,10 @@ def cmd_validate(args):
         sys.exit(0 if report.overall_passed else 1)
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(2)
     except ValueError as e:
-        print(f"✗ Validation error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] Validation error: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -375,7 +525,7 @@ def cmd_fault_test(args):
         from minicluster.validators.fault_injector import FaultInjector
     except Exception as exc:
         print(
-            "Error: fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"',
+            "[ERROR] fault injection requires optional ML dependencies. " 'Install with: pip install -e ".[ml]"',
             file=sys.stderr,
         )
         raise SystemExit(2) from exc
@@ -406,7 +556,7 @@ def cmd_baseline_save(args):
         print(f"[OK] Baseline '{args.name}' saved successfully")
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -447,7 +597,7 @@ def cmd_baseline_compare(args):
 
             print(
                 f"{metric_name:30} {comparison.baseline_value:12.6f} "
-                f"→ {comparison.current_value:12.6f} ({comparison.percent_change:+7.2f}%) {status}"
+                f"â†’ {comparison.current_value:12.6f} ({comparison.percent_change:+7.2f}%) {status}"
             )
 
         print("=" * 80 + "\n")
@@ -477,7 +627,7 @@ def cmd_baseline_compare(args):
         sys.exit(1 if regressions_found else 0)
 
     except FileNotFoundError as e:
-        print(f"✗ Error: {str(e)}", file=sys.stderr)
+        print(f"[ERROR] {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -486,10 +636,10 @@ def cmd_report_pdf(args):
     try:
         result = load_trackiq_result(args.result)
     except FileNotFoundError:
-        print(f"Error: Result file not found: {args.result}", file=sys.stderr)
+        print(f"[ERROR] Result file not found: {args.result}", file=sys.stderr)
         sys.exit(2)
     except Exception as e:  # pragma: no cover - defensive parse guard
-        print(f"Error: Invalid TrackiqResult input: {e}", file=sys.stderr)
+        print(f"[ERROR] Invalid TrackiqResult input: {e}", file=sys.stderr)
         sys.exit(2)
 
     try:
@@ -502,7 +652,7 @@ def cmd_report_pdf(args):
             author="minicluster",
         )
     except PdfBackendError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        print(f"[ERROR] {e}", file=sys.stderr)
         sys.exit(2)
 
     if outcome.used_fallback:
@@ -517,10 +667,10 @@ def cmd_report_html(args):
         try:
             result = load_trackiq_result(path)
         except FileNotFoundError:
-            print(f"Error: Result file not found: {path}", file=sys.stderr)
+            print(f"[ERROR] Result file not found: {path}", file=sys.stderr)
             sys.exit(2)
         except Exception as e:  # pragma: no cover - defensive parse guard
-            print(f"Error: Invalid TrackiqResult input ({path}): {e}", file=sys.stderr)
+            print(f"[ERROR] Invalid TrackiqResult input ({path}): {e}", file=sys.stderr)
             sys.exit(2)
         results.append(result)
 
@@ -531,11 +681,50 @@ def cmd_report_html(args):
             title=args.title,
         )
     except Exception as e:
-        print(f"Error: Failed to generate HTML report: {e}", file=sys.stderr)
+        print(f"[ERROR] Failed to generate HTML report: {e}", file=sys.stderr)
         sys.exit(2)
 
     mode = "consolidated" if len(results) > 1 else "single-run"
     print(f"[OK] HTML report generated ({mode}): {output_path}")
+
+
+def cmd_report_heatmap(args):
+    """Execute `minicluster report heatmap` command."""
+    try:
+        rows = load_worker_results_from_dir(args.results_dir, args.metric)
+        generate_cluster_heatmap(rows, metric=args.metric, output_path=args.output)
+    except FileNotFoundError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"[ERROR] Failed to generate heatmap report: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"[OK] Heatmap report generated: {args.output}")
+
+
+def cmd_report_fault_timeline(args):
+    """Execute `minicluster report fault-timeline` command."""
+    try:
+        with open(args.json, encoding="utf-8") as handle:
+            report = json.load(handle)
+        if not isinstance(report, dict):
+            raise ValueError("Fault report JSON must be an object.")
+        generate_fault_timeline(report, output_path=args.output)
+    except FileNotFoundError:
+        print(f"[ERROR] Fault report file not found: {args.json}", file=sys.stderr)
+        sys.exit(2)
+    except ValueError as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:  # pragma: no cover - defensive runtime guard
+        print(f"[ERROR] Failed to generate fault timeline report: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    print(f"[OK] Fault timeline report generated: {args.output}")
 
 
 def setup_main_parser() -> argparse.ArgumentParser:
@@ -559,6 +748,9 @@ Examples:
   # Run fault injection tests
   minicluster fault-test --steps 50
 
+  # Run communication-only all-reduce benchmark
+  minicluster bench-collective --workers 2 --size-mb 256 --iterations 50
+
   # Save baseline after stable run
   minicluster baseline save --metrics run.json --name stable_v1
 
@@ -570,7 +762,19 @@ Examples:
 
   # Generate consolidated HTML report from multiple configs
   minicluster report html --result run_cfg_a.json run_cfg_b.json --output ./minicluster_results/report.html
+
+  # Generate worker heatmap from per-worker JSON files
+  minicluster report heatmap --results-dir ./minicluster_results/workers --metric p99_allreduce_ms --output ./minicluster_results/heatmap.html
+
+  # Generate fault timeline HTML report
+  minicluster report fault-timeline --json ./minicluster_results/fault_report.json --output ./minicluster_results/fault_timeline.html
         """,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"minicluster {MINICLUSTER_CLI_VERSION}",
+        help="Show CLI version and exit",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to execute")
@@ -578,6 +782,7 @@ Examples:
     setup_run_parser(subparsers)
     setup_validate_parser(subparsers)
     setup_fault_test_parser(subparsers)
+    setup_bench_collective_parser(subparsers)
     setup_baseline_parser(subparsers)
     setup_report_parser(subparsers)
     register_monitor_subcommand(subparsers)

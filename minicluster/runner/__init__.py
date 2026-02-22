@@ -16,12 +16,15 @@ from minicluster.runner.distributed_runner import (
     train_distributed,
     train_single_process,
 )
+from minicluster.runner.workloads import EmbeddingWorkload, TransformerWorkload
 
 __all__ = [
     "RunConfig",
     "RunMetrics",
     "StepMetrics",
     "SimpleMLP",
+    "TransformerWorkload",
+    "EmbeddingWorkload",
     "create_synthetic_dataset",
     "train_single_process",
     "train_distributed",
