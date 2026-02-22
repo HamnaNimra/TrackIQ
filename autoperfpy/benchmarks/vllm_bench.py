@@ -60,10 +60,12 @@ def _parse_vllm_stdout(stdout: str) -> dict[str, float]:
             r"tokens_per_sec[^0-9]*([0-9]+(?:\.[0-9]+)?)",
         ],
     )
-    mean_ttft = _parse_float_pattern(stdout, [r"(?:mean|avg)[^\\n]*ttft[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
-    p99_ttft = _parse_float_pattern(stdout, [r"p99[^\\n]*ttft[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
-    mean_tpot = _parse_float_pattern(stdout, [r"(?:mean|avg)[^\\n]*(?:tpot|time per output token)[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
-    p99_tpot = _parse_float_pattern(stdout, [r"p99[^\\n]*(?:tpot|time per output token)[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
+    mean_ttft = _parse_float_pattern(stdout, [r"(?:mean|avg)[^\n]*ttft[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
+    p99_ttft = _parse_float_pattern(stdout, [r"p99[^\n]*ttft[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
+    mean_tpot = _parse_float_pattern(
+        stdout, [r"(?:mean|avg)[^\n]*(?:tpot|time per output token)[^0-9]*([0-9]+(?:\.[0-9]+)?)"]
+    )
+    p99_tpot = _parse_float_pattern(stdout, [r"p99[^\n]*(?:tpot|time per output token)[^0-9]*([0-9]+(?:\.[0-9]+)?)"])
     return {
         "throughput_tokens_per_sec": throughput or 0.0,
         "mean_ttft_ms": mean_ttft or 0.0,
@@ -149,4 +151,3 @@ def save_inference_benchmark(result: dict[str, Any], output_path: str) -> str:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2), encoding="utf-8")
     return str(out)
-

@@ -2113,25 +2113,19 @@ class HTMLReportGenerator:
             f'<span class="meta-item"><strong>{key}:</strong> {value}</span>'
             for key, value in self._build_header_meta_items(timestamp)
         )
-        header_kpi_html = "".join(
-            f"""
+        header_kpi_html = "".join(f"""
             <div class="header-kpi-card">
                 <div class="header-kpi-label">{label}</div>
                 <div class="header-kpi-value">{value}</div>
             </div>
-            """
-            for label, value in self._build_header_kpis()
-        )
+            """ for label, value in self._build_header_kpis())
         header_kpi_section = f'<div class="header-kpi-grid">{header_kpi_html}</div>' if header_kpi_html else ""
-        platform_cards_html = "".join(
-            f"""
+        platform_cards_html = "".join(f"""
             <div class="platform-card">
                 <span class="platform-label">{label}</span>
                 <span class="platform-value">{value}</span>
             </div>
-            """
-            for label, value in self._build_platform_snapshot()
-        )
+            """ for label, value in self._build_platform_snapshot())
         platform_section = (
             f"""
             <div class="platform-strip">
@@ -2264,4 +2258,3 @@ class HTMLReportGenerator:
 
 
 __all__ = ["HTMLReportGenerator"]
-

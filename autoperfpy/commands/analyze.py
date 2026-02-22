@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
-import json
 from collections.abc import Callable
 from typing import Any
 
@@ -338,4 +338,3 @@ def run_analyze_variability(
         return result
     finally:
         _cleanup_paths(cleanup_paths)
-

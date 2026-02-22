@@ -265,4 +265,3 @@ def generate_plotly_report(data: dict[str, Any], output_path: str) -> str:
         encoding="utf-8",
     )
     return str(output)
-

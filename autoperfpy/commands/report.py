@@ -79,6 +79,36 @@ def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
     return True
 
 
+def _export_report_data(
+    *,
+    args: Any,
+    export_data: Any,
+    output_path: Callable[[Any, str], str],
+    save_trackiq_wrapped_json: Callable[[str, Any, str, str], None],
+    write_result_to_csv: Callable[[dict[str, Any], str], bool],
+) -> None:
+    """Export report data payload as wrapped JSON and best-effort CSV."""
+    base = os.path.splitext(os.path.basename(args.output))[0]
+    json_out = getattr(args, "export_json", None) or (base + "_data.json")
+    csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
+    json_out = output_path(args, json_out)
+    csv_out = output_path(args, csv_out)
+    save_trackiq_wrapped_json(
+        json_out,
+        export_data,
+        workload_name="html_report_data",
+        workload_type="inference",
+    )
+    print(f"[OK] JSON exported to: {json_out}")
+    csv_written = False
+    if isinstance(export_data, list):
+        csv_written = _write_multi_run_csv(export_data, csv_out)
+    elif isinstance(export_data, dict):
+        csv_written = write_result_to_csv(export_data, csv_out)
+    if csv_written:
+        print(f"[OK] CSV exported to: {csv_out}")
+
+
 def run_report_html(
     args: Any,
     config: Any,
@@ -128,8 +158,15 @@ def run_report_html(
 
             if _is_plotly_report_candidate(raw_data):
                 report_output = generate_plotly_report(raw_data, output_path(args, args.output))
-                export_data = raw_data
-                has_report_data = True
+                _export_report_data(
+                    args=args,
+                    export_data=raw_data,
+                    output_path=output_path,
+                    save_trackiq_wrapped_json=save_trackiq_wrapped_json,
+                    write_result_to_csv=write_result_to_csv,
+                )
+                print(f"\n[OK] HTML report generated: {report_output}")
+                return {"output_path": report_output}
 
             if not has_report_data and isinstance(raw_data, list):
                 runs = [normalize_report_input_data(item) for item in raw_data]
@@ -249,25 +286,13 @@ def run_report_html(
             )
 
         if export_data is not None:
-            base = os.path.splitext(os.path.basename(args.output))[0]
-            json_out = getattr(args, "export_json", None) or (base + "_data.json")
-            csv_out = getattr(args, "export_csv", None) or (base + "_data.csv")
-            json_out = output_path(args, json_out)
-            csv_out = output_path(args, csv_out)
-            save_trackiq_wrapped_json(
-                json_out,
-                export_data,
-                workload_name="html_report_data",
-                workload_type="inference",
+            _export_report_data(
+                args=args,
+                export_data=export_data,
+                output_path=output_path,
+                save_trackiq_wrapped_json=save_trackiq_wrapped_json,
+                write_result_to_csv=write_result_to_csv,
             )
-            print(f"[OK] JSON exported to: {json_out}")
-            csv_written = False
-            if isinstance(export_data, list):
-                csv_written = _write_multi_run_csv(export_data, csv_out)
-            elif isinstance(export_data, dict):
-                csv_written = write_result_to_csv(export_data, csv_out)
-            if csv_written:
-                print(f"[OK] CSV exported to: {csv_out}")
 
         if not has_report_data:
             report.add_summary_item("Status", "No data file provided", "", "warning")
@@ -423,4 +448,3 @@ def run_report_pdf(
                 os.unlink(json_path_to_cleanup)
             except OSError:
                 pass
-
