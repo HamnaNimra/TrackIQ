@@ -1,6 +1,7 @@
 # UI Screenshot Artifacts
 
 This folder contains generated PNG captures for all tools and dashboards.
+The `tabs/` set was refreshed on 2026-02-22 with light-theme viewport captures.
 
 ## Preview Gallery
 

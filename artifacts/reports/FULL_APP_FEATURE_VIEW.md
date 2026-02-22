@@ -1,6 +1,6 @@
 # TrackIQ Full Feature View
 
-Last updated: 2026-02-22 (local artifact set, refreshed all UI/report captures; report previews recaptured at 1600px width for readability)
+Last updated: 2026-02-22 (local artifact set refreshed; `artifacts/ui_png/tabs` now uses light-theme, readable viewport captures aligned with current Streamlit styling)
 
 This document embeds the generated UI/report artifacts and summarizes what each result is used for in product and ops workflows.
 
@@ -117,6 +117,8 @@ Open report: [`minicluster_fault_timeline_report.html`](./minicluster_fault_time
 Open report: [`trackiq_compare_ui_report.html`](./trackiq_compare_ui_report.html)
 
 ## Tab And Section Captures
+
+Note: the tab/section screenshots below are curated viewport captures for readability in docs. They prioritize key decision surfaces (summary cards, configuration, and metric tables) over full-page scroll length.
 
 ### AutoPerfPy tabs
 
