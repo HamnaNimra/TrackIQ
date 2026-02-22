@@ -13,11 +13,17 @@ from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import DARK_THEME, LIGHT_THEME, MetricTable, PowerGauge, RegressionBadge, ResultBrowser
 from trackiq_core.ui.dashboard import TrackiqDashboard
 
+UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
-def _apply_ui_style() -> None:
+
+def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for the TrackIQ Core app."""
+    prefers_dark = theme == "Dark"
+    card_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
+    card_border = "rgba(148,163,184,0.35)" if prefers_dark else "rgba(148,163,184,0.22)"
+    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
     st.markdown(
-        """
+        f"""
         <style>
         .core-hero {
             border: 1px solid rgba(59,130,246,0.25);
@@ -32,14 +38,14 @@ def _apply_ui_style() -> None:
         }
         .core-hero p {
             margin: 0;
-            color: #4b5563;
+            color: {hero_text};
             font-size: 0.95rem;
         }
         [data-testid="stMetric"] {
-            border: 1px solid rgba(148,163,184,0.22);
+            border: 1px solid {card_border};
             border-radius: 12px;
             padding: 8px 10px;
-            background: rgba(15,23,42,0.02);
+            background: {card_bg};
         }
         button[kind="primary"] {
             border-radius: 10px !important;
@@ -117,6 +123,69 @@ def _discover_result_rows() -> list[dict[str, Any]]:
         return rows if isinstance(rows, list) else []
     except Exception:
         return []
+
+
+def _result_row_label(row: dict[str, Any], index: int) -> str:
+    """Build a compact label for discovered result selection widgets."""
+    tool_name = str(row.get("tool_name", "?"))
+    workload = str(row.get("workload_name", "?"))
+    timestamp = str(row.get("timestamp", "?"))
+    path = Path(str(row.get("path", "")))
+    filename = path.name if path.name else "unknown.json"
+    return f"{index + 1}. {tool_name} | {workload} | {timestamp} ({filename})"
+
+
+def _metric_snapshot(result: TrackiqResult) -> dict[str, float | None]:
+    """Extract compare-oriented metric snapshot from a TrackiqResult."""
+    return {
+        "throughput_samples_per_sec": result.metrics.throughput_samples_per_sec,
+        "latency_p99_ms": result.metrics.latency_p99_ms,
+        "power_consumption_watts": result.metrics.power_consumption_watts,
+        "scaling_efficiency_pct": result.metrics.scaling_efficiency_pct,
+    }
+
+
+def _build_compare_rows(
+    labeled_results: list[tuple[str, TrackiqResult]],
+    baseline_label: str | None = None,
+) -> list[dict[str, Any]]:
+    """Build row data for quick cross-result comparison in Streamlit."""
+    if not labeled_results:
+        return []
+    baseline_name = baseline_label or labeled_results[0][0]
+    baseline_result = next((res for label, res in labeled_results if label == baseline_name), labeled_results[0][1])
+    baseline_metrics = _metric_snapshot(baseline_result)
+
+    rows: list[dict[str, Any]] = []
+    for label, result in labeled_results:
+        metrics = _metric_snapshot(result)
+        row: dict[str, Any] = {
+            "Run": label,
+            "Tool": result.tool_name,
+            "Hardware": result.platform.hardware_name,
+            "Workload": f"{result.workload.name} ({result.workload.workload_type})",
+            "Throughput (samples/s)": metrics["throughput_samples_per_sec"],
+            "P99 Latency (ms)": metrics["latency_p99_ms"],
+            "Power (W)": metrics["power_consumption_watts"],
+            "Scaling Efficiency (%)": metrics["scaling_efficiency_pct"],
+        }
+        if label == baseline_name:
+            row["Delta vs Baseline (%)"] = 0.0
+        else:
+            baseline_throughput = baseline_metrics.get("throughput_samples_per_sec")
+            throughput = metrics.get("throughput_samples_per_sec")
+            if (
+                isinstance(baseline_throughput, (int, float))
+                and baseline_throughput
+                and isinstance(throughput, (int, float))
+            ):
+                row["Delta vs Baseline (%)"] = (
+                    (float(throughput) - float(baseline_throughput)) / float(baseline_throughput)
+                ) * 100.0
+            else:
+                row["Delta vs Baseline (%)"] = None
+        rows.append(row)
+    return rows
 
 
 def _try_load_result(path: str) -> TrackiqResult | None:
@@ -213,9 +282,16 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    _apply_ui_style()
+    selected_theme = st.session_state.get("trackiq_core_ui_theme", "System")
+    if selected_theme not in UI_THEME_OPTIONS:
+        selected_theme = "System"
+    _apply_ui_style(selected_theme)
+    st.markdown("<div id='trackiq-core-dashboard-top'></div>", unsafe_allow_html=True)
     st.title("TrackIQ Core Interactive Dashboard")
     _render_page_intro()
+
+    selected_compare_ids: list[int] = []
+    baseline_compare_id: int | None = None
 
     with st.sidebar:
         st.subheader("Result Source")
@@ -231,10 +307,7 @@ def main() -> None:
         if input_mode == "Browse results":
             if not rows:
                 st.info("No results discovered. Switch to manual mode or run a benchmark first.")
-            labels = [
-                f"{idx + 1}. {row.get('tool_name', '?')} | {row.get('workload_name', '?')} | {row.get('timestamp', '?')}"
-                for idx, row in enumerate(rows)
-            ]
+            labels = [_result_row_label(row, idx) for idx, row in enumerate(rows)]
             if labels:
                 idx_sel = st.selectbox(
                     "Discovered Results",
@@ -246,6 +319,35 @@ def main() -> None:
         else:
             result_path = st.text_input("Result JSON path", value="output/autoperf_result.json")
         load_clicked = st.button("Load Result", use_container_width=True, type="primary")
+        demo_clicked = st.button("Load Demo Result", use_container_width=True)
+
+        if len(rows) >= 2:
+            st.markdown("---")
+            st.subheader("Compare Runs")
+            selected_compare_ids = st.multiselect(
+                "Select runs to compare",
+                options=list(range(len(rows))),
+                default=list(range(min(3, len(rows)))),
+                format_func=lambda i: _result_row_label(rows[i], i),
+                key="trackiq_core_compare_ids",
+            )
+            if selected_compare_ids:
+                baseline_compare_id = st.selectbox(
+                    "Set baseline run",
+                    options=selected_compare_ids,
+                    format_func=lambda i: _result_row_label(rows[i], i),
+                    key="trackiq_core_baseline_compare_id",
+                )
+
+        st.markdown("---")
+        st.subheader("View Options")
+        st.selectbox(
+            "Theme",
+            options=UI_THEME_OPTIONS,
+            index=UI_THEME_OPTIONS.index(selected_theme),
+            key="trackiq_core_ui_theme",
+        )
+        st.markdown("[Back to top](#trackiq-core-dashboard-top)")
 
     if "trackiq_core_result" not in st.session_state and rows:
         auto_loaded = _try_load_result(str(rows[0]["path"]))
@@ -262,10 +364,33 @@ def main() -> None:
                 st.session_state["trackiq_core_result"] = loaded
                 st.session_state["trackiq_core_result_path"] = result_path
 
+    if demo_clicked:
+        st.session_state["trackiq_core_result"] = _build_demo_result()
+        st.session_state["trackiq_core_result_path"] = "demo-result"
+
     result = st.session_state.get("trackiq_core_result")
     if result is None:
         result = _build_demo_result()
         st.info("Showing demo result. Load a real result from the sidebar.")
+
+    if selected_compare_ids:
+        loaded_rows: list[tuple[str, TrackiqResult]] = []
+        for idx in selected_compare_ids:
+            try:
+                loaded = load_trackiq_result(str(rows[idx]["path"]))
+            except Exception:
+                continue
+            loaded_rows.append((_result_row_label(rows[idx], idx), loaded))
+        if len(loaded_rows) >= 2:
+            baseline_label = None
+            if baseline_compare_id is not None and 0 <= baseline_compare_id < len(rows):
+                baseline_label = _result_row_label(rows[baseline_compare_id], baseline_compare_id)
+            st.markdown("### Compare Selected Runs")
+            if baseline_label:
+                st.caption(f"Baseline run: {baseline_label}")
+            compare_rows = _build_compare_rows(loaded_rows, baseline_label=baseline_label)
+            if compare_rows:
+                st.dataframe(compare_rows, width="stretch", hide_index=True)
 
     active_theme = LIGHT_THEME if st.session_state.get("theme") == LIGHT_THEME.name else DARK_THEME
     dashboard = CoreDashboard(result=result)

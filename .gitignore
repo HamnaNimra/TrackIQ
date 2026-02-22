@@ -86,3 +86,4 @@ debug_test_report.html
 output/
 minicluster_results/
 coverage.xml
+artifacts/
