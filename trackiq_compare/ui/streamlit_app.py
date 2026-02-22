@@ -87,6 +87,18 @@ def main() -> None:
         )
         load_clicked = st.button("Load Comparison", use_container_width=True)
 
+    # Auto-load first two discovered results to avoid blank first render.
+    if "compare_result_a" not in st.session_state and "compare_result_b" not in st.session_state and len(rows) >= 2:
+        auto_a = _try_load(str(rows[0]["path"]))
+        auto_b = _try_load(str(rows[1]["path"]))
+        if auto_a is not None and auto_b is not None:
+            st.session_state["compare_result_a"] = auto_a
+            st.session_state["compare_result_b"] = auto_b
+            st.session_state["compare_label_a"] = "Result A"
+            st.session_state["compare_label_b"] = "Result B"
+            st.session_state["compare_regression_threshold"] = regression_threshold
+            st.session_state["compare_variance_threshold"] = variance_threshold
+
     if load_clicked:
         if not Path(result_a_path).exists():
             st.error(f"Result A file not found: {result_a_path}")

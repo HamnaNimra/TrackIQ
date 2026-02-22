@@ -68,6 +68,18 @@ def _latency_bars(payload: dict[str, Any]) -> tuple[list[str], list[float]]:
         labels = [label for label in order if label in merged]
         return labels, [merged[label] for label in labels]
 
+    llm_candidates = [
+        ("Mean TTFT", _to_float(payload.get("mean_ttft_ms"))),
+        ("P99 TTFT", _to_float(payload.get("p99_ttft_ms"))),
+        ("Mean TPOT", _to_float(payload.get("mean_tpot_ms"))),
+        ("P99 TPOT", _to_float(payload.get("p99_tpot_ms"))),
+        ("TTFT", _to_float(metrics.get("ttft_ms"))),
+        ("TPOT", _to_float(metrics.get("decode_tpt_ms"))),
+    ]
+    llm_points = [(label, value) for label, value in llm_candidates if value is not None]
+    if llm_points:
+        return [label for label, _ in llm_points], [value for _, value in llm_points]
+
     average_latency = _to_float((summary_latency or {}).get("mean_ms"))
     if average_latency is None:
         average_latency = _to_float(payload.get("mean_ttft_ms"))
@@ -154,10 +166,14 @@ def _summary_rows(payload: dict[str, Any]) -> list[list[str]]:
     peak_power = _to_float(_safe_get(summary, "power", "max_w"))
     if peak_power is None:
         peak_power = _to_float(metrics.get("power_consumption_watts"))
+    backend = payload.get("backend")
+    prompts = _to_float(payload.get("num_prompts"))
 
     rows: list[list[str]] = [
         ["Device Name", str(device)],
         ["Duration", f"{duration:.2f} s" if duration is not None else "N/A"],
+        ["Backend", str(backend) if backend is not None else "N/A"],
+        ["Prompts", f"{int(prompts)}" if prompts is not None else "N/A"],
         ["Average Throughput", f"{avg_throughput:.2f}" if avg_throughput is not None else "N/A"],
         ["Peak Power", f"{peak_power:.2f} W" if peak_power is not None else "N/A"],
     ]

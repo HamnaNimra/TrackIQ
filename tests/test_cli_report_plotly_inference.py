@@ -65,3 +65,6 @@ def test_run_report_html_uses_plotly_inference_path_for_bench_payload(tmp_path: 
     content = html_path.read_text(encoding="utf-8")
     assert "AutoPerfPy Inference Benchmark Report" in content
     assert "Latency Percentiles (ms)" in content
+    assert "P99 TTFT" in content
+    assert "Mean TPOT" in content
+    assert "Backend" in content

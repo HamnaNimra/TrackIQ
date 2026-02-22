@@ -14,19 +14,24 @@ from typing import List, Optional
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Launch TrackIQ unified dashboard via Streamlit."
-    )
+    parser = argparse.ArgumentParser(description="Launch TrackIQ unified dashboard via Streamlit.")
     parser.add_argument(
         "--tool",
         required=False,
         default="all",
-        choices=["all", "autoperfpy", "minicluster", "compare"],
+        choices=["all", "autoperfpy", "minicluster", "compare", "cluster-health"],
         help="Tool dashboard to launch (default: all)",
     )
     parser.add_argument("--result", help="Single TrackiqResult JSON path")
     parser.add_argument("--result-a", help="Compare mode: result A path")
     parser.add_argument("--result-b", help="Compare mode: result B path")
+    parser.add_argument("--fault-report", help="Cluster-health mode: fault report JSON path")
+    parser.add_argument(
+        "--scaling-runs",
+        nargs="*",
+        default=None,
+        help="Cluster-health mode: optional list of scaling run JSON paths",
+    )
     parser.add_argument("--label-a", help="Compare mode: display label A")
     parser.add_argument("--label-b", help="Compare mode: display label B")
     return parser
@@ -50,6 +55,10 @@ def _build_streamlit_command(args: argparse.Namespace) -> List[str]:
         cmd.extend(["--result-a", args.result_a])
     if args.result_b:
         cmd.extend(["--result-b", args.result_b])
+    if args.fault_report:
+        cmd.extend(["--fault-report", args.fault_report])
+    if args.scaling_runs:
+        cmd.extend(["--scaling-runs", *args.scaling_runs])
     if args.label_a:
         cmd.extend(["--label-a", args.label_a])
     if args.label_b:
