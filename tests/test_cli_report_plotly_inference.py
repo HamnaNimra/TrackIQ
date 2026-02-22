@@ -68,3 +68,5 @@ def test_run_report_html_uses_plotly_inference_path_for_bench_payload(tmp_path: 
     assert "P99 TTFT" in content
     assert "Mean TPOT" in content
     assert "Backend" in content
+    assert "How to Interpret These Results" in content
+    assert "Why it matters" in content

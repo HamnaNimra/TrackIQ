@@ -180,6 +180,48 @@ def _summary_rows(payload: dict[str, Any]) -> list[list[str]]:
     return rows
 
 
+def _interpretation_rows(payload: dict[str, Any]) -> list[list[str]]:
+    """Build plain-English guidance rows for key results in this report."""
+    rows: list[list[str]] = []
+    latency_labels, _ = _latency_bars(payload)
+    if latency_labels:
+        rows.append(
+            [
+                "Latency percentiles",
+                "Shows typical and tail response time (P50/P95/P99).",
+                "Use P99 as the straggler and SLO risk signal.",
+            ]
+        )
+
+    sweep_x, sweep_y = _throughput_sweep(payload)
+    if sweep_x and sweep_y:
+        rows.append(
+            [
+                "Throughput vs batch size",
+                "Capacity trend as batch size changes.",
+                "Reveals scaling sweet spots and saturation points.",
+            ]
+        )
+
+    if _power_efficiency(payload) is not None:
+        rows.append(
+            [
+                "Throughput per watt",
+                "Delivered work for each watt consumed.",
+                "Tracks operating cost efficiency and thermal headroom.",
+            ]
+        )
+
+    rows.append(
+        [
+            "Summary table",
+            "Run metadata (device, duration, backend, throughput, peak power).",
+            "Use this to validate run comparability before metric deltas.",
+        ]
+    )
+    return rows
+
+
 def generate_plotly_report(data: dict[str, Any], output_path: str) -> str:
     """Generate AutoPerfPy Inference Benchmark Plotly report HTML."""
     if not PLOTLY_AVAILABLE:  # pragma: no cover
@@ -201,6 +243,7 @@ def generate_plotly_report(data: dict[str, Any], output_path: str) -> str:
         rows.append({"type": "efficiency"})
 
     rows.append({"type": "summary"})
+    rows.append({"type": "guide"})
 
     specs = []
     titles = []
@@ -208,6 +251,9 @@ def generate_plotly_report(data: dict[str, Any], output_path: str) -> str:
         if row["type"] == "summary":
             specs.append([{"type": "table"}])
             titles.append("Summary")
+        elif row["type"] == "guide":
+            specs.append([{"type": "table"}])
+            titles.append("How to Interpret These Results")
         else:
             specs.append([{"type": "xy"}])
             if row["type"] == "latency":
@@ -250,12 +296,28 @@ def generate_plotly_report(data: dict[str, Any], output_path: str) -> str:
                 col=1,
             )
             fig.update_yaxes(title_text="Units / W", row=row_index, col=1)
-        else:
+        elif row_type == "summary":
             summary_rows = _summary_rows(payload)
             fig.add_trace(
                 go.Table(
                     header=dict(values=["Field", "Value"], fill_color="#1f2937", font=dict(color="white")),
                     cells=dict(values=[[r[0] for r in summary_rows], [r[1] for r in summary_rows]]),
+                ),
+                row=row_index,
+                col=1,
+            )
+        else:
+            guide_rows = _interpretation_rows(payload)
+            fig.add_trace(
+                go.Table(
+                    header=dict(
+                        values=["Result", "What it means", "Why it matters"],
+                        fill_color="#1f2937",
+                        font=dict(color="white"),
+                    ),
+                    cells=dict(
+                        values=[[r[0] for r in guide_rows], [r[1] for r in guide_rows], [r[2] for r in guide_rows]]
+                    ),
                 ),
                 row=row_index,
                 col=1,

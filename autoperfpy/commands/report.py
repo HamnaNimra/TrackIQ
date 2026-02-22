@@ -7,6 +7,7 @@ import os
 import sys
 from collections.abc import Callable
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any
 
 from autoperfpy.reports.export_csv import write_multi_run_csv as _write_multi_run_samples_csv
@@ -87,14 +88,20 @@ def _append_report_context(
     data_source: str,
 ) -> Any:
     """Attach export context to payload without mutating caller-owned data."""
+    generated_at_utc = datetime.now(timezone.utc).isoformat()
     context = {
         "report_context": {
             "format": report_kind,
             "data_source": data_source,
+            "generated_at_utc": generated_at_utc,
             "purpose": (
                 "Human-readable performance artifact. Use HTML/PDF for reviews, "
                 "JSON/CSV for automation and longitudinal analysis."
             ),
+            "consumer_guidance": [
+                "Check p99 latency and throughput together before making go/no-go decisions.",
+                "Use CSV/JSON exports for regression automation and longitudinal trend analysis.",
+            ],
         }
     }
 
