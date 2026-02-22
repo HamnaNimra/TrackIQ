@@ -41,3 +41,4 @@ Use `artifacts/ui_png/tabs/` as the curated set:
 - AutoPerfPy standalone app has real Streamlit tabs and was captured tab-by-tab.
 - MiniCluster / Compare / Cluster Health dashboard views are section-based (no tab widgets), so they are captured by section/viewport.
 - `ui_trackiq_core_app.png` captures the canonical TrackIQ Core explorer for schema-level inspection flows.
+- HTML report preview captures are refreshed at 1600px width for improved text/chart readability in docs.

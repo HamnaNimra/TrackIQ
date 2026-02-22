@@ -1,6 +1,6 @@
 # TrackIQ Full Feature View
 
-Last updated: 2026-02-22 (local artifact set, refreshed all UI/report captures)
+Last updated: 2026-02-22 (local artifact set, refreshed all UI/report captures; report previews recaptured at 1600px width for readability)
 
 This document embeds the generated UI/report artifacts and summarizes what each result is used for in product and ops workflows.
 
