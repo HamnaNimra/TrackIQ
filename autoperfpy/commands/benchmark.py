@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
-from autoperfpy.benchmarks import BatchingTradeoffBenchmark, LLMLatencyBenchmark
+from autoperfpy.benchmarks import (
+    BatchingTradeoffBenchmark,
+    LLMLatencyBenchmark,
+    run_inference_benchmark,
+    save_inference_benchmark,
+)
 
 
 def run_benchmark_batching(args: Any, config: Any) -> dict[str, Any]:
@@ -47,3 +53,29 @@ def run_benchmark_llm(args: Any, config: Any) -> dict[str, Any]:
     print(f"\nThroughput: {results['throughput_tokens_per_sec']:.1f} tokens/sec")
 
     return results
+
+
+def run_bench_inference(args: Any, _config: Any, *, output_path: Any) -> dict[str, Any] | None:
+    """Run inference benchmark for mock/vLLM backend and write JSON output."""
+    try:
+        result = run_inference_benchmark(
+            model=str(args.model),
+            backend=str(args.backend),
+            num_prompts=int(args.num_prompts),
+            input_len=int(args.input_len),
+            output_len=int(args.output_len),
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return None
+
+    output_file = output_path(args, args.output)
+    save_inference_benchmark(result, output_file)
+    print(f"[OK] Inference benchmark saved: {output_file}")
+    print(
+        "[OK] "
+        f"TTFT(mean/p99)={result['mean_ttft_ms']:.2f}/{result['p99_ttft_ms']:.2f} ms, "
+        f"TPOT(mean/p99)={result['mean_tpot_ms']:.2f}/{result['p99_tpot_ms']:.2f} ms, "
+        f"throughput={result['throughput_tokens_per_sec']:.2f} tok/s"
+    )
+    return result

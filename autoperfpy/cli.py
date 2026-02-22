@@ -112,6 +112,7 @@ Examples:
   # Benchmarking
   autoperfpy benchmark batching --batch-sizes 1,4,8,16
   autoperfpy benchmark llm --prompt-length 512
+  autoperfpy bench-inference --model meta-llama/Llama-3-8B --backend mock --output llm_bench.json
 
   # Monitoring
   autoperfpy monitor gpu --duration 300
@@ -350,6 +351,47 @@ Environment Variables:
     llm_parser.add_argument("--prompt-length", type=int, default=512, help="Prompt token count")
     llm_parser.add_argument("--output-tokens", type=int, default=256, help="Output token count")
     llm_parser.add_argument("--runs", type=int, default=10, help="Number of benchmark runs")
+
+    # Inference benchmark (mock/vLLM backends)
+    bench_inference_parser = subparsers.add_parser(
+        "bench-inference",
+        help="Benchmark LLM inference backend (mock or vLLM) and export JSON",
+    )
+    bench_inference_parser.add_argument(
+        "--model",
+        required=True,
+        help="Model name or local path",
+    )
+    bench_inference_parser.add_argument(
+        "--backend",
+        choices=["vllm", "mock"],
+        default="mock",
+        help="Inference benchmark backend (default: mock)",
+    )
+    bench_inference_parser.add_argument(
+        "--num-prompts",
+        type=int,
+        default=100,
+        help="Number of prompts to benchmark (default: 100)",
+    )
+    bench_inference_parser.add_argument(
+        "--input-len",
+        type=int,
+        default=128,
+        help="Input prompt length in tokens (default: 128)",
+    )
+    bench_inference_parser.add_argument(
+        "--output-len",
+        type=int,
+        default=128,
+        help="Output generation length in tokens (default: 128)",
+    )
+    bench_inference_parser.add_argument(
+        "--output",
+        "-o",
+        required=True,
+        help="Output JSON path for benchmark result",
+    )
 
     # Distributed validation
     distributed_parser = bench_subparsers.add_parser("distributed", help="Validate distributed training correctness")
@@ -818,6 +860,13 @@ def run_benchmark_llm(args, config):
     return _cmd_run_benchmark_llm(args, config)
 
 
+def run_bench_inference(args, config):
+    """Run LLM inference benchmark (mock/vLLM) and export JSON."""
+    from autoperfpy.commands.benchmark import run_bench_inference as _cmd_run_bench_inference
+
+    return _cmd_run_bench_inference(args, config, output_path=_output_path)
+
+
 def run_benchmark_distributed(args, config):
     """Run distributed training validation."""
     validator = DistributedValidator()
@@ -1054,6 +1103,10 @@ def main():
                 result = run_benchmark_llm(args, config)
             elif args.bench_type == "distributed":
                 result = run_benchmark_distributed(args, config)
+        elif args.command == "bench-inference":
+            result = run_bench_inference(args, config)
+            if result is None:
+                return 1
         elif args.command == "monitor":
             if args.monitor_type == "gpu":
                 result = run_monitor_gpu(args, config)
@@ -1076,7 +1129,7 @@ def main():
         return 1
 
     # Save output if requested (report html/pdf already write to output dir; do not overwrite)
-    if args.output and result and getattr(args, "command", None) != "report":
+    if args.output and result and getattr(args, "command", None) not in {"report", "bench-inference"}:
         out_path = _output_path(args, args.output)
         if hasattr(result, "to_dict"):
             _save_trackiq_wrapped_json(out_path, result.to_dict())
