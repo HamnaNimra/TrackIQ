@@ -1,18 +1,22 @@
 """Terminal reporter using rich output."""
 
+import importlib
 from typing import Any
-
-rich_console: Any
-rich_table: Any
-try:
-    import rich.console as rich_console
-    import rich.table as rich_table
-except Exception:  # pragma: no cover - fallback path only when rich is absent
-    rich_console = None
-    rich_table = None
 
 from trackiq_compare.comparator.metric_comparator import ComparisonResult, MetricComparison
 from trackiq_compare.comparator.summary_generator import SummaryResult
+
+
+def _load_optional_module(module_name: str) -> Any:
+    """Import optional dependency module, returning None if unavailable."""
+    try:
+        return importlib.import_module(module_name)
+    except Exception:  # pragma: no cover - fallback path only when optional deps are absent
+        return None
+
+
+rich_console: Any = _load_optional_module("rich.console")
+rich_table: Any = _load_optional_module("rich.table")
 
 
 class TerminalReporter:
