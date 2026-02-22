@@ -191,13 +191,13 @@ class CoreDashboard(TrackiqDashboard):
         with col1:
             st.metric("Tool", result.tool_name)
         with col2:
-            st.metric("Throughput", f"{float(result.metrics.throughput_samples_per_sec):.2f} samples/s")
+            st.metric("Throughput (samples/s)", f"{float(result.metrics.throughput_samples_per_sec):.2f}")
         with col3:
             p99 = result.metrics.latency_p99_ms
-            st.metric("P99 Latency", f"{float(p99):.2f} ms" if isinstance(p99, (int, float)) else "N/A")
+            st.metric("P99 Latency (ms)", f"{float(p99):.2f}" if isinstance(p99, (int, float)) else "N/A")
         with col4:
             power = result.metrics.power_consumption_watts
-            st.metric("Power", f"{float(power):.2f} W" if isinstance(power, (int, float)) else "N/A")
+            st.metric("Power (W)", f"{float(power):.2f}" if isinstance(power, (int, float)) else "N/A")
 
         tab_overview, tab_power, tab_kv, tab_payload, tab_trends, tab_downloads = st.tabs(
             ["Overview", "Power & Thermal", "KV Cache", "Payload", "Trends", "Downloads"]

@@ -65,6 +65,19 @@ def inject_app_shell_style(
             background: %(card_bg)s;
             box-shadow: 0 1px 6px rgba(15, 23, 42, 0.05);
         }
+        [data-testid="stMetricLabel"] p {
+            margin-bottom: 2px;
+            font-size: 0.82rem;
+            line-height: 1.15;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: clamp(1.35rem, 1.1vw + 0.9rem, 2.05rem);
+            line-height: 1.1;
+        }
+        [data-testid="stMetricValue"] > div {
+            white-space: normal !important;
+            overflow-wrap: anywhere;
+        }
         [data-testid="stExpander"] {
             border: 1px solid %(card_border)s;
             border-radius: 10px;
