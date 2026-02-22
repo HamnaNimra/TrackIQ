@@ -282,10 +282,20 @@ class TrackiqDashboard(ABC):
             border-radius: {theme.border_radius};
         }}
         .stButton>button {{
-            background: {theme.accent_color};
-            color: #ffffff;
-            border: 0;
+            background: transparent;
+            color: {theme.text_color};
+            border: 1px solid {theme.accent_color}55;
             border-radius: {theme.border_radius};
+            transition: all 0.15s ease;
+        }}
+        .stButton>button:hover {{
+            border-color: {theme.accent_color};
+            box-shadow: 0 2px 12px {theme.accent_color}22;
+        }}
+        button[kind="primary"], .stDownloadButton>button {{
+            background: {theme.accent_color} !important;
+            color: #ffffff !important;
+            border: 1px solid {theme.accent_color} !important;
         }}
         .stSuccess {{
             background-color: {theme.pass_color}22 !important;
