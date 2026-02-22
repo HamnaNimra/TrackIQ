@@ -340,9 +340,12 @@ def _build_fault_timeline_figure(fault_report: dict[str, Any]) -> Any | None:
             colors.append("#dc2626")
             bar_text.append("MISSED")
 
+    # Keep zero-latency/missed faults visible as thin bars in screenshots/exports.
+    display_latencies = [value if value > 0.0 else 0.05 for value in latencies]
+
     fig.add_trace(
         go.Bar(
-            x=latencies,
+            x=display_latencies,
             y=fault_labels,
             orientation="h",
             marker_color=colors,
