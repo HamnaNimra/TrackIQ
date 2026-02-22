@@ -12,6 +12,40 @@ from trackiq_core.reporting import PDF_BACKEND_AUTO, PdfBackendError
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 
 
+def _has_samples(payload: object) -> bool:
+    if isinstance(payload, dict):
+        samples = payload.get("samples")
+        if isinstance(samples, list) and len(samples) > 0:
+            return True
+        tool_payload = payload.get("tool_payload")
+        if isinstance(tool_payload, dict):
+            nested_samples = tool_payload.get("samples")
+            return isinstance(nested_samples, list) and len(nested_samples) > 0
+    return False
+
+
+def _is_plotly_report_candidate(payload: object) -> bool:
+    """Return True when payload should use inference Plotly report path."""
+    if not isinstance(payload, dict):
+        return False
+    if _has_samples(payload):
+        return False
+    if "mean_ttft_ms" in payload or "throughput_tokens_per_sec" in payload:
+        return True
+    metrics = payload.get("metrics")
+    if isinstance(metrics, dict) and (
+        "ttft_ms" in metrics
+        or "tokens_per_sec" in metrics
+        or "latency_p50_ms" in metrics
+        or "latency_p95_ms" in metrics
+        or "latency_p99_ms" in metrics
+    ):
+        return True
+    if payload.get("tool_name") == "autoperfpy":
+        return True
+    return False
+
+
 def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
     """Write consolidated CSV rows for multiple runs."""
     rows: list[tuple[Any, ...]] = []
@@ -60,6 +94,7 @@ def run_report_html(
     import pandas as pd
 
     from autoperfpy.reporting import HTMLReportGenerator
+    from autoperfpy.reports.plotly_report import generate_plotly_report
     from autoperfpy.reports.report_builder import (
         populate_multi_run_html_report,
         populate_standard_html_report,
@@ -91,7 +126,12 @@ def run_report_html(
             with open(args.json, encoding="utf-8") as handle:
                 raw_data = json.load(handle)
 
-            if isinstance(raw_data, list):
+            if _is_plotly_report_candidate(raw_data):
+                report_output = generate_plotly_report(raw_data, output_path(args, args.output))
+                export_data = raw_data
+                has_report_data = True
+
+            if not has_report_data and isinstance(raw_data, list):
                 runs = [normalize_report_input_data(item) for item in raw_data]
                 runs = [run for run in runs if isinstance(run, dict) and run]
                 if runs:
@@ -104,7 +144,7 @@ def run_report_html(
                         chart_engine="plotly",
                     )
                     export_data = runs
-            else:
+            elif not has_report_data:
                 data = normalize_report_input_data(raw_data)
 
                 if "comparisons" in data and "summary" in data and "config" in data:

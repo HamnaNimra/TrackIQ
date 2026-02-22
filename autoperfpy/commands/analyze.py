@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -28,7 +30,14 @@ def _resolve_csv_input(
     if csv_path:
         return csv_path, cleanup_paths
 
-    print("No --csv provided; running a quick benchmark to generate data...")
+    json_path = getattr(args, "json", None)
+    if json_path:
+        converted_csv = _convert_json_to_csv(json_path)
+        if converted_csv:
+            cleanup_paths.append(converted_csv)
+        return converted_csv, cleanup_paths
+
+    print("No --csv/--json provided; running a quick benchmark to generate data...")
     _, csv_path, json_path = run_default_benchmark(
         device_id=getattr(args, "device", None),
         duration_seconds=getattr(args, "duration", 10),
@@ -48,6 +57,62 @@ def _cleanup_paths(paths: list[str]) -> None:
                 os.unlink(path)
         except OSError:
             pass
+
+
+def _convert_json_to_csv(json_path: str) -> str | None:
+    """Convert benchmark JSON payload (raw or TrackiqResult) into analyzer CSV format."""
+    try:
+        with open(json_path, encoding="utf-8") as handle:
+            raw_data = json.load(handle)
+    except Exception as exc:
+        print(f"[ERROR] Failed to read JSON input: {exc}", file=sys.stderr)
+        return None
+
+    runs: list[dict[str, Any]] = []
+    if isinstance(raw_data, list):
+        runs = [item for item in raw_data if isinstance(item, dict)]
+    elif isinstance(raw_data, dict):
+        runs = [raw_data]
+
+    rows: list[tuple[Any, ...]] = []
+    for idx, run in enumerate(runs):
+        payload = run.get("tool_payload") if isinstance(run.get("tool_payload"), dict) else run
+        if not isinstance(payload, dict):
+            continue
+
+        workload = payload.get("run_label") or payload.get("collector_name") or f"run_{idx+1}"
+        inference_cfg = payload.get("inference_config") if isinstance(payload.get("inference_config"), dict) else {}
+        batch_size = int(inference_cfg.get("batch_size", 1))
+
+        samples = payload.get("samples")
+        if not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            metrics = sample.get("metrics") if isinstance(sample.get("metrics"), dict) else sample
+            latency = metrics.get("latency_ms", 0)
+            power = metrics.get("power_w", 0)
+            timestamp = sample.get("timestamp", 0)
+            rows.append((timestamp, workload, batch_size, latency, power))
+
+    if not rows:
+        print("[ERROR] JSON input did not contain benchmark samples for latency analysis.", file=sys.stderr)
+        return None
+
+    fd, csv_path = tempfile.mkstemp(suffix=".csv", prefix="autoperfpy_analyze_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("timestamp,workload,batch_size,latency_ms,power_w\n")
+            for row in rows:
+                handle.write(",".join(str(value) for value in row) + "\n")
+    except Exception:
+        try:
+            os.unlink(csv_path)
+        except OSError:
+            pass
+        return None
+    return csv_path
 
 
 def run_analyze_latency(

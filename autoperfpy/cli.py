@@ -95,6 +95,7 @@ Examples:
 
   # Latency analysis
   autoperfpy analyze latency --csv data.csv
+  autoperfpy analyze latency --json results.json
   autoperfpy analyze logs --log performance.log --threshold 50
 
   # DNN pipeline analysis
@@ -281,7 +282,15 @@ Environment Variables:
     # Analyze latency
     latency_parser = analyze_subparsers.add_parser("latency", help="Analyze percentile latencies")
     latency_parser.add_argument("--csv", help="CSV file with benchmark data (default: run a quick benchmark)")
-    latency_parser.add_argument("--device", "-D", help="Device to use when no --csv (e.g. nvidia_0, cpu_0)")
+    latency_parser.add_argument(
+        "--json",
+        help="Benchmark JSON file from autoperfpy run --export (converted to analyzer CSV format)",
+    )
+    latency_parser.add_argument(
+        "--device",
+        "-D",
+        help="Device to use when no --csv/--json (e.g. nvidia_0, cpu_0)",
+    )
     latency_parser.add_argument(
         "--duration",
         "-d",
