@@ -19,7 +19,7 @@ class TrackiqDashboard(ABC):
     def __init__(
         self,
         result: TrackiqResult | list[TrackiqResult],
-        theme: TrackiqTheme = DARK_THEME,
+        theme: TrackiqTheme = LIGHT_THEME,
         title: str = "TrackIQ Dashboard",
     ) -> None:
         self.result = result

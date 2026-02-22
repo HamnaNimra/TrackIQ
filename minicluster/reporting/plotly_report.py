@@ -169,6 +169,9 @@ def generate_fault_timeline(fault_report: dict, output_path: str) -> None:
     results = fault_report.get("results", [])
     if not isinstance(results, list):
         results = []
+    fault_count = int(fault_report.get("num_faults", len(results)))
+    if fault_count < len(results):
+        fault_count = len(results)
 
     loss_values = _extract_loss_curve(fault_report)
     fig = make_subplots(
@@ -269,6 +272,12 @@ def generate_fault_timeline(fault_report: dict, output_path: str) -> None:
         latencies = [0.0]
         colors = ["#9ca3af"]
         bar_text = ["No fault records"]
+    elif len(fault_labels) < fault_count:
+        for missing_idx in range(len(fault_labels), fault_count):
+            fault_labels.append(f"MISSING_FAULT_{missing_idx + 1}")
+            latencies.append(0.0)
+            colors.append("#dc2626")
+            bar_text.append("MISSED")
 
     fig.add_trace(
         go.Bar(
@@ -287,7 +296,6 @@ def generate_fault_timeline(fault_report: dict, output_path: str) -> None:
     detected_count = int(
         fault_report.get("num_detected", sum(1 for e in results if isinstance(e, dict) and e.get("was_detected")))
     )
-    fault_count = int(fault_report.get("num_faults", len(results)))
 
     # This visualization proves your monitoring stack catches the three production failure modes:
     # SLOW_WORKER = thermal throttling, GRADIENT_SYNC_ANOMALY = HBM bit-flip / Silent Data Corruption,

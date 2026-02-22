@@ -12,9 +12,8 @@ from trackiq_compare.comparator import MetricComparator, SummaryGenerator
 from trackiq_compare.reporters import HtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
-    DARK_THEME,
-    ComparisonTable,
     LIGHT_THEME,
+    ComparisonTable,
     RegressionBadge,
     TrackiqDashboard,
     TrackiqTheme,

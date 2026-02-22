@@ -19,7 +19,7 @@ from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import DARK_THEME, ResultBrowser, run_dashboard
+from trackiq_core.ui import LIGHT_THEME, ResultBrowser, run_dashboard
 
 
 def _apply_unified_ui_style() -> None:
@@ -240,6 +240,9 @@ def _build_fault_timeline_figure(fault_report: dict[str, Any]) -> Any | None:
     results = fault_report.get("results", [])
     if not isinstance(results, list):
         results = []
+    fault_count = int(fault_report.get("num_faults", len(results)))
+    if fault_count < len(results):
+        fault_count = len(results)
 
     loss_values = _extract_loss_curve(fault_report)
     fig = make_subplots(
@@ -330,6 +333,12 @@ def _build_fault_timeline_figure(fault_report: dict[str, Any]) -> Any | None:
         latencies = [0.0]
         colors = ["#9ca3af"]
         bar_text = ["No fault records"]
+    elif len(fault_labels) < fault_count:
+        for missing_idx in range(len(fault_labels), fault_count):
+            fault_labels.append(f"MISSING_FAULT_{missing_idx + 1}")
+            latencies.append(0.0)
+            colors.append("#dc2626")
+            bar_text.append("MISSED")
 
     fig.add_trace(
         go.Bar(
@@ -348,7 +357,6 @@ def _build_fault_timeline_figure(fault_report: dict[str, Any]) -> Any | None:
     detected_count = int(
         fault_report.get("num_detected", sum(1 for e in results if isinstance(e, dict) and e.get("was_detected")))
     )
-    fault_count = int(fault_report.get("num_faults", len(results)))
     fig.update_layout(
         title="Fault Injection Validation Report",
         template="plotly_white",
@@ -478,7 +486,9 @@ def _render_cluster_health_page(
 
     # Row 3: All-reduce histogram with optional P99 marker.
     if not df.empty and "allreduce_ms" in df.columns:
-        allreduce_values = [float(v) for v in df["allreduce_ms"].tolist() if isinstance(v, (int, float))]
+        allreduce_values = [
+            float(v) for v in df["allreduce_ms"].tolist() if isinstance(v, (int, float)) and float(v) > 0.0
+        ]
         if allreduce_values:
             fig_hist = px.histogram(
                 x=allreduce_values,
@@ -496,7 +506,7 @@ def _render_cluster_health_page(
                 )
             st.plotly_chart(fig_hist, use_container_width=True)
         else:
-            st.info("All-reduce values unavailable for histogram.")
+            st.info("All-reduce values unavailable or zero-only for histogram.")
     else:
         st.info("All-reduce values unavailable for histogram.")
     st.caption(
@@ -899,7 +909,7 @@ def _render_autoperf_interactive(
                         st.session_state[f"{key_prefix}_selected_idx"] = 0
 
     with st.sidebar.expander("Load AutoPerfPy Result", expanded=False):
-        ResultBrowser(theme=DARK_THEME, allowed_tools=["autoperfpy"]).render()
+        ResultBrowser(theme=LIGHT_THEME, allowed_tools=["autoperfpy"]).render()
 
     results = st.session_state.get(f"{key_prefix}_results")
     selected: Optional[TrackiqResult] = None
@@ -1077,7 +1087,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     )
 
                 with st.sidebar.expander("Load MiniCluster Result", expanded=False):
-                    ResultBrowser(theme=DARK_THEME, allowed_tools=["minicluster"]).render()
+                    ResultBrowser(theme=LIGHT_THEME, allowed_tools=["minicluster"]).render()
 
                 if run_clicked or quick_clicked:
                     cfg = RunConfig(
@@ -1189,7 +1199,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             )
             result_a_path = ""
             result_b_path = ""
-            rows = ResultBrowser(theme=DARK_THEME).to_dict()
+            rows = ResultBrowser(theme=LIGHT_THEME).to_dict()
             if input_mode == "Browse discovered results":
                 if not rows:
                     st.sidebar.info("No result files discovered. Switch to manual paths.")

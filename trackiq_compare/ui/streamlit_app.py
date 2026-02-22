@@ -15,11 +15,24 @@ if str(REPO_ROOT) not in sys.path:
 from trackiq_compare.comparator import MetricComparator, SummaryGenerator
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import ResultBrowser
+from trackiq_core.ui import DARK_THEME, LIGHT_THEME, ResultBrowser
+
+UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
 
-def _apply_ui_style() -> None:
+def _resolve_trackiq_theme(theme: str):
+    """Map UI theme selection to TrackIQ dashboard theme object."""
+    if theme == "Dark":
+        return DARK_THEME
+    return LIGHT_THEME
+
+
+def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for compare app."""
+    prefers_dark = theme == "Dark"
+    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
+    metric_border = "rgba(148,163,184,0.30)" if prefers_dark else "rgba(148,163,184,0.22)"
+    metric_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
     st.markdown(
         """
         <style>
@@ -36,20 +49,25 @@ def _apply_ui_style() -> None:
         }
         .cmp-hero p {
             margin: 0;
-            color: #4b5563;
+            color: %(hero_text)s;
             font-size: 0.95rem;
         }
         [data-testid="stMetric"] {
-            border: 1px solid rgba(148,163,184,0.22);
+            border: 1px solid %(metric_border)s;
             border-radius: 12px;
             padding: 8px 10px;
-            background: rgba(15,23,42,0.02);
+            background: %(metric_bg)s;
         }
         button[kind="primary"] {
             border-radius: 10px !important;
         }
         </style>
-        """,
+        """
+        % {
+            "hero_text": hero_text,
+            "metric_border": metric_border,
+            "metric_bg": metric_bg,
+        },
         unsafe_allow_html=True,
     )
 
@@ -97,7 +115,10 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    _apply_ui_style()
+    selected_theme = st.session_state.get("trackiq_compare_ui_theme", "Light")
+    if selected_theme not in UI_THEME_OPTIONS:
+        selected_theme = "Light"
+    _apply_ui_style(selected_theme)
     st.title("TrackIQ Compare Interactive Dashboard")
     _render_page_intro()
 
@@ -155,6 +176,14 @@ def main() -> None:
                 "- `Regression Threshold`: flags large performance swings.\n"
                 "- `Variance Threshold`: catches all-reduce consistency degradation even when averages look stable."
             )
+        st.markdown("---")
+        st.subheader("View Options")
+        st.selectbox(
+            "Theme",
+            options=UI_THEME_OPTIONS,
+            index=UI_THEME_OPTIONS.index(selected_theme),
+            key="trackiq_compare_ui_theme",
+        )
         load_clicked = st.button("Load Comparison", use_container_width=True, type="primary")
 
     # Auto-load first two discovered results to avoid blank first render.
@@ -210,18 +239,25 @@ def main() -> None:
     with col4:
         st.metric("Consistency Findings", len(comp.consistency_findings))
     if top:
-        st.caption(
-            "Top deltas: "
-            + " | ".join(
-                f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in top if item.percent_delta is not None
+        finite_top = [
+            item
+            for item in top
+            if item.percent_delta is not None and item.percent_delta not in (float("inf"), float("-inf"))
+        ]
+        if finite_top:
+            st.caption(
+                "Top deltas: " + " | ".join(f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in finite_top)
             )
-        )
 
+    selected_theme = st.session_state.get("trackiq_compare_ui_theme", selected_theme)
+    active_theme = _resolve_trackiq_theme(str(selected_theme))
+    st.session_state["theme"] = active_theme.name
     dash = CompareDashboard(
         result_a=a,
         result_b=b,
         label_a=st.session_state.get("compare_label_a"),
         label_b=st.session_state.get("compare_label_b"),
+        theme=active_theme,
         regression_threshold_percent=float(st.session_state.get("compare_regression_threshold", regression_threshold)),
         variance_threshold_percent=float(st.session_state.get("compare_variance_threshold", variance_threshold)),
     )
