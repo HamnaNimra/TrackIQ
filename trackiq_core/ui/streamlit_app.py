@@ -16,6 +16,13 @@ from trackiq_core.ui.dashboard import TrackiqDashboard
 UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
 
+def _resolve_trackiq_theme(theme: str) -> Any:
+    """Map UI theme selection to TrackIQ dashboard theme object."""
+    if theme == "Dark":
+        return DARK_THEME
+    return LIGHT_THEME
+
+
 def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for the TrackIQ Core app."""
     prefers_dark = theme == "Dark"
@@ -203,7 +210,7 @@ class CoreDashboard(TrackiqDashboard):
     """Generic tabbed dashboard for canonical TrackIQ result objects."""
 
     def __init__(self, result: TrackiqResult) -> None:
-        super().__init__(result=result, theme=DARK_THEME, title="TrackIQ Core Dashboard")
+        super().__init__(result=result, theme=LIGHT_THEME, title="TrackIQ Core Dashboard")
 
     def render_body(self) -> None:
         """Render generic TrackIQ Core tabs."""
@@ -284,9 +291,9 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    selected_theme = st.session_state.get("trackiq_core_ui_theme", "System")
+    selected_theme = st.session_state.get("trackiq_core_ui_theme", "Light")
     if selected_theme not in UI_THEME_OPTIONS:
-        selected_theme = "System"
+        selected_theme = "Light"
     _apply_ui_style(selected_theme)
     st.markdown("<div id='trackiq-core-dashboard-top'></div>", unsafe_allow_html=True)
     st.title("TrackIQ Core Interactive Dashboard")
@@ -394,7 +401,9 @@ def main() -> None:
             if compare_rows:
                 st.dataframe(compare_rows, width="stretch", hide_index=True)
 
-    active_theme = LIGHT_THEME if st.session_state.get("theme") == LIGHT_THEME.name else DARK_THEME
+    selected_theme = st.session_state.get("trackiq_core_ui_theme", selected_theme)
+    active_theme = _resolve_trackiq_theme(str(selected_theme))
+    st.session_state["theme"] = active_theme.name
     dashboard = CoreDashboard(result=result)
     dashboard.theme = active_theme
     dashboard.apply_theme(active_theme)

@@ -12,6 +12,7 @@ from minicluster.reporting import MiniClusterHtmlReporter
 from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
     DARK_THEME,
+    LIGHT_THEME,
     LossChart,
     MetricTable,
     PowerGauge,
@@ -28,7 +29,7 @@ class MiniClusterDashboard(TrackiqDashboard):
     def __init__(
         self,
         result: TrackiqResult,
-        theme: TrackiqTheme = DARK_THEME,
+        theme: TrackiqTheme = LIGHT_THEME,
         title: str = "MiniCluster Dashboard",
     ) -> None:
         super().__init__(result=result, theme=theme, title=title)
@@ -225,6 +226,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             return
 
         df = pd.DataFrame(rows)
+        plotly_template = "plotly_dark" if self.theme.name == DARK_THEME.name else "plotly_white"
         col_a, col_b = st.columns(2)
         with col_a:
             fig_loss = px.line(
@@ -234,6 +236,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 title="Loss by Step",
                 labels={"step": "Step", "loss": "Loss"},
             )
+            fig_loss.update_layout(template=plotly_template)
             st.plotly_chart(fig_loss, use_container_width=True, key="minicluster_training_loss_by_step_chart")
         with col_b:
             fig_thr = px.line(
@@ -243,6 +246,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 title="Throughput by Step",
                 labels={"step": "Step", "throughput": "Samples/sec"},
             )
+            fig_thr.update_layout(template=plotly_template)
             st.plotly_chart(fig_thr, use_container_width=True, key="minicluster_training_throughput_by_step_chart")
 
         fig_timing = go.Figure()
@@ -267,6 +271,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             xaxis_title="Step",
             yaxis_title="Time (ms)",
             barmode="stack",
+            template=plotly_template,
         )
         st.plotly_chart(fig_timing, use_container_width=True, key="minicluster_training_timing_breakdown_chart")
 
@@ -278,6 +283,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 title="All-Reduce Latency Distribution (ms)",
                 labels={"x": "allreduce_time_ms"},
             )
+            fig_hist.update_layout(template=plotly_template)
             p99 = payload.get("p99_allreduce_ms")
             if isinstance(p99, (int, float)):
                 fig_hist.add_vline(

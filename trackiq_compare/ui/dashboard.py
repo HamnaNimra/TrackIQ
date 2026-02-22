@@ -14,6 +14,7 @@ from trackiq_core.schema import TrackiqResult
 from trackiq_core.ui import (
     DARK_THEME,
     ComparisonTable,
+    LIGHT_THEME,
     RegressionBadge,
     TrackiqDashboard,
     TrackiqTheme,
@@ -74,7 +75,7 @@ class CompareDashboard(TrackiqDashboard):
         label_a: str | None = None,
         label_b: str | None = None,
         result: list[TrackiqResult] | None = None,
-        theme: TrackiqTheme = DARK_THEME,
+        theme: TrackiqTheme = LIGHT_THEME,
         title: str = "TrackIQ Compare Dashboard",
         regression_threshold_percent: float = 5.0,
         variance_threshold_percent: float = 25.0,
