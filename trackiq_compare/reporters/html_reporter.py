@@ -1030,7 +1030,5 @@ class HtmlReporter:
             "<table><thead><tr>"
             "<th>Code</th><th>Label</th><th>Status</th><th>StdDev A (ms)</th><th>StdDev B (ms)</th>"
             "<th>Increase %</th><th>Threshold %</th><th>Details</th>"
-            "</tr></thead><tbody>"
-            + "".join(rows)
-            + "</tbody></table>"
+            "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
         )

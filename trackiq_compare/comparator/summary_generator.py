@@ -67,9 +67,7 @@ class SummaryGenerator:
         )
         consistency = comparison.consistency_findings
         consistency_text = (
-            f"Consistency findings: {len(consistency)}."
-            if consistency
-            else "Consistency findings: none."
+            f"Consistency findings: {len(consistency)}." if consistency else "Consistency findings: none."
         )
 
         text = (
