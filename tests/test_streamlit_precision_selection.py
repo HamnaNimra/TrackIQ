@@ -2,9 +2,14 @@
 
 from dataclasses import dataclass
 
+import pandas as pd
+
 from autoperfpy.ui.streamlit_app import (
+    _available_metric_sections,
+    _build_run_summary_text,
     _cap_pairs_with_precision_coverage,
     _normalize_max_configs_per_device,
+    _run_display_name,
     build_run_overview_row,
     build_sample_data_list,
 )
@@ -77,3 +82,31 @@ def test_build_run_overview_row_includes_config_fields() -> None:
     assert row["Batch Size"] == 8
     assert row["Samples"] == 120
     assert row["P99 Latency (ms)"] == 42.1
+
+
+def test_run_display_name_prefers_label_and_filename_when_distinct() -> None:
+    """Display name should preserve run label and include source filename context."""
+    run = {"run_label": "mi300x_fp16_bs8", "source_filename": "results_gpu0.json"}
+    assert _run_display_name(run, index=0) == "mi300x_fp16_bs8 (results_gpu0.json)"
+
+
+def test_available_metric_sections_lists_known_groups() -> None:
+    """Metric section helper should map dataframe columns to user-facing sections."""
+    df = pd.DataFrame(
+        [
+            {
+                "latency_ms": 1.0,
+                "cpu_percent": 10.0,
+                "power_w": 50.0,
+                "memory_used_mb": 2048.0,
+                "throughput_fps": 90.0,
+            }
+        ]
+    )
+    assert _available_metric_sections(df) == "Latency, Utilization, Power & Thermal, Memory, Throughput"
+
+
+def test_build_run_summary_text_uses_p99_and_throughput() -> None:
+    """Sidebar run summary should expose key latency and throughput snippets."""
+    run = {"summary": {"latency": {"p99_ms": 27.32}, "throughput": {"mean_fps": 42.5}}}
+    assert _build_run_summary_text(run) == "P99 27.32 ms, 42.5 FPS"

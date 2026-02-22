@@ -60,6 +60,8 @@ MAX_UI_AUTO_RUNS = 12
 SOURCE_UPLOAD = "Upload File"
 SOURCE_DEMO = "Demo Data (synthetic)"
 SOURCE_BENCH = "Run Benchmark"
+SOURCE_OPTIONS = [SOURCE_UPLOAD, SOURCE_DEMO, SOURCE_BENCH]
+UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
 
 def _plotly_chart(fig: Any, *, key: str) -> None:
@@ -75,6 +77,45 @@ def _plotly_chart(fig: Any, *, key: str) -> None:
             "toImageButtonOptions": {"format": "png", "filename": key},
         },
     )
+
+
+def _set_session_state_value(key: str, value: Any) -> None:
+    """Set Streamlit session-state value safely outside script contexts."""
+    try:
+        st.session_state[key] = value
+    except Exception:
+        return
+
+
+def _run_display_name(run: dict[str, Any], index: int) -> str:
+    """Return a user-facing run label including filename when available."""
+    run_label = run.get("run_label")
+    source_filename = run.get("source_filename")
+    collector_name = run.get("collector_name")
+    if run_label and source_filename and source_filename not in str(run_label):
+        return f"{run_label} ({source_filename})"
+    if run_label:
+        return str(run_label)
+    if source_filename:
+        return f"Run {index + 1} ({source_filename})"
+    if collector_name:
+        return str(collector_name)
+    return f"Run {index + 1}"
+
+
+def _build_run_summary_text(run: dict[str, Any]) -> str:
+    """Build compact benchmark summary text for sidebar status."""
+    summary = run.get("summary", {})
+    latency = summary.get("latency", {}) if isinstance(summary, dict) else {}
+    throughput = summary.get("throughput", {}) if isinstance(summary, dict) else {}
+    p99 = latency.get("p99_ms")
+    mean_fps = throughput.get("mean_fps")
+    parts: list[str] = []
+    if isinstance(p99, (int, float)):
+        parts.append(f"P99 {p99:.2f} ms")
+    if isinstance(mean_fps, (int, float)):
+        parts.append(f"{mean_fps:.1f} FPS")
+    return ", ".join(parts) if parts else "Run completed"
 
 
 def _available_metric_sections(df: pd.DataFrame) -> str:
@@ -93,10 +134,14 @@ def _available_metric_sections(df: pd.DataFrame) -> str:
     return ", ".join(available) if available else "None"
 
 
-def _apply_ui_style() -> None:
+def _apply_ui_style(theme: str = "System") -> None:
     """Apply lightweight UX polish for readability and hierarchy."""
+    prefers_dark = theme == "Dark"
+    card_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
+    card_border = "rgba(148,163,184,0.35)" if prefers_dark else "rgba(148,163,184,0.24)"
+    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
     st.markdown(
-        """
+        f"""
         <style>
         .stApp {
             font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -114,14 +159,14 @@ def _apply_ui_style() -> None:
         }
         .ap-hero p {
             margin: 0;
-            color: #4b5563;
+            color: {hero_text};
             font-size: 0.95rem;
         }
         [data-testid="stMetric"] {
-            border: 1px solid rgba(148,163,184,0.24);
+            border: 1px solid {card_border};
             border-radius: 12px;
             padding: 8px 10px;
-            background: rgba(15,23,42,0.02);
+            background: {card_bg};
         }
         [data-testid="stSidebar"] [data-testid="stMarkdown"] p {
             line-height: 1.35;
@@ -530,6 +575,7 @@ def run_auto_benchmarks_ui(
 ) -> list[dict[str, Any]]:
     """Run auto benchmarks from UI and return list of result dicts (Phase 5)."""
     try:
+        _set_session_state_value("benchmark_error", None)
         from autoperfpy.auto_runner import run_auto_benchmarks
         from autoperfpy.device_config import get_devices_and_configs_auto
 
@@ -551,7 +597,8 @@ def run_auto_benchmarks_ui(
             progress_callback=progress_callback,
             enable_power=False,
         )
-    except Exception:
+    except Exception as e:
+        _set_session_state_value("benchmark_error", str(e))
         return []
 
 
@@ -587,6 +634,7 @@ def estimate_auto_benchmark_plan_ui(
 def run_benchmark_from_ui(duration_seconds: int, device: str, precision: str) -> dict[str, Any] | None:
     """Run benchmark from UI (Phase 5 manual: uses detected device + inference config)."""
     try:
+        _set_session_state_value("benchmark_error", None)
         from autoperfpy.auto_runner import run_single_benchmark
         from autoperfpy.device_config import (
             DEFAULT_ITERATIONS,
@@ -597,26 +645,30 @@ def run_benchmark_from_ui(duration_seconds: int, device: str, precision: str) ->
         )
     except ImportError:
         return _run_synthetic_fallback_ui(duration_seconds, device, precision)
-    target = resolve_device(device or "cpu_0")
-    if not target:
-        return _run_synthetic_fallback_ui(duration_seconds, device, precision)
-    config = InferenceConfig(
-        precision=precision or PRECISION_FP32,
-        batch_size=1,
-        accelerator=target.device_id,
-        streams=1,
-        warmup_runs=DEFAULT_WARMUP_RUNS,
-        iterations=DEFAULT_ITERATIONS,
-    )
-    result = run_single_benchmark(
-        target,
-        config,
-        duration_seconds=float(duration_seconds),
-        sample_interval_seconds=0.2,
-        quiet=True,
-        enable_power=False,
-    )
-    return result
+    try:
+        target = resolve_device(device or "cpu_0")
+        if not target:
+            return _run_synthetic_fallback_ui(duration_seconds, device, precision)
+        config = InferenceConfig(
+            precision=precision or PRECISION_FP32,
+            batch_size=1,
+            accelerator=target.device_id,
+            streams=1,
+            warmup_runs=DEFAULT_WARMUP_RUNS,
+            iterations=DEFAULT_ITERATIONS,
+        )
+        result = run_single_benchmark(
+            target,
+            config,
+            duration_seconds=float(duration_seconds),
+            sample_interval_seconds=0.2,
+            quiet=True,
+            enable_power=False,
+        )
+        return result
+    except Exception as e:
+        _set_session_state_value("benchmark_error", str(e))
+        return None
 
 
 def _run_synthetic_fallback_ui(duration_seconds: int, device: str, precision: str) -> dict[str, Any] | None:
@@ -625,7 +677,8 @@ def _run_synthetic_fallback_ui(duration_seconds: int, device: str, precision: st
         from autoperfpy.device_config import DEFAULT_WARMUP_RUNS
         from trackiq_core.collectors import SyntheticCollector
         from trackiq_core.runners import BenchmarkRunner
-    except ImportError:
+    except ImportError as e:
+        _set_session_state_value("benchmark_error", str(e))
         return None
     config = {"warmup_samples": DEFAULT_WARMUP_RUNS, "seed": 42}
     collector = SyntheticCollector(config=config)
@@ -640,6 +693,7 @@ def _run_synthetic_fallback_ui(duration_seconds: int, device: str, precision: st
     data["platform_metadata"] = get_platform_metadata()
     data["inference_config"] = {"device": device, "precision": precision}
     data["run_label"] = f"{device}_{precision}_bs1"
+    _set_session_state_value("benchmark_error", None)
     return data
 
 
@@ -825,9 +879,12 @@ def render_overview_analysis(data: dict[str, Any], df: pd.DataFrame, summary: di
     if fig is None:
         fig = shared_charts.create_throughput_timeline(df, summary)
     if fig:
-        st.plotly_chart(fig, width="stretch", key="overview_primary_signal_chart")
+        _plotly_chart(fig, key="overview_primary_signal_chart")
     else:
-        st.info("No latency or throughput timeline data available.")
+        st.info(
+            "No latency or throughput timeline data available for the current view. "
+            f"Available metric sections: {_available_metric_sections(df)}."
+        )
 
     st.markdown("**Run Configuration**")
     st.dataframe(pd.DataFrame([build_run_overview_row(data)]), width="stretch", hide_index=True)
@@ -844,7 +901,7 @@ def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     st.subheader("Latency Analysis")
 
     if "latency_ms" not in df.columns:
-        st.warning("No latency data available")
+        st.warning(f"No latency data available. Available metric sections: {_available_metric_sections(df)}.")
         return
 
     col1, col2 = st.columns(2)
@@ -853,13 +910,13 @@ def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Latency timeline (from shared charts)
         fig = shared_charts.create_latency_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="latency_timeline_chart")
+            _plotly_chart(fig, key="latency_timeline_chart")
 
     with col2:
         # Latency distribution (from shared charts)
         fig = shared_charts.create_latency_histogram(df, summary)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="latency_distribution_chart")
+            _plotly_chart(fig, key="latency_distribution_chart")
 
     # Percentile breakdown
     latency = summary.get("latency", {})
@@ -887,7 +944,7 @@ def render_utilization_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     has_gpu = "gpu_percent" in df.columns
 
     if not has_cpu and not has_gpu:
-        st.warning("No utilization data available")
+        st.warning(f"No utilization data available. Available metric sections: {_available_metric_sections(df)}.")
         return
 
     col1, col2 = st.columns(2)
@@ -896,13 +953,13 @@ def render_utilization_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Utilization timeline (from shared charts)
         fig = shared_charts.create_utilization_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="utilization_timeline_chart")
+            _plotly_chart(fig, key="utilization_timeline_chart")
 
     with col2:
         # Utilization summary bar chart (from shared charts)
         fig = shared_charts.create_utilization_summary_bar(summary)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="utilization_summary_chart")
+            _plotly_chart(fig, key="utilization_summary_chart")
 
 
 def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -918,7 +975,7 @@ def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     has_temp = "temperature_c" in df.columns
 
     if not has_power and not has_temp:
-        st.warning("No power/thermal data available")
+        st.warning(f"No power/thermal data available. Available metric sections: {_available_metric_sections(df)}.")
         return
 
     col1, col2 = st.columns(2)
@@ -927,7 +984,7 @@ def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Power timeline (from shared charts)
         fig = shared_charts.create_power_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="power_timeline_chart")
+            _plotly_chart(fig, key="power_timeline_chart")
         else:
             st.info("No power data available")
 
@@ -935,7 +992,7 @@ def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Temperature timeline (from shared charts)
         fig = shared_charts.create_temperature_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="temperature_timeline_chart")
+            _plotly_chart(fig, key="temperature_timeline_chart")
         else:
             st.info("No temperature data available")
 
@@ -966,7 +1023,7 @@ def render_memory_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     st.subheader("Memory Usage")
 
     if "memory_used_mb" not in df.columns:
-        st.warning("No memory data available")
+        st.warning(f"No memory data available. Available metric sections: {_available_metric_sections(df)}.")
         return
 
     col1, col2 = st.columns(2)
@@ -975,14 +1032,14 @@ def render_memory_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Memory timeline (from shared charts)
         fig = shared_charts.create_memory_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="memory_timeline_chart")
+            _plotly_chart(fig, key="memory_timeline_chart")
 
     with col2:
         # Memory gauge (from shared charts)
         total_mb = float(df["memory_total_mb"].iloc[0]) if "memory_total_mb" in df.columns and len(df) > 0 else None
         fig = shared_charts.create_memory_gauge(summary, total_mb)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="memory_gauge_chart")
+            _plotly_chart(fig, key="memory_gauge_chart")
 
 
 def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -995,7 +1052,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
     st.subheader("Throughput Analysis")
 
     if "throughput_fps" not in df.columns:
-        st.warning("No throughput data available")
+        st.warning(f"No throughput data available. Available metric sections: {_available_metric_sections(df)}.")
         return
 
     col1, col2 = st.columns(2)
@@ -1004,7 +1061,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Throughput timeline (from shared charts)
         fig = shared_charts.create_throughput_timeline(df, summary)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="throughput_timeline_chart")
+            _plotly_chart(fig, key="throughput_timeline_chart")
 
     with col2:
         # Throughput statistics
@@ -1021,7 +1078,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
                 st.metric("Efficiency", f"{efficiency:.2f} FPS/W")
 
 
-def render_multi_run_comparison(runs: list[dict[str, Any]]):
+def render_multi_run_comparison(runs: list[dict[str, Any]], baseline_name: str | None = None):
     """Render multi-run comparison view with platform_metadata and inference_config (Phase 5).
 
     Args:
@@ -1034,7 +1091,9 @@ def render_multi_run_comparison(runs: list[dict[str, Any]]):
         return
 
     # Run labels: run_label > collector_name > Run N
-    run_names = [r.get("run_label") or r.get("collector_name") or f"Run {i+1}" for i, r in enumerate(runs)]
+    run_names = [_run_display_name(r, i) for i, r in enumerate(runs)]
+    if baseline_name:
+        st.caption(f"Baseline run: {baseline_name}")
 
     # Latency comparison
     col1, col2 = st.columns(2)
@@ -1043,13 +1102,13 @@ def render_multi_run_comparison(runs: list[dict[str, Any]]):
         # Latency comparison bar chart (from shared charts)
         fig = shared_charts.create_latency_comparison_bar(runs, run_names)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="multi_run_latency_comparison_chart")
+            _plotly_chart(fig, key="multi_run_latency_comparison_chart")
 
     with col2:
         # Throughput comparison bar chart (from shared charts)
         fig = shared_charts.create_throughput_comparison_bar(runs, run_names)
         if fig:
-            st.plotly_chart(fig, width="stretch", key="multi_run_throughput_comparison_chart")
+            _plotly_chart(fig, key="multi_run_throughput_comparison_chart")
 
     # Comparison table with platform_metadata and inference_config (use None for missing numerics so Arrow can serialize)
     st.markdown("**Summary Comparison**")
@@ -1142,10 +1201,18 @@ def render_raw_data_view(df: pd.DataFrame):
 
 def main():
     """Main Streamlit application."""
-    _apply_ui_style()
+    selected_theme = st.session_state.get("ap_ui_theme", "System")
+    if selected_theme not in UI_THEME_OPTIONS:
+        selected_theme = "System"
+    _apply_ui_style(selected_theme)
 
+    st.markdown("<div id='autoperfpy-dashboard-top'></div>", unsafe_allow_html=True)
     st.title("AutoPerfPy Dashboard")
     _render_page_intro()
+
+    selected_compare_run_ids: list[str] = []
+    baseline_compare_run_id: str | None = None
+    compare_run_labels: dict[str, str] = {}
 
     # Sidebar
     with st.sidebar:
@@ -1154,15 +1221,19 @@ def main():
 
         data_source = st.radio(
             "Select data source",
-            options=["Upload File", "Demo Data", "Run Benchmark"],
-            index=1,  # Default to demo
+            options=SOURCE_OPTIONS,
+            index=SOURCE_OPTIONS.index(SOURCE_DEMO),
             horizontal=True,
+            help=(
+                "Upload results, use demo data (synthetic), or run benchmarks directly. "
+                "Demo includes 100 samples with warmup, latency, utilization, power, and throughput."
+            ),
         )
 
         uploaded_files = []
         data_list = []
 
-        if data_source == "Upload File":
+        if data_source == SOURCE_UPLOAD:
             uploaded_files = st.file_uploader(
                 "Upload collector output (JSON/CSV)",
                 type=["json", "csv"],
@@ -1175,20 +1246,36 @@ def main():
                     try:
                         if uploaded_file.name.endswith(".json"):
                             content = json.load(uploaded_file)
-                            data_list.append(content)
+                            if isinstance(content, dict):
+                                content.setdefault("source_filename", uploaded_file.name)
+                                content.setdefault("run_label", Path(uploaded_file.name).stem)
+                                data_list.append(content)
+                            elif isinstance(content, list):
+                                for idx, row in enumerate(content):
+                                    if not isinstance(row, dict):
+                                        continue
+                                    row.setdefault("source_filename", uploaded_file.name)
+                                    row.setdefault("run_label", f"{Path(uploaded_file.name).stem}_{idx + 1}")
+                                    data_list.append(row)
+                            else:
+                                st.warning(
+                                    f"Unsupported JSON structure in {uploaded_file.name}; expected object or list."
+                                )
                         elif uploaded_file.name.endswith(".csv"):
                             df = pd.read_csv(uploaded_file)
                             # Convert CSV to collector-like format
                             data_list.append(
                                 {
                                     "collector_name": uploaded_file.name,
+                                    "source_filename": uploaded_file.name,
+                                    "run_label": Path(uploaded_file.name).stem,
                                     "samples": df.to_dict("records"),
                                     "summary": {},
                                 }
                             )
                     except Exception as e:
                         st.error(f"Error loading {uploaded_file.name}: {e}")
-        elif data_source == "Run Benchmark":
+        elif data_source == SOURCE_BENCH:
             detected = get_detected_devices()
             try:
                 from autoperfpy.device_config import (
@@ -1279,7 +1366,15 @@ def main():
                             "Narrow devices/configs to target specific runs."
                         )
 
-            if st.button("Run benchmark"):
+            trigger_benchmark = st.button("Run benchmark", key="bench_run")
+            if st.session_state.get("last_benchmark_settings"):
+                trigger_benchmark = (
+                    st.button("Run again with same settings", key="bench_run_again") or trigger_benchmark
+                )
+                if st.session_state.get("last_benchmark_summary"):
+                    st.caption(f"Last run summary: {st.session_state['last_benchmark_summary']}")
+
+            if trigger_benchmark:
                 if not selected_device_ids:
                     st.warning("Select at least one device.")
                 elif detected:
@@ -1290,10 +1385,16 @@ def main():
                         progress = st.progress(0.0)
                         status = st.empty()
                         status.caption("Preparing runs...")
+                        started_at = time.time()
+                        estimated_total_seconds = max(int(plan.get("estimated_seconds", 0)), int(duration_ui))
 
                         def _on_progress(i, total, device, config):
-                            progress.progress(min(1.0, i / max(total, 1)))
+                            elapsed = int(time.time() - started_at)
+                            progress.progress(
+                                min(1.0, max(i / max(total, 1), elapsed / max(estimated_total_seconds, 1)))
+                            )
                             status.caption(
+                                f"Running... {min(elapsed, estimated_total_seconds)}s / ~{estimated_total_seconds}s | "
                                 f"Run {i}/{total}: {device.device_name} ({device.device_id}) "
                                 f"precision={config.precision} batch={config.batch_size}"
                             )
@@ -1314,18 +1415,42 @@ def main():
                         if "data_list" not in st.session_state:
                             st.session_state["data_list"] = []
                         st.session_state["data_list"] = results
+                        st.session_state["last_benchmark_settings"] = {
+                            "device_ids": selected_device_ids,
+                            "duration_seconds": int(duration_ui),
+                            "precisions": list(precisions_ui or PRECISIONS[:1]),
+                            "batch_sizes": list(batch_sizes_ui or DEFAULT_BATCH_SIZES[:1]),
+                            "max_configs_per_device": int(max_cfg),
+                        }
+                        st.session_state["last_benchmark_summary"] = _build_run_summary_text(results[0])
                         st.success(f"Completed {len(results)} runs. Results loaded below.")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:
                             st.experimental_rerun()
                     else:
-                        st.warning("No results. Check devices and config.")
+                        err = st.session_state.get("benchmark_error")
+                        if err:
+                            st.error(f"Benchmark failed: {err}")
+                        else:
+                            st.error("Benchmark failed to produce results for the selected configuration.")
+                        st.info(
+                            "Try Demo Data (synthetic) or upload a JSON/CSV file to continue exploring the dashboard."
+                        )
                 else:
+                    progress = st.progress(0.0)
+                    status = st.empty()
+                    started_at = time.time()
                     with st.spinner("Running benchmark..."):
                         run_results: list[dict[str, Any]] = []
                         selected_precisions = precisions_ui or PRECISIONS[:1]
-                        for precision in selected_precisions:
+                        estimated_total_seconds = max(1, int(duration_ui) * len(selected_precisions))
+                        for idx, precision in enumerate(selected_precisions, start=1):
+                            elapsed = int(time.time() - started_at)
+                            status.caption(
+                                f"Running... {min(elapsed, estimated_total_seconds)}s / ~{estimated_total_seconds}s | "
+                                f"Precision {precision} ({idx}/{len(selected_precisions)})"
+                            )
                             run_data = run_benchmark_from_ui(
                                 duration_ui,
                                 selected_device_ids[0],
@@ -1333,17 +1458,35 @@ def main():
                             )
                             if run_data:
                                 run_results.append(run_data)
+                            progress.progress(min(1.0, idx / max(len(selected_precisions), 1)))
+                    progress.empty()
+                    status.empty()
                     if run_results:
                         if "data_list" not in st.session_state:
                             st.session_state["data_list"] = []
                         st.session_state["data_list"] = run_results
+                        st.session_state["last_benchmark_settings"] = {
+                            "device_ids": selected_device_ids,
+                            "duration_seconds": int(duration_ui),
+                            "precisions": list(selected_precisions),
+                            "batch_sizes": list(batch_sizes_ui or [1]),
+                            "max_configs_per_device": int(max_cfg),
+                        }
+                        st.session_state["last_benchmark_summary"] = _build_run_summary_text(run_results[0])
                         st.success(f"Completed {len(run_results)} run(s). Results loaded below.")
                         if hasattr(st, "rerun"):
                             st.rerun()
                         else:
                             st.experimental_rerun()
                     else:
-                        st.warning("No results. Check device ID.")
+                        err = st.session_state.get("benchmark_error")
+                        if err:
+                            st.error(f"Benchmark failed: {err}")
+                        else:
+                            st.error("Benchmark failed to produce results for the selected device.")
+                        st.info(
+                            "Try Demo Data (synthetic) or upload a JSON/CSV file to continue exploring the dashboard."
+                        )
 
             if "data_list" in st.session_state and st.session_state["data_list"]:
                 data_list = st.session_state["data_list"]
@@ -1351,7 +1494,32 @@ def main():
                 st.info("Select one or more devices, set options, then click **Run benchmark**.")
         else:
             st.info("Using synthetic demo data")
+            st.caption(
+                "What's in demo data: 100 samples, 10 warmup samples, latency/utilization/power/throughput metrics."
+            )
             data_list = [generate_synthetic_demo_data()]
+
+        if len(data_list) >= 2:
+            st.markdown("### Compare runs")
+            run_ids = [f"run_{idx}" for idx in range(len(data_list))]
+            compare_run_labels = {run_id: _run_display_name(data_list[idx], idx) for idx, run_id in enumerate(run_ids)}
+            selected_compare_run_ids = st.multiselect(
+                "Select runs to compare",
+                options=run_ids,
+                default=run_ids,
+                format_func=lambda rid: compare_run_labels.get(rid, rid),
+                key="compare_run_ids",
+            )
+            if selected_compare_run_ids:
+                baseline_compare_run_id = st.selectbox(
+                    "Set baseline run",
+                    options=selected_compare_run_ids,
+                    index=0,
+                    format_func=lambda rid: compare_run_labels.get(rid, rid),
+                    key="compare_baseline_run_id",
+                )
+            if len(selected_compare_run_ids) < 2:
+                st.info("Select at least two runs to enable comparison charts.")
 
         st.divider()
 
@@ -1476,8 +1644,16 @@ def main():
 
         # View options
         st.header("View Options")
+        st.selectbox(
+            "Theme",
+            options=UI_THEME_OPTIONS,
+            index=UI_THEME_OPTIONS.index(selected_theme),
+            key="ap_ui_theme",
+            help="Use high-contrast labels with your preferred theme mode.",
+        )
         show_warmup = st.checkbox("Include warmup samples", value=False)
         show_raw_data = st.checkbox("Show raw data table", value=False)
+        st.markdown("[Back to top](#autoperfpy-dashboard-top)")
         if data_list and result_to_csv_content(data_list[0]):
             csv_content = result_to_csv_content(data_list[0])
             st.download_button(
@@ -1489,12 +1665,29 @@ def main():
                 key="dl_run_csv",
             )
 
+    baseline_run_name: str | None = None
+    if data_list and selected_compare_run_ids:
+        run_lookup = {f"run_{idx}": run for idx, run in enumerate(data_list)}
+        filtered_runs = [run_lookup[run_id] for run_id in selected_compare_run_ids if run_id in run_lookup]
+        if filtered_runs:
+            data_list = filtered_runs
+        if baseline_compare_run_id:
+            baseline_run_name = compare_run_labels.get(baseline_compare_run_id, baseline_compare_run_id)
+            baseline_candidates = [run_lookup[baseline_compare_run_id]] if baseline_compare_run_id in run_lookup else []
+            remaining = [
+                run_lookup[run_id]
+                for run_id in selected_compare_run_ids
+                if run_id != baseline_compare_run_id and run_id in run_lookup
+            ]
+            if baseline_candidates:
+                data_list = baseline_candidates + remaining
+
     # Main content
     if not data_list:
-        if data_source == "Run Benchmark":
+        if data_source == SOURCE_BENCH:
             st.info("Configure benchmark settings in the sidebar and click **Run benchmark** to start.")
         else:
-            st.info("Please upload a data file or select Demo Data to get started")
+            st.info("Please upload a data file, load sample data, or select Demo Data to get started")
 
         if st.button("Load sample data", key="load_sample_data_empty_state"):
             data_list = build_sample_data_list()
@@ -1547,6 +1740,30 @@ def main():
         st.warning("No sample data found in the uploaded file")
         return
 
+    if "elapsed_seconds" in display_df.columns and len(display_df) > 1:
+        min_t = float(display_df["elapsed_seconds"].min())
+        max_t = float(display_df["elapsed_seconds"].max())
+        if max_t > min_t:
+            st.markdown("**Time range (seconds)**")
+            slider_step = max(0.1, round((max_t - min_t) / 100, 2))
+            time_range = st.slider(
+                "Zoom into a segment",
+                min_value=min_t,
+                max_value=max_t,
+                value=(min_t, max_t),
+                step=slider_step,
+                key="time_range_seconds",
+            )
+            display_df = display_df[
+                (display_df["elapsed_seconds"] >= float(time_range[0]))
+                & (display_df["elapsed_seconds"] <= float(time_range[1]))
+            ]
+            st.caption(f"Showing {len(display_df)} samples from {time_range[0]:.1f}s to {time_range[1]:.1f}s.")
+
+    if display_df.empty:
+        st.warning("No samples remain after filters. Expand the time range or include warmup samples.")
+        return
+
     summary = data.get("summary", {})
 
     # Display collector info
@@ -1556,6 +1773,7 @@ def main():
             f"**Duration:** {summary['duration_seconds']:.1f} seconds | "
             f"**Samples:** {summary.get('sample_count', len(samples))}"
         )
+    st.caption(f"Available metric sections: {_available_metric_sections(display_df)}")
 
     # Platform metadata (device name, CPU, GPU, SoC, power mode) and inference_config
     platform_meta = data.get("platform_metadata") or {}
@@ -1617,7 +1835,7 @@ def main():
 
     # Multi-run comparison if multiple files uploaded
     if len(data_list) > 1:
-        render_multi_run_comparison(data_list)
+        render_multi_run_comparison(data_list, baseline_name=baseline_run_name)
         st.divider()
 
     # Raw data view
