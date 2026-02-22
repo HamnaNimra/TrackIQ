@@ -13,8 +13,16 @@ from minicluster.runner import RunConfig, run_distributed, save_metrics
 from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqResult, WorkloadInfo
 from trackiq_core.serializer import load_trackiq_result
+from trackiq_core.ui import DARK_THEME, LIGHT_THEME
 
 UI_THEME_OPTIONS = ["System", "Light", "Dark"]
+
+
+def _resolve_trackiq_theme(theme: str):
+    """Map UI theme selection to TrackIQ dashboard theme object."""
+    if theme == "Dark":
+        return DARK_THEME
+    return LIGHT_THEME
 
 
 def _apply_ui_style(theme: str = "System") -> None:
@@ -214,9 +222,9 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-    selected_theme = st.session_state.get("minicluster_ui_theme", "System")
+    selected_theme = st.session_state.get("minicluster_ui_theme", "Light")
     if selected_theme not in UI_THEME_OPTIONS:
-        selected_theme = "System"
+        selected_theme = "Light"
     _apply_ui_style(selected_theme)
     st.markdown("<div id='minicluster-dashboard-top'></div>", unsafe_allow_html=True)
     st.title("MiniCluster Interactive Dashboard")
@@ -371,7 +379,10 @@ def main() -> None:
         return
     st.success(f"Active result source: {st.session_state.get('minicluster_result_path', 'loaded')}")
 
-    dashboard = MiniClusterDashboard(result=result)
+    selected_theme = st.session_state.get("minicluster_ui_theme", selected_theme)
+    active_theme = _resolve_trackiq_theme(str(selected_theme))
+    st.session_state["theme"] = active_theme.name
+    dashboard = MiniClusterDashboard(result=result, theme=active_theme)
     dashboard.apply_theme(dashboard.theme)
     dashboard.render_sidebar()
     dashboard.render_body()
