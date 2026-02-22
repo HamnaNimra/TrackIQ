@@ -23,8 +23,7 @@ def _apply_ui_style(theme: str = "System") -> None:
     card_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
     card_border = "rgba(148,163,184,0.35)" if prefers_dark else "rgba(148,163,184,0.22)"
     hero_text = "#d1d5db" if prefers_dark else "#4b5563"
-    st.markdown(
-        f"""
+    css = """
         <style>
         .mc-hero {
             border: 1px solid rgba(20,184,166,0.25);
@@ -39,22 +38,25 @@ def _apply_ui_style(theme: str = "System") -> None:
         }
         .mc-hero p {
             margin: 0;
-            color: {hero_text};
+            color: %(hero_text)s;
             font-size: 0.95rem;
         }
         [data-testid="stMetric"] {
-            border: 1px solid {card_border};
+            border: 1px solid %(card_border)s;
             border-radius: 12px;
             padding: 8px 10px;
-            background: {card_bg};
+            background: %(card_bg)s;
         }
         button[kind="primary"] {
             border-radius: 10px !important;
         }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """ % {
+        "hero_text": hero_text,
+        "card_border": card_border,
+        "card_bg": card_bg,
+    }
+    st.markdown(css, unsafe_allow_html=True)
 
 
 def _render_page_intro() -> None:
