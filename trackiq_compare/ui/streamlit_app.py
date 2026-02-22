@@ -7,22 +7,22 @@ from pathlib import Path
 
 import streamlit as st
 
-# Ensure local repo packages are imported when launched via `streamlit run ...`.
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from trackiq_compare.comparator import MetricComparator, SummaryGenerator
-from trackiq_compare.ui.dashboard import CompareDashboard
-from trackiq_core.serializer import load_trackiq_result
-from trackiq_core.ui import DARK_THEME, LIGHT_THEME, ResultBrowser
-from trackiq_core.ui.style import inject_app_shell_style
-
 UI_THEME_OPTIONS = ["System", "Light", "Dark"]
+
+
+def _ensure_repo_root_on_path() -> None:
+    """Ensure local repo packages are importable under `streamlit run path/to/app.py`."""
+    repo_root = Path(__file__).resolve().parents[2]
+    repo_root_str = str(repo_root)
+    if repo_root_str not in sys.path:
+        sys.path.insert(0, repo_root_str)
 
 
 def _resolve_trackiq_theme(theme: str):
     """Map UI theme selection to TrackIQ dashboard theme object."""
+    _ensure_repo_root_on_path()
+    from trackiq_core.ui import DARK_THEME, LIGHT_THEME
+
     if theme == "Dark":
         return DARK_THEME
     return LIGHT_THEME
@@ -30,6 +30,9 @@ def _resolve_trackiq_theme(theme: str):
 
 def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for compare app."""
+    _ensure_repo_root_on_path()
+    from trackiq_core.ui.style import inject_app_shell_style
+
     inject_app_shell_style(
         theme=theme,
         hero_class="cmp-hero",
@@ -60,6 +63,9 @@ def _render_page_intro() -> None:
 
 def _try_load(path: str):
     """Load a TrackiqResult from path, returning None on failure."""
+    _ensure_repo_root_on_path()
+    from trackiq_core.serializer import load_trackiq_result
+
     try:
         return load_trackiq_result(path)
     except Exception as exc:  # pragma: no cover - UI feedback path
@@ -69,6 +75,9 @@ def _try_load(path: str):
 
 def _discover_result_rows() -> list[dict]:
     """Return discovered TrackiqResult metadata rows from common output folders."""
+    _ensure_repo_root_on_path()
+    from trackiq_core.ui import ResultBrowser
+
     try:
         return ResultBrowser().to_dict()
     except Exception:
@@ -77,6 +86,10 @@ def _discover_result_rows() -> list[dict]:
 
 def main() -> None:
     """Render interactive compare app with file selectors and labels."""
+    _ensure_repo_root_on_path()
+    from trackiq_compare.comparator import MetricComparator, SummaryGenerator
+    from trackiq_compare.ui.dashboard import CompareDashboard
+
     st.set_page_config(
         page_title="TrackIQ Compare Interactive Dashboard",
         layout="wide",
