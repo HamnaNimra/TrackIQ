@@ -26,6 +26,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,40 @@ st.set_page_config(
 )
 
 MAX_UI_AUTO_RUNS = 12
+SOURCE_UPLOAD = "Upload File"
+SOURCE_DEMO = "Demo Data (synthetic)"
+SOURCE_BENCH = "Run Benchmark"
+
+
+def _plotly_chart(fig: Any, *, key: str) -> None:
+    """Render Plotly chart with consistent interactive toolbar settings."""
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        key=key,
+        config={
+            "displayModeBar": True,
+            "displaylogo": False,
+            "scrollZoom": True,
+            "toImageButtonOptions": {"format": "png", "filename": key},
+        },
+    )
+
+
+def _available_metric_sections(df: pd.DataFrame) -> str:
+    """Return comma-separated metric sections available in the dataframe."""
+    available: list[str] = []
+    if "latency_ms" in df.columns:
+        available.append("Latency")
+    if "cpu_percent" in df.columns or "gpu_percent" in df.columns:
+        available.append("Utilization")
+    if "power_w" in df.columns or "temperature_c" in df.columns:
+        available.append("Power & Thermal")
+    if "memory_used_mb" in df.columns:
+        available.append("Memory")
+    if "throughput_fps" in df.columns:
+        available.append("Throughput")
+    return ", ".join(available) if available else "None"
 
 
 def _apply_ui_style() -> None:
