@@ -2,12 +2,14 @@
 
 from typing import Any
 
+rich_console: Any
+rich_table: Any
 try:
-    from rich.console import Console
-    from rich.table import Table
+    import rich.console as rich_console
+    import rich.table as rich_table
 except Exception:  # pragma: no cover - fallback path only when rich is absent
-    Console = None
-    Table = None
+    rich_console = None
+    rich_table = None
 
 from trackiq_compare.comparator.metric_comparator import ComparisonResult, MetricComparison
 from trackiq_compare.comparator.summary_generator import SummaryResult
@@ -18,15 +20,15 @@ class TerminalReporter:
 
     def __init__(self, tolerance_percent: float = 0.5, console: Any | None = None):
         self.tolerance_percent = tolerance_percent
-        self.console = console or (Console() if Console is not None else None)
+        self.console = console or (rich_console.Console() if rich_console is not None else None)
 
     def render(self, comparison: ComparisonResult, summary: SummaryResult) -> None:
         """Print comparison table and plain-English summary."""
-        if Table is None or self.console is None:
+        if rich_table is None or self.console is None:
             self._render_plain(comparison, summary)
             return
 
-        table = Table(title="TrackIQ Metric Comparison")
+        table = rich_table.Table(title="TrackIQ Metric Comparison")
         table.add_column("Metric", style="bold")
         table.add_column(comparison.label_a)
         table.add_column(comparison.label_b)

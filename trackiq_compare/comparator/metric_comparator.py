@@ -158,18 +158,20 @@ class MetricComparator:
 
         explicit = payload.get("allreduce_time_ms")
         if isinstance(explicit, list):
-            values = [float(v) for v in explicit if isinstance(v, (int, float))]
-            if values:
-                return values
+            explicit_values = [float(v) for v in explicit if isinstance(v, (int, float))]
+            if explicit_values:
+                return explicit_values
 
         steps = payload.get("steps")
         if not isinstance(steps, list):
             return []
-        values = [
-            float(step.get("allreduce_time_ms"))
-            for step in steps
-            if isinstance(step, dict) and isinstance(step.get("allreduce_time_ms"), (int, float))
-        ]
+        values: list[float] = []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            raw_value = step.get("allreduce_time_ms")
+            if isinstance(raw_value, (int, float)):
+                values.append(float(raw_value))
         return values
 
     def _consistency_findings(self, result_a: TrackiqResult, result_b: TrackiqResult) -> list[ConsistencyFinding]:
