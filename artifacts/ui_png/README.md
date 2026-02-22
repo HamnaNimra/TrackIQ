@@ -1,7 +1,8 @@
 # UI Screenshot Artifacts
 
 This folder contains generated PNG captures for all tools and dashboards.
-The `tabs/` set was refreshed on 2026-02-22 with light-theme viewport captures.
+The `tabs/` set was refreshed on 2026-02-22 with live Streamlit captures, light theme, and a consistent `1680x1100` viewport.
+Alias duplicate filenames were removed; each capture now has one canonical filename.
 
 ## Preview Gallery
 
@@ -41,5 +42,7 @@ Use `artifacts/ui_png/tabs/` as the curated set:
 
 - AutoPerfPy standalone app has real Streamlit tabs and was captured tab-by-tab.
 - MiniCluster / Compare / Cluster Health dashboard views are section-based (no tab widgets), so they are captured by section/viewport.
+- All curated tab captures use the same viewport size (`1680x1100`) to keep visual scale and text readability consistent across tools.
+- Canonical naming policy: one filename per capture (no duplicate alias copies).
 - `ui_trackiq_core_app.png` captures the canonical TrackIQ Core explorer for schema-level inspection flows.
 - HTML report preview captures are refreshed at 1600px width for improved text/chart readability in docs.
