@@ -155,6 +155,12 @@ class HTMLReportGenerator:
                 section_added = True
 
         def _plotly_to_html(fig) -> str:
+            try:
+                from autoperfpy.reports import charts as shared_charts
+
+                shared_charts.apply_report_figure_style(fig)
+            except Exception:
+                pass
             fig.update_layout(
                 autosize=True,
                 height=380,
@@ -2138,6 +2144,14 @@ class HTMLReportGenerator:
             if platform_cards_html
             else ""
         )
+        plotly_script = ""
+        if self.html_figures:
+            try:
+                from plotly.offline.offline import get_plotlyjs
+
+                plotly_script = f"<script>{get_plotlyjs()}</script>"
+            except Exception:
+                plotly_script = '<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>'
 
         # Complete HTML document
         html = f"""<!DOCTYPE html>
@@ -2151,7 +2165,7 @@ class HTMLReportGenerator:
     <style>
         {self._get_css_styles()}
     </style>
-    {('<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>' if self.html_figures else '')}
+    {plotly_script}
 </head>
 <body>
     <div class="container">

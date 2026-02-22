@@ -52,6 +52,18 @@ def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
     for idx, run in enumerate(runs):
         if not isinstance(run, dict):
             continue
+        power_by_step: dict[int, float] = {}
+        power_profile = run.get("power_profile")
+        if isinstance(power_profile, dict):
+            step_readings = power_profile.get("step_readings")
+            if isinstance(step_readings, list):
+                for reading in step_readings:
+                    if not isinstance(reading, dict):
+                        continue
+                    step = reading.get("step")
+                    watts = reading.get("power_watts")
+                    if isinstance(step, int) and step >= 0 and isinstance(watts, (int, float)):
+                        power_by_step[step] = float(watts)
         run_label = run.get("run_label") or run.get("collector_name") or f"run_{idx + 1}"
         batch_size = (
             run.get("inference_config", {}).get("batch_size", 1) if isinstance(run.get("inference_config"), dict) else 1
@@ -59,7 +71,7 @@ def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
         samples = run.get("samples", [])
         if not isinstance(samples, list):
             continue
-        for sample in samples:
+        for row_idx, sample in enumerate(samples):
             if not isinstance(sample, dict):
                 continue
             ts = sample.get("timestamp", 0)
@@ -67,7 +79,13 @@ def _write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
             if not isinstance(metrics, dict):
                 continue
             latency = metrics.get("latency_ms", 0)
-            power = metrics.get("power_w", 0)
+            power = metrics.get("power_w")
+            if not isinstance(power, (int, float)) or power == 0:
+                meta = sample.get("metadata", {})
+                sample_index = meta.get("sample_index") if isinstance(meta, dict) else None
+                if not isinstance(sample_index, int):
+                    sample_index = row_idx
+                power = power_by_step.get(sample_index, 0)
             throughput = (1000.0 / latency) if isinstance(latency, (int, float)) and latency else 0
             rows.append((ts, run_label, "default", batch_size, latency, power, throughput))
     if not rows:

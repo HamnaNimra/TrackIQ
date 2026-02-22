@@ -707,6 +707,79 @@ def render_summary_metrics(data: dict[str, Any]):
         st.metric("Avg Power", f"{mean_power} W" if mean_power != "N/A" else "N/A")
 
 
+def render_result_purpose_guide(summary: dict[str, Any]) -> None:
+    """Render plain-English meaning and purpose of key result metrics."""
+    rows: list[tuple[str, str, str]] = []
+    if summary.get("sample_count") is not None:
+        rows.append(
+            (
+                "sample_count",
+                "Total collected sample points in this run.",
+                "Higher counts improve statistical confidence.",
+            )
+        )
+    if summary.get("duration_seconds") is not None:
+        rows.append(
+            (
+                "duration_seconds",
+                "Total benchmark measurement window.",
+                "Ensures fair cross-run comparison.",
+            )
+        )
+
+    metric_map = {
+        "latency.p50_ms": ("Typical latency for most requests.", "Use as baseline responsiveness."),
+        "latency.p95_ms": ("Tail latency for slower requests.", "Detects user-visible latency spikes."),
+        "latency.p99_ms": ("Worst-case tail latency.", "Primary straggler/regression indicator."),
+        "throughput.mean_fps": ("Average processing rate.", "Capacity planning and scaling metric."),
+        "power.mean_w": ("Average power draw.", "Cost and efficiency baseline."),
+        "temperature.max_c": ("Peak observed temperature.", "Thermal throttle risk signal."),
+        "cpu.mean_percent": ("Average CPU utilization.", "Host-side bottleneck indicator."),
+        "gpu.mean_percent": ("Average GPU utilization.", "Low values can indicate data/sync stalls."),
+        "memory.mean_mb": ("Average memory footprint.", "Headroom check for larger models/batches."),
+    }
+    for group_name, metrics in summary.items():
+        if not isinstance(metrics, dict):
+            continue
+        for metric_key in metrics:
+            full_name = f"{group_name}.{metric_key}"
+            if full_name in metric_map:
+                description, purpose = metric_map[full_name]
+                rows.append((full_name, description, purpose))
+
+    if not rows:
+        return
+
+    with st.expander("What each result means", expanded=False):
+        st.dataframe(
+            pd.DataFrame(rows, columns=["Metric", "What It Means", "Why It Matters"]),
+            width="stretch",
+            hide_index=True,
+        )
+
+
+def render_multi_run_column_guide() -> None:
+    """Explain the purpose of each column in multi-run comparison output."""
+    rows = [
+        ("Run", "Unique run identifier.", "Join key across outputs and reports."),
+        ("Device", "Detected hardware target.", "Separates hardware effects from config effects."),
+        ("Precision", "Numerical precision mode.", "Directly impacts speed/quality trade-offs."),
+        ("Batch", "Configured batch size.", "Key lever for throughput and memory pressure."),
+        ("Samples", "Collected sample count.", "Low counts can hide regressions."),
+        ("Duration (s)", "Measured run window.", "Enforces fair comparison time windows."),
+        ("P99 Latency (ms)", "99th percentile latency.", "Best indicator of tail regressions."),
+        ("Mean Throughput (FPS)", "Average throughput.", "Capacity and scaling metric."),
+        ("Mean Power (W)", "Average power draw.", "Cost and efficiency indicator."),
+        ("Max Temp (C)", "Peak temperature.", "Thermal risk and throttling signal."),
+    ]
+    with st.expander("What each comparison column means", expanded=False):
+        st.dataframe(
+            pd.DataFrame(rows, columns=["Column", "What It Means", "Why It Matters"]),
+            width="stretch",
+            hide_index=True,
+        )
+
+
 def render_overview_analysis(data: dict[str, Any], df: pd.DataFrame, summary: dict[str, Any]):
     """Render first-pass overview with key metrics, one chart, and run configuration."""
     st.subheader("Overview")
@@ -723,6 +796,7 @@ def render_overview_analysis(data: dict[str, Any], df: pd.DataFrame, summary: di
 
     st.markdown("**Run Configuration**")
     st.dataframe(pd.DataFrame([build_run_overview_row(data)]), width="stretch", hide_index=True)
+    render_result_purpose_guide(summary)
 
 
 def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -973,6 +1047,7 @@ def render_multi_run_comparison(runs: list[dict[str, Any]]):
         )
 
     st.dataframe(pd.DataFrame(comparison_data), width="stretch")
+    render_multi_run_column_guide()
 
     # Per-run metadata expanders (side-by-side)
     st.markdown("**Run metadata**")

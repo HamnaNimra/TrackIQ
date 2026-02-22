@@ -406,6 +406,20 @@ class TestHTMLReportGenerator:
         assert "plotly" in content.lower()
         assert "plotly-div" in content or "placeholder" in content
 
+    def test_generate_html_prefers_inline_plotly_bundle_when_available(self, report, tmp_path):
+        """Plotly should be inlined for self-contained reports when plotly is installed."""
+        pytest.importorskip("plotly")
+        report.add_html_figure(
+            "<div id='plotly-inline'>placeholder</div>",
+            caption="Plot",
+            section="Charts",
+        )
+        output_path = tmp_path / "inline_plotly_report.html"
+        report.generate_html(str(output_path))
+        content = output_path.read_text(encoding="utf-8")
+        assert "plotly.js v" in content.lower()
+        assert '<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>' not in content
+
 
 class TestHTMLReportGeneratorIntegration:
     """Integration tests for HTMLReportGenerator with full workflow."""

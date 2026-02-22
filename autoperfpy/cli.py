@@ -785,13 +785,31 @@ def _write_result_to_csv(result: dict, path: str) -> bool:
     samples = result.get("samples", [])
     if not samples:
         return False
+    power_by_step: dict[int, float] = {}
+    power_profile = result.get("power_profile")
+    if isinstance(power_profile, dict):
+        step_readings = power_profile.get("step_readings")
+        if isinstance(step_readings, list):
+            for reading in step_readings:
+                if not isinstance(reading, dict):
+                    continue
+                step = reading.get("step")
+                watts = reading.get("power_watts")
+                if isinstance(step, int) and step >= 0 and isinstance(watts, (int, float)):
+                    power_by_step[step] = float(watts)
     batch_size = result.get("inference_config", {}).get("batch_size", 1)
     rows = []
-    for s in samples:
+    for row_idx, s in enumerate(samples):
         ts = s.get("timestamp", 0)
         m = s.get("metrics", s) if isinstance(s, dict) else {}
         lat = m.get("latency_ms", 0)
-        pwr = m.get("power_w", 0)
+        pwr = m.get("power_w")
+        if not isinstance(pwr, (int, float)) or pwr == 0:
+            meta = s.get("metadata", {}) if isinstance(s, dict) else {}
+            sample_index = meta.get("sample_index") if isinstance(meta, dict) else None
+            if not isinstance(sample_index, int):
+                sample_index = row_idx
+            pwr = power_by_step.get(sample_index, 0)
         throughput = (1000 / lat) if lat else 0
         rows.append((ts, "default", batch_size, lat, pwr, throughput))
     with open(path, "w", encoding="utf-8") as f:

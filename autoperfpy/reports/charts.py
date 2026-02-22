@@ -35,6 +35,27 @@ def is_available() -> bool:
     return PLOTLY_AVAILABLE and PANDAS_AVAILABLE
 
 
+def apply_report_figure_style(fig: Any) -> Any:
+    """Apply a consistent visual style for HTML report Plotly figures."""
+    if not PLOTLY_AVAILABLE or fig is None:
+        return fig
+    fig.update_layout(
+        template="plotly_white",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        font=dict(color="#0f172a"),
+        colorway=["#0f766e", "#f59e0b", "#2563eb", "#dc2626", "#7c3aed", "#16a34a"],
+        legend=dict(
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="#e2e8f0",
+            borderwidth=1,
+        ),
+    )
+    fig.update_xaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False)
+    fig.update_yaxes(showgrid=True, gridcolor="#e2e8f0", zeroline=False)
+    return fig
+
+
 def samples_to_dataframe(samples: list[dict]) -> "pd.DataFrame":
     """Convert collector samples to a pandas DataFrame.
 
@@ -1090,6 +1111,7 @@ def add_charts_to_html_report(
 
     def _fig_to_html(fig, caption: str) -> str:
         """Convert a Plotly figure to HTML, preserving original layout."""
+        apply_report_figure_style(fig)
         # Only update size-related properties, preserve all other layout settings
         # Use height that matches CSS container (400px - padding)
         fig.update_layout(
@@ -1200,6 +1222,7 @@ def add_charts_to_html_report(
 
 __all__ = [
     "is_available",
+    "apply_report_figure_style",
     "samples_to_dataframe",
     "ensure_throughput_column",
     "compute_summary_from_dataframe",

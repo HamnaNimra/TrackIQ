@@ -47,6 +47,128 @@ def _format_value(value: Any) -> str:
     return text if text else "-"
 
 
+def _has_numeric_signal(series: Any) -> bool:
+    """Return True when a pandas-like series has any meaningful numeric value."""
+    try:
+        cleaned = series.dropna()
+    except Exception:
+        return False
+    if len(cleaned) == 0:
+        return False
+    try:
+        numeric = cleaned.astype(float)
+    except Exception:
+        return True
+    return bool((numeric.abs() > 1e-12).any())
+
+
+def _extract_power_profile_by_step(data: dict[str, Any]) -> dict[int, dict[str, float | None]]:
+    """Return power_profile readings keyed by step index."""
+    profile = data.get("power_profile")
+    if not isinstance(profile, dict):
+        return {}
+    readings = profile.get("step_readings")
+    if not isinstance(readings, list):
+        return {}
+
+    mapped: dict[int, dict[str, float | None]] = {}
+    for reading in readings:
+        if not isinstance(reading, dict):
+            continue
+        step = reading.get("step")
+        if not isinstance(step, int) or step < 0:
+            continue
+        power = reading.get("power_watts")
+        temp = reading.get("temperature_celsius")
+        mapped[step] = {
+            "power_w": float(power) if isinstance(power, (int, float)) else None,
+            "temperature_c": float(temp) if isinstance(temp, (int, float)) else None,
+        }
+    return mapped
+
+
+def _fill_dataframe_power_columns(report_df: Any, data: dict[str, Any]) -> None:
+    """Backfill per-sample power/temperature columns from power_profile when needed."""
+    if report_df is None or len(report_df) == 0:
+        return
+    by_step = _extract_power_profile_by_step(data)
+    if not by_step:
+        return
+
+    sample_ids: list[int] = []
+    if "meta_sample_index" in report_df.columns:
+        for row_idx, sample_id in enumerate(report_df["meta_sample_index"].tolist()):
+            if isinstance(sample_id, int):
+                sample_ids.append(sample_id)
+            else:
+                sample_ids.append(row_idx)
+    else:
+        sample_ids = list(range(len(report_df)))
+
+    mapped_power = [by_step.get(sample_id, {}).get("power_w") for sample_id in sample_ids]
+    mapped_temp = [by_step.get(sample_id, {}).get("temperature_c") for sample_id in sample_ids]
+
+    for column, mapped_values in (("power_w", mapped_power), ("temperature_c", mapped_temp)):
+        if column not in report_df.columns:
+            report_df[column] = mapped_values
+            continue
+        if not _has_numeric_signal(report_df[column]):
+            report_df[column] = mapped_values
+            continue
+        try:
+            report_df[column] = report_df[column].where(report_df[column].notna(), mapped_values)
+        except Exception:
+            pass
+
+
+def _enrich_summary_from_power_profile(summary: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing power/temperature summary fields from power_profile summary."""
+    profile = data.get("power_profile")
+    if not isinstance(profile, dict):
+        return summary
+    profile_summary = profile.get("summary")
+    if not isinstance(profile_summary, dict):
+        return summary
+
+    merged = dict(summary)
+    power = merged.get("power", {})
+    if not isinstance(power, dict):
+        power = {}
+    if _is_missing(power.get("mean_w")) and isinstance(profile_summary.get("mean_power_watts"), (int, float)):
+        power["mean_w"] = float(profile_summary["mean_power_watts"])
+    if _is_missing(power.get("max_w")) and isinstance(profile_summary.get("peak_power_watts"), (int, float)):
+        power["max_w"] = float(profile_summary["peak_power_watts"])
+    if _is_missing(power.get("peak_w")) and isinstance(profile_summary.get("peak_power_watts"), (int, float)):
+        power["peak_w"] = float(profile_summary["peak_power_watts"])
+    if power:
+        merged["power"] = power
+
+    temperature = merged.get("temperature", {})
+    if not isinstance(temperature, dict):
+        temperature = {}
+    if _is_missing(temperature.get("mean_c")) and isinstance(
+        profile_summary.get("mean_temperature_celsius"),
+        (int, float),
+    ):
+        temperature["mean_c"] = float(profile_summary["mean_temperature_celsius"])
+    readings = profile.get("step_readings")
+    if _is_missing(temperature.get("max_c")) and isinstance(readings, list):
+        max_temp = None
+        for reading in readings:
+            if not isinstance(reading, dict):
+                continue
+            temp_value = reading.get("temperature_celsius")
+            if not isinstance(temp_value, (int, float)):
+                continue
+            max_temp = float(temp_value) if max_temp is None else max(max_temp, float(temp_value))
+        if max_temp is not None:
+            temperature["max_c"] = max_temp
+    if temperature:
+        merged["temperature"] = temperature
+
+    return merged
+
+
 def _flatten_mapping(
     payload: dict[str, Any],
     *,
@@ -162,6 +284,145 @@ def _add_detailed_summary_table(report: Any, merged_summary: dict[str, Any]) -> 
     if rows:
         report.add_section("Summary Details", "Expanded summary metrics generated from the run payload.")
         report.add_table("Detailed Summary Metrics", ["Metric", "Value", "Unit"], rows, "Summary Details")
+
+
+def _add_result_purpose_table(report: Any, merged_summary: dict[str, Any]) -> None:
+    """Add plain-English explanation for each key result metric."""
+    rows: list[list[str]] = []
+    top_level = [
+        (
+            "sample_count",
+            "Total collected measurement points in this run.",
+            "Higher sample counts increase confidence in regression and trend decisions.",
+        ),
+        (
+            "warmup_samples",
+            "Initial samples excluded from steady-state analysis.",
+            "Prevents startup transients from distorting production-latency conclusions.",
+        ),
+        (
+            "duration_seconds",
+            "Total measured run time in seconds.",
+            "Validates benchmark window length and comparability between runs.",
+        ),
+    ]
+    for metric, purpose, impact in top_level:
+        if not _is_missing(merged_summary.get(metric)):
+            rows.append([metric, purpose, impact])
+
+    metric_guides = {
+        "latency.p50_ms": (
+            "Median response latency.",
+            "Represents typical user experience and baseline responsiveness.",
+        ),
+        "latency.p95_ms": (
+            "95th percentile latency.",
+            "Captures tail latency for near-worst-case requests.",
+        ),
+        "latency.p99_ms": (
+            "99th percentile latency.",
+            "Primary straggler signal; spikes indicate queueing, throttling, or contention.",
+        ),
+        "latency.mean_ms": (
+            "Average latency across measured samples.",
+            "Useful trend metric, but can hide tail outliers.",
+        ),
+        "throughput.mean_fps": (
+            "Average processed samples per second.",
+            "Primary capacity metric for planning and SLO sizing.",
+        ),
+        "throughput.min_fps": (
+            "Lowest observed throughput in steady state.",
+            "Highlights instability or periodic slowdowns under load.",
+        ),
+        "power.mean_w": (
+            "Average power draw in watts.",
+            "Used for energy-cost modeling and efficiency tracking.",
+        ),
+        "power.max_w": (
+            "Peak power draw in watts.",
+            "Helps detect power spikes and validate power envelope constraints.",
+        ),
+        "temperature.max_c": (
+            "Maximum observed device temperature.",
+            "High peaks correlate with thermal throttling risk and performance collapse.",
+        ),
+        "cpu.mean_percent": (
+            "Average CPU utilization.",
+            "Identifies host bottlenecks, preprocessing pressure, or dataloader saturation.",
+        ),
+        "gpu.mean_percent": (
+            "Average GPU utilization.",
+            "Low utilization with high latency usually indicates input or sync bottlenecks.",
+        ),
+        "memory.mean_mb": (
+            "Average memory footprint in MB.",
+            "Tracks memory pressure and headroom for larger batch sizes/models.",
+        ),
+    }
+
+    for group_name, group_values in merged_summary.items():
+        if not isinstance(group_values, dict):
+            continue
+        for metric_key in group_values:
+            metric_name = f"{group_name}.{metric_key}"
+            guide = metric_guides.get(metric_name)
+            if guide is not None:
+                rows.append([metric_name, guide[0], guide[1]])
+
+    if rows:
+        report.add_section(
+            "Result Guide",
+            "Plain-English purpose of each key result and how to interpret it for decisions.",
+        )
+        report.add_table(
+            "Metric Purpose Guide",
+            ["Metric", "What It Means", "Why It Matters"],
+            rows,
+            "Result Guide",
+        )
+
+
+def _add_multi_run_column_guide(report: Any) -> None:
+    """Explain each consolidated run-overview column for comparison reports."""
+    rows = [
+        ["Run Label", "Unique identifier for one benchmark run.", "Use this as the join key across reports/artifacts."],
+        [
+            "Device",
+            "Detected target hardware for the run.",
+            "Separates CPU/GPU/SOC differences in performance outcomes.",
+        ],
+        ["Accelerator", "Requested backend/accelerator setting.", "Verifies run intent matches execution environment."],
+        [
+            "Precision",
+            "Numerical precision mode (e.g., fp32/fp16/bf16).",
+            "Directly impacts latency, throughput, and quality tradeoffs.",
+        ],
+        ["Batch", "Batch size used during inference/training.", "Primary lever for throughput and memory behavior."],
+        [
+            "Streams",
+            "Execution/concurrency streams setting.",
+            "Higher concurrency can improve throughput or worsen jitter.",
+        ],
+        [
+            "Warmup",
+            "Warmup iterations executed before measurement.",
+            "Ensures fair steady-state comparison across runs.",
+        ],
+        ["Iterations", "Measured benchmark iterations.", "Controls run stability and statistical confidence."],
+        ["Samples", "Number of recorded samples.", "Low values reduce reliability of percentile metrics."],
+        ["Duration (s)", "Measured wall-clock duration.", "Required for consistent cross-run comparison windows."],
+        ["P99 (ms)", "99th percentile latency.", "Best single indicator for tail regressions and stragglers."],
+        [
+            "Mean Throughput (FPS)",
+            "Average throughput in samples/sec.",
+            "Capacity metric for provisioning and scaling decisions.",
+        ],
+        ["Mean Power (W)", "Average power draw.", "Enables cost/performance and efficiency analysis."],
+        ["Max Temp (C)", "Peak observed temperature.", "Flags thermal headroom issues and throttling risk."],
+    ]
+    report.add_section("Result Guide", "Purpose of each column in the consolidated comparison output.")
+    report.add_table("Run Overview Column Guide", ["Column", "What It Means", "Why It Matters"], rows, "Result Guide")
 
 
 def _add_raw_data_preview_table(
@@ -285,6 +546,7 @@ def _add_prefixed_plotly_charts_for_run(
         section_name = f"{run_name} | {section_label}"
         report.add_section(section_name, f"{section_label} charts for run {run_name}.")
         for caption, fig in charts:
+            shared_charts.apply_report_figure_style(fig)
             fig.update_layout(
                 autosize=True,
                 height=380,
@@ -323,9 +585,11 @@ def prepare_report_dataframe_and_summary(
     if report_df is not None:
         if "throughput" in report_df.columns and "throughput_fps" not in report_df.columns:
             report_df["throughput_fps"] = report_df["throughput"]
+        _fill_dataframe_power_columns(report_df, data)
         shared_charts.ensure_throughput_column(report_df)
         computed_summary = shared_charts.compute_summary_from_dataframe(report_df)
         summary = _merge_missing(summary, computed_summary)
+    summary = _enrich_summary_from_power_profile(summary, data)
 
     if _is_missing(summary.get("sample_count")):
         sample_count = data.get("sample_count")
@@ -476,6 +740,7 @@ def populate_standard_html_report(
 
     _add_run_metadata_tables(report, data, merged_summary)
     _add_detailed_summary_table(report, merged_summary)
+    _add_result_purpose_table(report, merged_summary)
 
     if add_charts and report_df is not None and len(report_df) > 0:
         shared_charts.add_charts_to_html_report(report, report_df, merged_summary, chart_engine=chart_engine)
@@ -644,6 +909,7 @@ def populate_multi_run_html_report(
         overview_rows,
         "Run Overview",
     )
+    _add_multi_run_column_guide(report)
     if metadata_rows:
         report.add_section("Run Metadata", "Per-run platform and inference metadata from each input result.")
         report.add_table(

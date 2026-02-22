@@ -106,6 +106,50 @@ def test_prepare_report_dataframe_and_summary_keeps_existing_values() -> None:
     assert summary["sample_count"] == 2
 
 
+@pytest.mark.skipif(not CHARTS_AVAILABLE, reason="trackiq.reporting.charts (pandas/plotly) not available")
+def test_prepare_report_dataframe_and_summary_backfills_power_from_power_profile() -> None:
+    """Missing sample power/temperature should be backfilled from power_profile step readings."""
+    data = {
+        "samples": [
+            {
+                "timestamp": 1.0,
+                "metrics": {"latency_ms": 10.0},
+                "metadata": {"sample_index": 0},
+            },
+            {
+                "timestamp": 2.0,
+                "metrics": {"latency_ms": 11.0},
+                "metadata": {"sample_index": 1},
+            },
+        ],
+        "summary": {},
+        "power_profile": {
+            "step_readings": [
+                {"step": -1, "power_watts": 99.0, "temperature_celsius": 60.0},
+                {"step": 0, "power_watts": 45.0, "temperature_celsius": 50.0},
+                {"step": 1, "power_watts": 47.0, "temperature_celsius": 52.0},
+            ],
+            "summary": {
+                "mean_power_watts": 46.0,
+                "peak_power_watts": 47.0,
+                "mean_temperature_celsius": 51.0,
+            },
+        },
+    }
+
+    df, summary = prepare_report_dataframe_and_summary(data)
+
+    assert df is not None
+    assert "power_w" in df.columns
+    assert list(df["power_w"].astype(float)) == [45.0, 47.0]
+    assert "temperature_c" in df.columns
+    assert list(df["temperature_c"].astype(float)) == [50.0, 52.0]
+    assert summary.get("power", {}).get("mean_w") == pytest.approx(46.0)
+    assert summary.get("power", {}).get("max_w") == pytest.approx(47.0)
+    assert summary.get("temperature", {}).get("mean_c") == pytest.approx(51.0)
+    assert summary.get("temperature", {}).get("max_c") == pytest.approx(52.0)
+
+
 def test_populate_multi_run_html_report_includes_all_run_labels() -> None:
     """Multi-run report should include every run label in overview metadata/table."""
     report = HTMLReportGenerator()
@@ -208,6 +252,10 @@ def test_populate_standard_html_report_adds_metadata_and_detailed_summary_tables
     assert "latency.p95_ms" in metric_names
     assert "power.max_w" in metric_names
     assert "temperature.max_c" in metric_names
+    purpose_table = next(table for table in report.tables if table["title"] == "Metric Purpose Guide")
+    purpose_metrics = {row[0] for row in purpose_table["rows"]}
+    assert "latency.p99_ms" in purpose_metrics
+    assert "throughput.mean_fps" in purpose_metrics
     assert any(table["section"] == "Raw Data" for table in report.tables)
 
 
@@ -276,3 +324,7 @@ def test_populate_multi_run_html_report_with_run_details_includes_per_run_sectio
     detail_rows = {row[0] for row in detail_table["rows"]}
     assert "inference_config.precision" in detail_rows
     assert "inference_config.batch_size" in detail_rows
+    run_guide = next(item for item in report.tables if item["title"] == "Run Overview Column Guide")
+    guide_columns = {row[0] for row in run_guide["rows"]}
+    assert "P99 (ms)" in guide_columns
+    assert "Mean Throughput (FPS)" in guide_columns
