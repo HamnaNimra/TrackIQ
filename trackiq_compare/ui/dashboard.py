@@ -579,6 +579,10 @@ class CompareDashboard(TrackiqDashboard):
         import streamlit as st
 
         components = self.build_components()
+        st.info(
+            "Use this view in order: check top-level winner and flagged regressions, validate confidence/coverage, "
+            "then review consistency findings for hidden straggler risk."
+        )
         self._render_input_context()
         if self.is_platform_comparison_mode():
             self._render_platform_comparison_mode()

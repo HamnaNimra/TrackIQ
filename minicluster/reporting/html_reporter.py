@@ -37,7 +37,7 @@ class MiniClusterHtmlReporter:
         metric_rows = self._single_metric_rows(result, run)
         config_rows = self._config_rows(run["config"])
         if PLOTLY_AVAILABLE:
-            loss_chart, throughput_chart, timing_chart = self._single_plotly_charts(run)
+            loss_chart, throughput_chart, timing_chart, allreduce_histogram_chart = self._single_plotly_charts(run)
         else:
             loss_chart = self._line_chart_svg(
                 run["step_points"],
@@ -56,6 +56,13 @@ class MiniClusterHtmlReporter:
             timing_chart = self._stacked_timing_svg(
                 run["timing_points"],
                 title="Per-Step Timing (Compute + AllReduce)",
+            )
+            allreduce_histogram_chart = self._histogram_svg(
+                run.get("allreduce_values", []),
+                title="All-Reduce Latency Distribution (ms)",
+                x_label="allreduce_time_ms",
+                color="#0f766e",
+                bins=18,
             )
 
         return f"""<!doctype html>
@@ -112,12 +119,19 @@ class MiniClusterHtmlReporter:
     </section>
 
     <section class="card">
+      <h2>How To Read This Report</h2>
+      {self._single_run_guide_html(run)}
+      {self._metric_coverage_html(run)}
+    </section>
+
+    <section class="card">
       <h2>Training Graphs</h2>
       <div class="charts-grid">
         <div>{loss_chart}</div>
         <div>{throughput_chart}</div>
       </div>
       <div class="chart-full">{timing_chart}</div>
+      <div class="chart-full">{allreduce_histogram_chart}</div>
     </section>
   </div>
 </body>
@@ -297,6 +311,11 @@ class MiniClusterHtmlReporter:
   .legend li { display: flex; align-items: center; gap: 6px; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(15, 23, 42, 0.25); display: inline-block; }
   .chart-note { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .guide-list { margin: 0 0 8px 20px; color: var(--text); }
+  .guide-list li { margin: 4px 0; }
+  .coverage { color: var(--muted); font-size: 13px; margin: 0; }
+  .coverage .missing { color: #b91c1c; font-weight: 600; }
+  .coverage .ok { color: #166534; font-weight: 600; }
   @media (max-width: 980px) {
     .kpi { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
     .charts-grid { grid-template-columns: 1fr; }
@@ -304,7 +323,7 @@ class MiniClusterHtmlReporter:
 </style>
 """
 
-    def _single_plotly_charts(self, run: dict[str, Any]) -> tuple[str, str, str]:
+    def _single_plotly_charts(self, run: dict[str, Any]) -> tuple[str, str, str, str]:
         """Build Plotly chart fragments for single-run report."""
         if not PLOTLY_AVAILABLE:  # pragma: no cover - guarded by caller
             return (
@@ -319,6 +338,13 @@ class MiniClusterHtmlReporter:
                     show_points=True,
                 ),
                 self._stacked_timing_svg(run["timing_points"], title="Per-Step Timing (Compute + AllReduce)"),
+                self._histogram_svg(
+                    run.get("allreduce_values", []),
+                    title="All-Reduce Latency Distribution (ms)",
+                    x_label="allreduce_time_ms",
+                    color="#0f766e",
+                    bins=18,
+                ),
             )
 
         steps = [float(step) for step, value in run["step_points"] if value is not None]
@@ -443,7 +469,50 @@ class MiniClusterHtmlReporter:
                 title="Per-Step Timing (Compute + AllReduce)",
             )
 
-        return loss_chart, throughput_chart, timing_chart
+        allreduce_values = [
+            float(value) for value in run.get("allreduce_values", []) if isinstance(value, (int, float))
+        ]
+        if len(allreduce_values) >= 2:
+            fig_hist = go.Figure()
+            fig_hist.add_trace(
+                go.Histogram(
+                    x=allreduce_values,
+                    nbinsx=18,
+                    marker_color="#0f766e",
+                    opacity=0.9,
+                )
+            )
+            p99_allreduce = run.get("p99_allreduce_ms")
+            if isinstance(p99_allreduce, (int, float)):
+                fig_hist.add_vline(
+                    x=float(p99_allreduce),
+                    line_dash="dash",
+                    line_color="#dc2626",
+                    annotation_text="P99",
+                    annotation_position="top right",
+                )
+            fig_hist.update_layout(
+                title="All-Reduce Latency Distribution (ms)",
+                template="plotly_white",
+                height=340,
+                margin=dict(l=40, r=16, t=48, b=36),
+                xaxis_title="allreduce_time_ms",
+                yaxis_title="Count",
+            )
+            allreduce_histogram_chart = self._wrap_plotly_chart(
+                "All-Reduce Latency Distribution (ms)",
+                self._fig_to_html(fig_hist, include_plotlyjs=include_js),
+            )
+        else:
+            allreduce_histogram_chart = self._histogram_svg(
+                allreduce_values,
+                title="All-Reduce Latency Distribution (ms)",
+                x_label="allreduce_time_ms",
+                color="#0f766e",
+                bins=18,
+            )
+
+        return loss_chart, throughput_chart, timing_chart, allreduce_histogram_chart
 
     def _multi_plotly_charts(
         self,
@@ -737,6 +806,11 @@ class MiniClusterHtmlReporter:
         step_points = [(point["step"], point["loss"]) for point in parsed_steps]
         throughput_points = [(point["step"], point["throughput"]) for point in parsed_steps]
         timing_points = [(point["step"], point["compute_ms"], point["allreduce_ms"]) for point in parsed_steps]
+        allreduce_values = [
+            float(point["allreduce_ms"])
+            for point in parsed_steps
+            if isinstance(point.get("allreduce_ms"), (int, float))
+        ]
 
         workers = config.get("num_processes", payload.get("num_workers"))
         batch = config.get("batch_size", result.workload.batch_size)
@@ -764,6 +838,7 @@ class MiniClusterHtmlReporter:
             "step_points": step_points,
             "throughput_points": throughput_points,
             "timing_points": timing_points,
+            "allreduce_values": allreduce_values,
         }
 
     def _winner_share(self, runs: list[dict[str, Any]]) -> dict[str, int]:
@@ -994,6 +1069,96 @@ class MiniClusterHtmlReporter:
             "</ul>"
         )
         return "".join(parts)
+
+    def _histogram_svg(
+        self,
+        values: list[float],
+        *,
+        title: str,
+        x_label: str,
+        color: str,
+        bins: int = 18,
+    ) -> str:
+        clean = [float(value) for value in values if isinstance(value, (int, float))]
+        if len(clean) < 2:
+            return f"<p>No distribution data available for {escape(title)}.</p>"
+
+        value_min = min(clean)
+        value_max = max(clean)
+        value_span = (value_max - value_min) or 1.0
+        bin_count = max(4, min(int(bins), 40))
+        bin_width = value_span / bin_count
+        counts = [0 for _ in range(bin_count)]
+        for value in clean:
+            bucket = int((value - value_min) / bin_width) if bin_width > 0 else 0
+            if bucket >= bin_count:
+                bucket = bin_count - 1
+            counts[bucket] += 1
+
+        width = 1120
+        height = 260
+        margin_left = 52
+        margin_bottom = 44
+        chart_w = width - margin_left - 16
+        chart_h = height - 20 - margin_bottom
+        bar_gap = 1.5
+        bar_width = max(5.0, (chart_w / max(1, bin_count)) - bar_gap)
+        max_count = max(counts) if max(counts) > 0 else 1
+
+        parts: list[str] = [
+            f"<h3>{escape(title)}</h3>",
+            f"<p class='chart-note'>{escape(x_label)}</p>",
+            f"<svg width='{width}' height='{height}' viewBox='0 0 {width} {height}' xmlns='http://www.w3.org/2000/svg'>",
+            f"<line x1='{margin_left}' y1='20' x2='{margin_left}' y2='{20 + chart_h}' stroke='#6b7280'/>",
+            f"<line x1='{margin_left}' y1='{20 + chart_h}' x2='{margin_left + chart_w}' y2='{20 + chart_h}' stroke='#6b7280'/>",
+        ]
+        for idx, count in enumerate(counts):
+            scaled = (count / max_count) * chart_h
+            x = margin_left + idx * (bar_width + bar_gap)
+            y = 20 + (chart_h - scaled)
+            parts.append(
+                f"<rect x='{x:.1f}' y='{y:.1f}' width='{bar_width:.1f}' height='{scaled:.1f}' fill='{color}' opacity='0.88'/>"
+            )
+        parts.append("</svg>")
+        return "".join(parts)
+
+    def _single_run_guide_html(self, run: dict[str, Any]) -> str:
+        p99 = run.get("p99_allreduce_ms")
+        scaling = run.get("scaling_efficiency_pct")
+        stdev = run.get("allreduce_stdev_ms")
+        p99_text = self._fmt(p99)
+        scaling_text = self._fmt(scaling)
+        stdev_text = self._fmt(stdev)
+        return (
+            "<ul class='guide-list'>"
+            "<li><strong>Loss trend:</strong> decreasing or stable is expected for a healthy training loop.</li>"
+            f"<li><strong>P99 all-reduce:</strong> current value is <code>{escape(p99_text)}</code> ms. "
+            "A heavy right-tail in the histogram is your straggler signal.</li>"
+            f"<li><strong>All-reduce variability:</strong> stdev is <code>{escape(stdev_text)}</code> ms. "
+            "Higher variability can indicate unstable interconnect paths.</li>"
+            f"<li><strong>Scaling efficiency:</strong> current value is <code>{escape(scaling_text)}</code>%. "
+            "Below ~90% often means communication or memory bottlenecks.</li>"
+            "</ul>"
+        )
+
+    def _metric_coverage_html(self, run: dict[str, Any]) -> str:
+        expected = [
+            "p50_allreduce_ms",
+            "p95_allreduce_ms",
+            "p99_allreduce_ms",
+            "max_allreduce_ms",
+            "allreduce_stdev_ms",
+            "scaling_efficiency_pct",
+        ]
+        missing = [name for name in expected if run.get(name) is None]
+        if not missing:
+            return "<p class='coverage'><span class='ok'>Coverage:</span> all key cluster-health aggregates are present.</p>"
+        missing_text = ", ".join(missing)
+        return (
+            "<p class='coverage'><span class='missing'>Coverage warning:</span> "
+            f"missing aggregates: {escape(missing_text)}. "
+            "Run with more steps/baseline settings to unlock full diagnostics.</p>"
+        )
 
     def _pie_div(self, counts: dict[str, int], *, title: str, labels: dict[str, str]) -> str:
         total = sum(counts.values())

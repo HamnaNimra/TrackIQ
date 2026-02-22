@@ -47,6 +47,7 @@ class HtmlReporter:
         platform_diff = self._platform_comparison(result_a, result_b)
         highlighted = self._highlighted_metrics(summary)
         consistency_html = self._render_consistency_analysis(comparison)
+        guide_html = self._render_decision_guide(comparison, summary)
         generated = datetime.now(timezone.utc).isoformat()
 
         html = f"""<!doctype html>
@@ -273,6 +274,29 @@ class HtmlReporter:
       display: inline-block;
       border: 1px solid rgba(15, 23, 42, 0.2);
     }}
+    .kpi-strip {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 10px;
+    }}
+    .kpi-pill {{
+      border-radius: 999px;
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+    }}
+    .guide-list {{
+      margin: 0 0 0 20px;
+      padding: 0;
+      color: var(--text);
+    }}
+    .guide-list li {{
+      margin: 6px 0;
+    }}
     @media (max-width: 900px) {{
       .grid {{ grid-template-columns: 1fr; }}
       .chart-grid {{ grid-template-columns: 1fr; }}
@@ -290,6 +314,11 @@ class HtmlReporter:
       <h2>Executive Summary</h2>
       <p>{escape(summary.text)}</p>
       <div class="highlights">{highlighted}</div>
+    </section>
+
+    <section class="card">
+      <h2>How To Read This Report</h2>
+      {guide_html}
     </section>
 
     <section class="grid">
@@ -1031,4 +1060,26 @@ class HtmlReporter:
             "<th>Code</th><th>Label</th><th>Status</th><th>StdDev A (ms)</th><th>StdDev B (ms)</th>"
             "<th>Increase %</th><th>Threshold %</th><th>Details</th>"
             "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        )
+
+    @staticmethod
+    def _render_decision_guide(comparison: ComparisonResult, summary: SummaryResult) -> str:
+        """Render quick interpretation and action guidance for end users."""
+        comparable_count = len(comparison.comparable_metrics)
+        non_comparable_count = len(comparison.non_comparable_metrics)
+        regression_count = len(summary.flagged_regressions)
+        consistency_count = len(comparison.consistency_findings)
+        return (
+            "<div class='kpi-strip'>"
+            f"<span class='kpi-pill'>Comparable metrics: {comparable_count}</span>"
+            f"<span class='kpi-pill'>Missing/non-comparable: {non_comparable_count}</span>"
+            f"<span class='kpi-pill'>Flagged regressions: {regression_count}</span>"
+            f"<span class='kpi-pill'>Consistency findings: {consistency_count}</span>"
+            "</div>"
+            "<ul class='guide-list'>"
+            "<li><strong>Metric comparison:</strong> use this table for direct value deltas and winners.</li>"
+            "<li><strong>Normalized deltas:</strong> positive values favor Result B; negative values favor Result A.</li>"
+            "<li><strong>Confidence matrix:</strong> prioritize strong-confidence metrics for release decisions.</li>"
+            "<li><strong>Consistency analysis:</strong> variance regressions can reveal stragglers even when averages look stable.</li>"
+            "</ul>"
         )

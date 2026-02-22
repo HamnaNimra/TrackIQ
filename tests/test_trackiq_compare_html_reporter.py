@@ -86,6 +86,8 @@ def test_compare_html_report_includes_visualization_parity_sections(tmp_path) ->
     html = out.read_text(encoding="utf-8")
 
     assert "Visual Overview" in html
+    assert "How To Read This Report" in html
+    assert "Comparable metrics:" in html
     assert "Top Normalized Deltas" in html
     assert "Winner Distribution" in html
     assert "Confidence Distribution" in html

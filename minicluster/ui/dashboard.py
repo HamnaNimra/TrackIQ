@@ -361,6 +361,10 @@ class MiniClusterDashboard(TrackiqDashboard):
             ]
         )
         with tab_overview:
+            st.info(
+                "Overview focuses on pass/fail regression status, key metrics, and per-worker health. "
+                "Use this tab first for go/no-go validation."
+            )
             components["regression_badge"].render()
             dynamic_container = st.empty()
             refresh_status_container = st.empty()
@@ -422,8 +426,13 @@ class MiniClusterDashboard(TrackiqDashboard):
 
         with tab_health:
             self._render_cluster_health_summary(local_payload)
+            st.caption(
+                "Use P99 and all-reduce stdev together: high tail latency plus high variability usually indicates "
+                "fabric imbalance or a straggling worker."
+            )
 
         with tab_training:
+            st.caption("Training graphs show whether slowdown is compute-bound or communication-bound across steps.")
             self._render_training_graphs(local_payload)
 
         with tab_config:

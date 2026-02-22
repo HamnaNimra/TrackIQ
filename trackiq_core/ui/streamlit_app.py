@@ -234,6 +234,10 @@ class CoreDashboard(TrackiqDashboard):
         )
 
         with tab_overview:
+            st.info(
+                "TrackIQ Core is the canonical contract view. Start here to verify metrics and metadata are complete "
+                "before using compare/regression workflows."
+            )
             RegressionBadge(result.regression, theme=self.theme).render()
             MetricTable(result=result, mode="single", theme=self.theme).render()
             st.markdown("### Run Context")

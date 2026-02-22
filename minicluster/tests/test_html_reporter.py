@@ -62,9 +62,12 @@ def test_minicluster_html_reporter_single_run_contains_training_graphs(tmp_path)
 
     assert "MiniCluster HTML Report" in html
     assert "Training Graphs" in html
+    assert "How To Read This Report" in html
+    assert "Coverage" in html
     assert "Loss by Step" in html
     assert "Throughput by Step" in html
     assert "Per-Step Timing (Compute + AllReduce)" in html
+    assert "All-Reduce Latency Distribution (ms)" in html
     assert "P99 All-Reduce (ms)" in html
     assert "Scaling Efficiency (%)" in html
     assert "collective_backend" in html

@@ -245,9 +245,14 @@ def main() -> None:
             if item.percent_delta is not None and item.percent_delta not in (float("inf"), float("-inf"))
         ]
         if finite_top:
-            st.caption(
-                "Top deltas: " + " | ".join(f"{item.metric_name} ({item.percent_delta:+.2f}%)" for item in finite_top)
-            )
+            top_labels = [
+                f"{item.metric_name} ({item.winner} by {abs(float(item.percent_delta)):.2f}%)"
+                for item in finite_top
+                if item.winner not in {"tie", "not_comparable"}
+            ]
+            if not top_labels:
+                top_labels = [f"{item.metric_name} ({float(item.percent_delta):+.2f}%)" for item in finite_top]
+            st.caption("Top deltas: " + " | ".join(top_labels))
 
     selected_theme = st.session_state.get("trackiq_compare_ui_theme", selected_theme)
     active_theme = _resolve_trackiq_theme(str(selected_theme))
