@@ -41,6 +41,7 @@ try:
     import pandas as pd
 
     from autoperfpy.reports import charts as shared_charts
+    from trackiq_core.ui.style import inject_app_shell_style
 
 except ImportError as e:
     st.error(f"Missing required dependency: {e}")
@@ -136,50 +137,13 @@ def _available_metric_sections(df: pd.DataFrame) -> str:
 
 def _apply_ui_style(theme: str = "System") -> None:
     """Apply lightweight UX polish for readability and hierarchy."""
-    prefers_dark = theme == "Dark"
-    card_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
-    card_border = "rgba(148,163,184,0.35)" if prefers_dark else "rgba(148,163,184,0.24)"
-    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
-    css = """
-        <style>
-        .stApp {
-            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        }
-        .ap-hero {
-            border: 1px solid rgba(59,130,246,0.22);
-            background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10));
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 14px;
-        }
-        .ap-hero h2 {
-            margin: 0 0 4px 0;
-            font-size: 1.28rem;
-        }
-        .ap-hero p {
-            margin: 0;
-            color: %(hero_text)s;
-            font-size: 0.95rem;
-        }
-        [data-testid="stMetric"] {
-            border: 1px solid %(card_border)s;
-            border-radius: 12px;
-            padding: 8px 10px;
-            background: %(card_bg)s;
-        }
-        [data-testid="stSidebar"] [data-testid="stMarkdown"] p {
-            line-height: 1.35;
-        }
-        button[kind="primary"] {
-            border-radius: 10px !important;
-        }
-        </style>
-    """ % {
-        "hero_text": hero_text,
-        "card_border": card_border,
-        "card_bg": card_bg,
-    }
-    st.markdown(css, unsafe_allow_html=True)
+    inject_app_shell_style(
+        theme=theme,
+        hero_class="ap-hero",
+        hero_border="rgba(59,130,246,0.22)",
+        hero_gradient="linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10))",
+        st_module=st,
+    )
 
 
 def _render_page_intro() -> None:

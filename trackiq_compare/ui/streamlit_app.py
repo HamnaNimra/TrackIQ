@@ -16,6 +16,7 @@ from trackiq_compare.comparator import MetricComparator, SummaryGenerator
 from trackiq_compare.ui.dashboard import CompareDashboard
 from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import DARK_THEME, LIGHT_THEME, ResultBrowser
+from trackiq_core.ui.style import inject_app_shell_style
 
 UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
@@ -29,46 +30,12 @@ def _resolve_trackiq_theme(theme: str):
 
 def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for compare app."""
-    prefers_dark = theme == "Dark"
-    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
-    metric_border = "rgba(148,163,184,0.30)" if prefers_dark else "rgba(148,163,184,0.22)"
-    metric_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
-    st.markdown(
-        """
-        <style>
-        .cmp-hero {
-            border: 1px solid rgba(16,185,129,0.24);
-            background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10));
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 14px;
-        }
-        .cmp-hero h2 {
-            margin: 0 0 4px 0;
-            font-size: 1.24rem;
-        }
-        .cmp-hero p {
-            margin: 0;
-            color: %(hero_text)s;
-            font-size: 0.95rem;
-        }
-        [data-testid="stMetric"] {
-            border: 1px solid %(metric_border)s;
-            border-radius: 12px;
-            padding: 8px 10px;
-            background: %(metric_bg)s;
-        }
-        button[kind="primary"] {
-            border-radius: 10px !important;
-        }
-        </style>
-        """
-        % {
-            "hero_text": hero_text,
-            "metric_border": metric_border,
-            "metric_bg": metric_bg,
-        },
-        unsafe_allow_html=True,
+    inject_app_shell_style(
+        theme=theme,
+        hero_class="cmp-hero",
+        hero_border="rgba(16,185,129,0.24)",
+        hero_gradient="linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10))",
+        st_module=st,
     )
 
 

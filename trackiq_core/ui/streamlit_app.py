@@ -12,6 +12,7 @@ from trackiq_core.schema import Metrics, PlatformInfo, RegressionInfo, TrackiqRe
 from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import DARK_THEME, LIGHT_THEME, MetricTable, PowerGauge, RegressionBadge, ResultBrowser
 from trackiq_core.ui.dashboard import TrackiqDashboard
+from trackiq_core.ui.style import inject_app_shell_style
 
 UI_THEME_OPTIONS = ["System", "Light", "Dark"]
 
@@ -25,44 +26,13 @@ def _resolve_trackiq_theme(theme: str) -> Any:
 
 def _apply_ui_style(theme: str = "System") -> None:
     """Apply visual polish for the TrackIQ Core app."""
-    prefers_dark = theme == "Dark"
-    card_bg = "rgba(255,255,255,0.06)" if prefers_dark else "rgba(15,23,42,0.02)"
-    card_border = "rgba(148,163,184,0.35)" if prefers_dark else "rgba(148,163,184,0.22)"
-    hero_text = "#d1d5db" if prefers_dark else "#4b5563"
-    css = """
-        <style>
-        .core-hero {
-            border: 1px solid rgba(59,130,246,0.25);
-            background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10));
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-bottom: 14px;
-        }
-        .core-hero h2 {
-            margin: 0 0 4px 0;
-            font-size: 1.22rem;
-        }
-        .core-hero p {
-            margin: 0;
-            color: %(hero_text)s;
-            font-size: 0.95rem;
-        }
-        [data-testid="stMetric"] {
-            border: 1px solid %(card_border)s;
-            border-radius: 12px;
-            padding: 8px 10px;
-            background: %(card_bg)s;
-        }
-        button[kind="primary"] {
-            border-radius: 10px !important;
-        }
-        </style>
-    """ % {
-        "hero_text": hero_text,
-        "card_border": card_border,
-        "card_bg": card_bg,
-    }
-    st.markdown(css, unsafe_allow_html=True)
+    inject_app_shell_style(
+        theme=theme,
+        hero_class="core-hero",
+        hero_border="rgba(59,130,246,0.25)",
+        hero_gradient="linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10))",
+        st_module=st,
+    )
 
 
 def _render_page_intro() -> None:
