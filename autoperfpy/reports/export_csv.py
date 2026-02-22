@@ -120,4 +120,3 @@ def write_multi_run_csv(runs: list[dict[str, Any]], path: str) -> bool:
         writer.writeheader()
         writer.writerows(all_rows)
     return True
-

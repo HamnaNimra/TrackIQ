@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 import os
 import sys
-from copy import deepcopy
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 from autoperfpy.reports.export_csv import write_multi_run_csv as _write_multi_run_samples_csv
-
 from trackiq_core.reporting import PDF_BACKEND_AUTO, PdfBackendError
 from trackiq_core.utils.errors import DependencyError, HardwareNotFoundError
 
@@ -64,8 +63,8 @@ def _bootstrap_report_input(
         return None
     print("No --csv/--json provided; running a quick benchmark to generate data...")
     _, _, json_path = run_default_benchmark(
-        device_id=getattr(args, "device", None),
-        duration_seconds=getattr(args, "duration", 10),
+        getattr(args, "device", None),
+        getattr(args, "duration", 10),
     )
     if json_path:
         args.json = json_path
@@ -173,7 +172,9 @@ def _add_distributed_validation_html(report: Any, data: dict[str, Any], data_sou
     report.add_summary_item("Passed Steps", passed_steps, "", "good" if passed_steps > 0 else "neutral")
     report.add_summary_item("Failed Steps", failed_steps, "", "critical" if failed_steps > 0 else "neutral")
     report.add_summary_item("Pass Rate", f"{pass_rate:.1%}", "", "good" if overall_pass else "critical")
-    report.add_summary_item("Overall Status", "PASS" if overall_pass else "FAIL", "", "good" if overall_pass else "critical")
+    report.add_summary_item(
+        "Overall Status", "PASS" if overall_pass else "FAIL", "", "good" if overall_pass else "critical"
+    )
 
     report.add_section(
         "Step-by-Step Loss Comparison",
