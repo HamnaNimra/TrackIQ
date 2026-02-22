@@ -58,6 +58,67 @@ st.set_page_config(
 MAX_UI_AUTO_RUNS = 12
 
 
+def _apply_ui_style() -> None:
+    """Apply lightweight UX polish for readability and hierarchy."""
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        }
+        .ap-hero {
+            border: 1px solid rgba(59,130,246,0.22);
+            background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10));
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .ap-hero h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.28rem;
+        }
+        .ap-hero p {
+            margin: 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid rgba(148,163,184,0.24);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background: rgba(15,23,42,0.02);
+        }
+        [data-testid="stSidebar"] [data-testid="stMarkdown"] p {
+            line-height: 1.35;
+        }
+        button[kind="primary"] {
+            border-radius: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_page_intro() -> None:
+    """Render top-level UX guidance."""
+    st.markdown(
+        """
+        <div class="ap-hero">
+          <h2>AutoPerfPy Performance Studio</h2>
+          <p>Choose a data source in the sidebar, inspect charts in tabs, then export reports or run analyses.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander("Quick Start", expanded=False):
+        st.markdown(
+            "1. Pick a data source (`Upload File`, `Demo Data`, or `Run Benchmark`).\n"
+            "2. Review `Overview`, then drill into `Latency`, `Utilization`, and `Power & Thermal`.\n"
+            "3. Use `Generate HTML Report` and `Run analysis` for sharable outputs."
+        )
+
+
 def _normalize_max_configs_per_device(value: int | None) -> int | None:
     """Normalize UI max-config value: non-positive means unlimited."""
     if value is None:
@@ -971,18 +1032,21 @@ def render_raw_data_view(df: pd.DataFrame):
 
 def main():
     """Main Streamlit application."""
+    _apply_ui_style()
 
     st.title("AutoPerfPy Dashboard")
-    st.markdown("Interactive visualization for performance analysis metrics")
+    _render_page_intro()
 
     # Sidebar
     with st.sidebar:
         st.header("Data Source")
+        st.caption("Workflow: select input -> inspect tabs -> export report.")
 
         data_source = st.radio(
             "Select data source",
             options=["Upload File", "Demo Data", "Run Benchmark"],
             index=1,  # Default to demo
+            horizontal=True,
         )
 
         uploaded_files = []

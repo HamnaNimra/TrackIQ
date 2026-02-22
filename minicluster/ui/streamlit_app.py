@@ -13,6 +13,61 @@ from minicluster.ui.dashboard import MiniClusterDashboard
 from trackiq_core.serializer import load_trackiq_result
 
 
+def _apply_ui_style() -> None:
+    """Apply consistent visual polish for MiniCluster app."""
+    st.markdown(
+        """
+        <style>
+        .mc-hero {
+            border: 1px solid rgba(20,184,166,0.25);
+            background: linear-gradient(135deg, rgba(20,184,166,0.14), rgba(59,130,246,0.10));
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .mc-hero h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.26rem;
+        }
+        .mc-hero p {
+            margin: 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid rgba(148,163,184,0.22);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background: rgba(15,23,42,0.02);
+        }
+        button[kind="primary"] {
+            border-radius: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_page_intro() -> None:
+    """Render quick orientation content."""
+    st.markdown(
+        """
+        <div class="mc-hero">
+          <h2>MiniCluster Validation Console</h2>
+          <p>Configure a run in the sidebar, execute, then inspect cluster health, timing and fault signals.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander("Quick Start", expanded=False):
+        st.markdown(
+            "1. Set worker count, backend, workload, and steps.\n"
+            "2. Click `Run MiniCluster` (or `Quick Smoke Run`).\n"
+            "3. Review `Cluster Health Summary`, `Training Graphs`, and fault sections."
+        )
+
+
 def _run_and_load_result(config: RunConfig) -> object | None:
     """Run MiniCluster once and load canonical TrackiqResult output."""
     metrics = run_distributed(config)
@@ -58,11 +113,13 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    _apply_ui_style()
     st.title("MiniCluster Interactive Dashboard")
-    st.caption("Run distributed training and inspect validation metrics live.")
+    _render_page_intro()
 
     with st.sidebar:
         st.subheader("Run Settings")
+        st.caption("Set core run parameters, then launch from below.")
         workers = st.number_input("Workers", min_value=1, max_value=16, value=1, step=1)
         backend = st.selectbox("Collective Backend", options=["gloo", "nccl"], index=0)
         workload = st.selectbox("Workload", options=["mlp", "transformer", "embedding"], index=0)
@@ -82,7 +139,13 @@ def main() -> None:
             step=1.0,
             disabled=not use_baseline,
         )
-        run_clicked = st.button("Run MiniCluster", use_container_width=True)
+        with st.expander("What these settings mean", expanded=False):
+            st.markdown(
+                "- `Collective Backend`: `gloo` for CPU/local CI, `nccl` for GPU clusters.\n"
+                "- `Workload`: synthetic model shape for communication/computation behavior.\n"
+                "- `Baseline Throughput`: enables scaling efficiency in output metrics."
+            )
+        run_clicked = st.button("Run MiniCluster", use_container_width=True, type="primary")
         quick_clicked = st.button("Quick Smoke Run (20 steps)", use_container_width=True)
         st.markdown("---")
         st.subheader("Load Existing Result")
@@ -163,6 +226,7 @@ def main() -> None:
             "Configure run settings and click 'Run MiniCluster', or load an existing " "result JSON from the sidebar."
         )
         return
+    st.success(f"Active result source: {st.session_state.get('minicluster_result_path', 'loaded')}")
 
     dashboard = MiniClusterDashboard(result=result)
     dashboard.apply_theme(dashboard.theme)

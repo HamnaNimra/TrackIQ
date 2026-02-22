@@ -22,6 +22,47 @@ from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import DARK_THEME, ResultBrowser, run_dashboard
 
 
+def _apply_unified_ui_style() -> None:
+    """Apply shared visual polish for unified Streamlit pages."""
+    import streamlit as st
+
+    if not hasattr(st, "markdown"):
+        return
+
+    st.markdown(
+        """
+        <style>
+        .trackiq-hero {
+            border: 1px solid rgba(59,130,246,0.20);
+            background: linear-gradient(135deg, rgba(59,130,246,0.10), rgba(16,185,129,0.10));
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .trackiq-hero h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.22rem;
+        }
+        .trackiq-hero p {
+            margin: 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid rgba(148,163,184,0.20);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background: rgba(15,23,42,0.02);
+        }
+        button[kind="primary"] {
+            border-radius: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def _validate_path(path: Optional[str], label: str) -> str:
     if not path:
         raise SystemExit(f"{label} is required.")
@@ -921,8 +962,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                 layout="wide",
                 initial_sidebar_state="expanded",
             )
+            _apply_unified_ui_style()
             st.title("TrackIQ Unified Dashboard")
             st.caption("Switch between AutoPerfPy, MiniCluster, and Compare in one app.")
+            st.markdown(
+                """
+                <div class="trackiq-hero">
+                  <h2>Unified Validation Workspace</h2>
+                  <p>Use the sidebar to choose a tool and run profile. Each view keeps the same output contract.</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
             tool_choice = st.sidebar.selectbox(
                 "Tool",
@@ -1256,6 +1307,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 layout="wide",
                 initial_sidebar_state="expanded",
             )
+            _apply_unified_ui_style()
 
             result_payload = _extract_minicluster_payload(_load_json_dict(result_path, "Result"))
             fault_payload = _load_json_dict(fault_path, "Fault report") if fault_path else None
@@ -1280,6 +1332,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 layout="wide",
                 initial_sidebar_state="expanded",
             )
+            _apply_unified_ui_style()
             return _render_autoperf_interactive(
                 args=args,
                 key_prefix="trackiq_autoperf_only",

@@ -12,6 +12,61 @@ from trackiq_core.serializer import load_trackiq_result
 from trackiq_core.ui import ResultBrowser
 
 
+def _apply_ui_style() -> None:
+    """Apply visual polish for compare app."""
+    st.markdown(
+        """
+        <style>
+        .cmp-hero {
+            border: 1px solid rgba(16,185,129,0.24);
+            background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(16,185,129,0.10));
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+        }
+        .cmp-hero h2 {
+            margin: 0 0 4px 0;
+            font-size: 1.24rem;
+        }
+        .cmp-hero p {
+            margin: 0;
+            color: #4b5563;
+            font-size: 0.95rem;
+        }
+        [data-testid="stMetric"] {
+            border: 1px solid rgba(148,163,184,0.22);
+            border-radius: 12px;
+            padding: 8px 10px;
+            background: rgba(15,23,42,0.02);
+        }
+        button[kind="primary"] {
+            border-radius: 10px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_page_intro() -> None:
+    """Render top-level usage guidance."""
+    st.markdown(
+        """
+        <div class="cmp-hero">
+          <h2>TrackIQ Compare Studio</h2>
+          <p>Load two results, tune thresholds, and inspect metric deltas and consistency regressions.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.expander("Quick Start", expanded=False):
+        st.markdown(
+            "1. Pick two result files from `Browse results` or `Manual paths`.\n"
+            "2. Click `Load Comparison`.\n"
+            "3. Review winner summary, comparison graphs, and `Consistency Analysis`."
+        )
+
+
 def _try_load(path: str):
     """Load a TrackiqResult from path, returning None on failure."""
     try:
@@ -36,11 +91,13 @@ def main() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    _apply_ui_style()
     st.title("TrackIQ Compare Interactive Dashboard")
-    st.caption("Configure comparison inputs and thresholds, then inspect graphs and winner logic.")
+    _render_page_intro()
 
     with st.sidebar:
         st.subheader("Compare Inputs")
+        st.caption("Choose two outputs and threshold policy for regression detection.")
         input_mode = st.radio(
             "Input Mode",
             options=["Browse results", "Manual paths"],
@@ -53,6 +110,8 @@ def main() -> None:
         if input_mode == "Browse results":
             if not rows:
                 st.info("No results discovered. Switch to manual paths or generate runs first.")
+            else:
+                st.caption(f"Discovered results: {len(rows)}")
             labels = [
                 f"{idx + 1}. {row.get('tool_name', '?')} | {row.get('workload_name', '?')} | {row.get('timestamp', '?')}"
                 for idx, row in enumerate(rows)
@@ -85,7 +144,12 @@ def main() -> None:
             value=25.0,
             step=1.0,
         )
-        load_clicked = st.button("Load Comparison", use_container_width=True)
+        with st.expander("Threshold guidance", expanded=False):
+            st.markdown(
+                "- `Regression Threshold`: flags large performance swings.\n"
+                "- `Variance Threshold`: catches all-reduce consistency degradation even when averages look stable."
+            )
+        load_clicked = st.button("Load Comparison", use_container_width=True, type="primary")
 
     # Auto-load first two discovered results to avoid blank first render.
     if "compare_result_a" not in st.session_state and "compare_result_b" not in st.session_state and len(rows) >= 2:
