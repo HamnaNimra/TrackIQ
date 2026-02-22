@@ -1,0 +1,10 @@
+{
+  "backend": "mock",
+  "model": "meta-llama/Llama-3-8B-Instruct",
+  "num_prompts": 120,
+  "mean_ttft_ms": 126.82216453650322,
+  "p99_ttft_ms": 192.5429022302457,
+  "mean_tpot_ms": 46.87034021432131,
+  "p99_tpot_ms": 72.36145736604415,
+  "throughput_tokens_per_sec": 21.335454264410235
+}
