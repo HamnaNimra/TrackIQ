@@ -790,7 +790,7 @@ def render_overview_analysis(data: dict[str, Any], df: pd.DataFrame, summary: di
     if fig is None:
         fig = shared_charts.create_throughput_timeline(df, summary)
     if fig:
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="overview_primary_signal_chart")
     else:
         st.info("No latency or throughput timeline data available.")
 
@@ -818,13 +818,13 @@ def render_latency_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Latency timeline (from shared charts)
         fig = shared_charts.create_latency_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="latency_timeline_chart")
 
     with col2:
         # Latency distribution (from shared charts)
         fig = shared_charts.create_latency_histogram(df, summary)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="latency_distribution_chart")
 
     # Percentile breakdown
     latency = summary.get("latency", {})
@@ -861,13 +861,13 @@ def render_utilization_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Utilization timeline (from shared charts)
         fig = shared_charts.create_utilization_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="utilization_timeline_chart")
 
     with col2:
         # Utilization summary bar chart (from shared charts)
         fig = shared_charts.create_utilization_summary_bar(summary)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="utilization_summary_chart")
 
 
 def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -892,7 +892,7 @@ def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Power timeline (from shared charts)
         fig = shared_charts.create_power_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="power_timeline_chart")
         else:
             st.info("No power data available")
 
@@ -900,7 +900,7 @@ def render_power_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Temperature timeline (from shared charts)
         fig = shared_charts.create_temperature_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="temperature_timeline_chart")
         else:
             st.info("No temperature data available")
 
@@ -940,14 +940,14 @@ def render_memory_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Memory timeline (from shared charts)
         fig = shared_charts.create_memory_timeline(df)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="memory_timeline_chart")
 
     with col2:
         # Memory gauge (from shared charts)
         total_mb = float(df["memory_total_mb"].iloc[0]) if "memory_total_mb" in df.columns and len(df) > 0 else None
         fig = shared_charts.create_memory_gauge(summary, total_mb)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="memory_gauge_chart")
 
 
 def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
@@ -969,7 +969,7 @@ def render_throughput_analysis(df: pd.DataFrame, summary: dict[str, Any]):
         # Throughput timeline (from shared charts)
         fig = shared_charts.create_throughput_timeline(df, summary)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="throughput_timeline_chart")
 
     with col2:
         # Throughput statistics
@@ -1008,13 +1008,13 @@ def render_multi_run_comparison(runs: list[dict[str, Any]]):
         # Latency comparison bar chart (from shared charts)
         fig = shared_charts.create_latency_comparison_bar(runs, run_names)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="multi_run_latency_comparison_chart")
 
     with col2:
         # Throughput comparison bar chart (from shared charts)
         fig = shared_charts.create_throughput_comparison_bar(runs, run_names)
         if fig:
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="multi_run_throughput_comparison_chart")
 
     # Comparison table with platform_metadata and inference_config (use None for missing numerics so Arrow can serialize)
     st.markdown("**Summary Comparison**")

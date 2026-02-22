@@ -234,7 +234,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 title="Loss by Step",
                 labels={"step": "Step", "loss": "Loss"},
             )
-            st.plotly_chart(fig_loss, use_container_width=True)
+            st.plotly_chart(fig_loss, use_container_width=True, key="minicluster_training_loss_by_step_chart")
         with col_b:
             fig_thr = px.line(
                 df,
@@ -243,7 +243,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                 title="Throughput by Step",
                 labels={"step": "Step", "throughput": "Samples/sec"},
             )
-            st.plotly_chart(fig_thr, use_container_width=True)
+            st.plotly_chart(fig_thr, use_container_width=True, key="minicluster_training_throughput_by_step_chart")
 
         fig_timing = go.Figure()
         fig_timing.add_trace(
@@ -268,7 +268,7 @@ class MiniClusterDashboard(TrackiqDashboard):
             yaxis_title="Time (ms)",
             barmode="stack",
         )
-        st.plotly_chart(fig_timing, use_container_width=True)
+        st.plotly_chart(fig_timing, use_container_width=True, key="minicluster_training_timing_breakdown_chart")
 
         allreduce_values = [row["allreduce_ms"] for row in rows if row["allreduce_ms"] > 0]
         if allreduce_values:
@@ -287,7 +287,7 @@ class MiniClusterDashboard(TrackiqDashboard):
                     annotation_text="P99",
                     annotation_position="top right",
                 )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, use_container_width=True, key="minicluster_training_allreduce_histogram_chart")
 
     def render_sidebar(self) -> None:
         """Render shared sidebar plus MiniCluster auto-refresh controls."""
@@ -343,9 +343,21 @@ class MiniClusterDashboard(TrackiqDashboard):
 
         components = self.build_components()
         payload = self._tool_payload()
-
-        components["regression_badge"].render()
-        dynamic_container = st.empty()
+        tab_overview, tab_health, tab_training, tab_config, tab_power_kv, tab_faults, tab_downloads = st.tabs(
+            [
+                "Overview",
+                "Cluster Health",
+                "Training Graphs",
+                "Run Configuration",
+                "Power & KV Cache",
+                "Faults",
+                "Downloads",
+            ]
+        )
+        with tab_overview:
+            components["regression_badge"].render()
+            dynamic_container = st.empty()
+            refresh_status_container = st.empty()
         checkpoint_path = payload.get("health_checkpoint_path")
         force_refresh = bool(st.session_state.pop("minicluster_force_refresh", False))
         auto_refresh = bool(st.session_state.get("minicluster_auto_refresh", False))
@@ -368,11 +380,13 @@ class MiniClusterDashboard(TrackiqDashboard):
                 with dynamic_container.container():
                     self._render_dynamic_sections(local_payload)
                 if checkpoint.is_complete:
-                    st.success("Live run complete. Auto-refresh stopped.")
+                    with refresh_status_container.container():
+                        st.success("Live run complete. Auto-refresh stopped.")
                     st.session_state["minicluster_auto_refresh"] = False
                     st.session_state["trackiq_live_indicator"] = False
                 else:
-                    st.caption("Auto-refresh active. Updating every 2 seconds.")
+                    with refresh_status_container.container():
+                        st.caption("Auto-refresh active. Updating every 2 seconds.")
                     time.sleep(2)
                     if hasattr(st, "rerun"):
                         st.rerun()
@@ -382,14 +396,16 @@ class MiniClusterDashboard(TrackiqDashboard):
                 failures = int(st.session_state.get("minicluster_refresh_failures", 0)) + 1
                 st.session_state["minicluster_refresh_failures"] = failures
                 if failures >= 3:
-                    st.warning(
-                        "Auto-refresh stopped: live checkpoint is unavailable. "
-                        "Use Refresh Now or disable auto-refresh."
-                    )
+                    with refresh_status_container.container():
+                        st.warning(
+                            "Auto-refresh stopped: live checkpoint is unavailable. "
+                            "Use Refresh Now or disable auto-refresh."
+                        )
                     st.session_state["minicluster_auto_refresh"] = False
                     st.session_state["trackiq_live_indicator"] = False
                 else:
-                    st.caption("Waiting for live checkpoint...")
+                    with refresh_status_container.container():
+                        st.caption("Waiting for live checkpoint...")
                     time.sleep(2)
                     if hasattr(st, "rerun"):
                         st.rerun()
@@ -398,16 +414,25 @@ class MiniClusterDashboard(TrackiqDashboard):
         else:
             st.session_state["minicluster_refresh_failures"] = 0
 
-        self._render_cluster_health_summary(local_payload)
-        self._render_config_section(local_payload)
-        self._render_training_graphs(local_payload)
-        components["power_gauge"].render()
-        self.render_kv_cache_section()
+        with tab_health:
+            self._render_cluster_health_summary(local_payload)
 
-        with st.expander("Fault Detection Report", expanded=False):
+        with tab_training:
+            self._render_training_graphs(local_payload)
+
+        with tab_config:
+            self._render_config_section(local_payload)
+
+        with tab_power_kv:
+            components["power_gauge"].render()
+            self.render_kv_cache_section()
+
+        with tab_faults:
             faults = local_payload.get("faults_detected")
             if faults is None:
-                st.write("No fault detection data available.")
+                st.info("No fault detection data available.")
             else:
                 st.json(faults)
-        self.render_download_section()
+
+        with tab_downloads:
+            self.render_download_section()
